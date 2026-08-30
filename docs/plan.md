@@ -2,17 +2,17 @@
 
 > Trạng thái: bản kế hoạch kỹ thuật. Tài liệu này chuyển đặc tả trong `docs/idea.md` thành kiến trúc phần mềm, cấu trúc thư mục, quy ước và lộ trình thi công cụ thể.
 >
-> Mọi tham chiếu dạng `§x.y` trỏ tới `docs/idea.md`. Khi hai tài liệu mâu thuẫn, `idea.md` là nguồn sự thật về **luật của thế giới**, còn tài liệu này là nguồn sự thật về **cách xây phần mềm**.
+> **Quy ước tham chiếu.** `§x.y` luôn trỏ tới `docs/idea.md`. `§Px.y` trỏ tới mục của **chính tài liệu này**. Khi hai tài liệu mâu thuẫn, `idea.md` là nguồn sự thật về **luật của thế giới**, còn tài liệu này là nguồn sự thật về **cách xây phần mềm**.
 
 ---
 
 ## 1. Nguyên tắc chỉ đạo
 
-1. **Một nguồn quyền lực duy nhất.** `sim-core` (Rust) là nơi duy nhất được commit state authoritative. Mọi thứ khác — LLM, gateway, frontend, devtool, plugin — chỉ **đề xuất** và **đọc**. Đây là §22.1 và §22.2 được biến thành ranh giới tiến trình, không chỉ là quy ước code.
+1. **Một nguồn quyền lực duy nhất.** `mow-server` (Rust) là nơi duy nhất được commit state authoritative. Mọi thứ khác — LLM, gateway, frontend, devtool, plugin — chỉ **đề xuất** và **đọc**. Đây là §22.1 và §22.2 được biến thành ranh giới tiến trình, không chỉ là quy ước code.
 2. **Đứng trên vai người khổng lồ.** Không tự viết ECS, vector DB, orchestration LLM, renderer, hay sandbox WASM. Chỉ tự viết phần *luật của thế giới này* mà không thư viện nào có.
 3. **Schema là hợp đồng.** Không có struct nào được định nghĩa hai lần bằng tay ở hai ngôn ngữ. Một nguồn định nghĩa → sinh mã cho Rust, Python, TypeScript.
 4. **Determinism là tính năng cấp một.** Nó không phải mục tiêu "nice to have" cuối dự án; nó là thứ được kiểm tra tự động từ commit đầu tiên.
-5. **Harness kiểm thử được xây trước, không phải sau.** Xem §7. Đây là điều kiện để một agent có thể tự vào thế giới kiểm tra thay vì bắt người ngồi chơi thử.
+5. **Harness kiểm thử được xây trước, không phải sau.** Xem §P7. Đây là điều kiện để một agent có thể tự vào thế giới kiểm tra thay vì bắt người ngồi chơi thử.
 6. **Mọi bug đều phải có repro bundle.** Không có bug nào tồn tại dưới dạng "tôi thấy nó lạ lạ".
 
 ---
@@ -74,19 +74,33 @@ flowchart TB
     CLI --> CORE
 ```
 
-### 2.1. Ranh giới trách nhiệm
+Sơ đồ trên là **hình thái server** dùng cho phát triển và CI. Bản desktop thay Postgres, Qdrant và NATS bằng các hiện thực nhúng sau cùng những trait đó — xem §P3.4. Ranh giới trách nhiệm không đổi giữa hai hình thái.
+
+### 2.1. Thuật ngữ artifact
+
+Ba tên hay bị lẫn, chốt một lần:
+
+| Tên | Là gì |
+|---|---|
+| `mow-core` | **Crate** chứa ECS, clock, scheduler, event commit, transaction |
+| `mow-server` | **Binary** chạy simulation authoritative; nhúng `mow-core` và chỉ phơi ra gRPC cộng NATS. Không terminate WebSocket — việc đó thuộc `api-gateway` |
+| `mow-worker` | **Binary** chạy job nặng deterministic; trả proposal về `mow-server` |
+
+Trong tài liệu này, khi nói "tiến trình mô phỏng" thì đó là `mow-server`. Không dùng tên khác cho cùng một thứ.
+
+### 2.2. Ranh giới trách nhiệm
 
 | Thành phần | Sở hữu | **Không bao giờ** được làm |
 |---|---|---|
-| `sim-core` | ECS, tick, law, effect, event commit, chunk, portal, persistence, invariant | Gọi LLM trực tiếp; render; biết về HTTP |
-| `sim-worker` | Job nặng deterministic: worldgen, tiền sử, LOD catch-up, pathfinding batch | Commit state — nó trả **proposal** về core |
-| `api-gateway` | Auth, session, REST/WS, read model, rate limit, aggregate | Chứa luật game; sửa state trực tiếp |
+| `mow-server` | ECS, tick, law, effect, event commit, chunk, portal, persistence, invariant | Gọi LLM trực tiếp; render; phục vụ thẳng frontend; xử lý phiên, auth hay CORS |
+| `mow-worker` | Job nặng deterministic: worldgen, tiền sử, LOD catch-up, pathfinding batch | Commit state — nó trả **proposal** về core |
+| `api-gateway` | Session, REST/WS, read model, rate limit, aggregate. Auth **chỉ có ở server mode**; ở bản desktop gateway chạy trên loopback với token local sinh lúc khởi động | Chứa luật game; sửa state trực tiếp |
 | `agent-service` | Cognition cycle: build context → LLM → validate → typed plan | Ghi state; đọc dữ liệu ngoài observation của entity |
 | `memory-service` | Lưu/truy xuất ký ức, ACL, branch filter, tombstone | Trả về ký ức của entity khác chủ (§22.16) |
 | `web` | Render, UI, input | Chứa luật authoritative (§19.2) |
 | `mow-devtool` | Inspect, drive, assert, snapshot, repro | Tồn tại trong build production |
 
-**Quy tắc vàng:** nếu một thay đổi state không đi qua `sim-core`'s transaction handler thì đó là bug, không phải tính năng.
+**Quy tắc vàng:** nếu một thay đổi state không đi qua transaction handler của `mow-server` thì đó là bug, không phải tính năng.
 
 ---
 
@@ -111,7 +125,7 @@ flowchart TB
 | Config Rust | `figment` + `serde` + `garde` + `schemars` | Layer env/yaml/default, validate, sinh JSON Schema | `config-rs` (thiếu validate tích hợp) |
 | Config Python | `pydantic-settings` v2 | Cùng mô hình validate với phần còn lại | dynaconf (validate yếu hơn) |
 | Prompt | YAML + **Jinja2** + registry có version | Đúng yêu cầu; version hóa theo §22.15 | f-string (không version được) |
-| DB | **PostgreSQL** (event log, snapshot, claim, index) | Giao dịch thật, `jsonb`, partition theo branch | SQLite (đủ cho desktop single-player — xem §3.3) |
+| DB | **PostgreSQL** (event log, snapshot, claim, index) | Giao dịch thật, `jsonb`, partition theo branch | SQLite (đủ cho desktop single-player — xem §P3.3) |
 | Object store | Filesystem (dev) / S3-compatible (server) | Chunk delta và repro bundle là blob | — |
 | Observability | OpenTelemetry + Jaeger + Prometheus | Trace từ command → event → effect | — |
 | Đóng gói desktop | **Tauri v2** | §2 của idea.md: desktop-first, offline-first | Electron (nặng) |
@@ -135,6 +149,24 @@ Cùng một codebase, hai cách đóng gói:
 Khác biệt chỉ nằm ở lớp cấu hình và adapter persistence, không ở luật.
 
 ---
+
+### 3.4. Những gì bản desktop phải giải quyết
+
+§2 của `idea.md` chốt desktop-first và offline-first. Bốn phụ thuộc trong bảng §P3.1 là dịch vụ máy chủ và **không chạy nhúng được**; chúng cần một quyết định tường minh chứ không được để tới lúc đóng gói mới phát hiện.
+
+| Phụ thuộc | Vấn đề ở desktop | Quyết định |
+|---|---|---|
+| Qdrant | Là server riêng, không có chế độ nhúng; bắt người chơi cài Docker là không chấp nhận được | Trừu tượng sau trait `VectorIndex`. Server mode dùng Qdrant; desktop dùng chỉ mục nhúng (`sqlite-vec` hoặc LanceDB) trong cùng file save. Cùng bộ test chạy trên cả hai backend |
+| NATS | Server Go, không nhúng vào Rust | Trừu tượng sau trait `MessageBus`. Server mode dùng NATS JetStream; desktop dùng kênh in-process có cùng ngữ nghĩa durable trên SQLite |
+| PostgreSQL | Nặng cho máy người dùng | Đã xử lý ở §P6.6: SQLite/WAL sau cùng một lớp persistence |
+| Python runtime | FastAPI + LangGraph + mem0 kéo theo hàng trăm MB | Đóng gói **sidecar** bằng PyInstaller/uv, chạy trên loopback, do Tauri quản lý vòng đời. Chấp nhận chi phí dung lượng; đổi lại một codebase cognition duy nhất cho cả hai hình thái |
+| Embedding model | Gọi API là vi phạm offline-first | Model ONNX local qua `fastembed`; API chỉ là tùy chọn khi người chơi bật |
+
+**Offline nghĩa là gì, cụ thể:** không có mạng thì thế giới vẫn chạy đầy đủ ở ba tầng đầu của tháp hành vi (§10.3) — phản xạ, thói quen và chiến thuật. Chỉ tầng nhận thức chiến lược và phản tư là tạm dừng, và scheduler chuyển các entity đó sang fallback policy như khi gateway timeout (§20.2.1). Người chơi cắm một model local (Ollama, llama.cpp) thì cả hai tầng trên cũng hoạt động.
+
+Đây chính là lý do §10.3 tồn tại, và là điều phải được kiểm chứng bằng một scenario chạy với `llm_mode: STUB` ngay từ Giai đoạn B chứ không phải khi sắp phát hành.
+
+**Cả bốn trừu tượng trên phải có từ Giai đoạn 0.** Viết thẳng vào Qdrant hay NATS rồi mới bọc lại là công việc gấp nhiều lần.
 
 ## 4. Hợp đồng và sinh mã
 
@@ -192,6 +224,7 @@ myopenworld/
 │       ├── determinism.yml           # chạy song song 2 lần, so hash
 │       ├── soak-nightly.yml          # mô phỏng dài, invariant + memory watch
 │       └── release.yml               # build Tauri + docker image
+├── .gitattributes                    # `* text=auto eol=lf` — repo phát triển trên Windows
 ├── .env.example                      # CHỈ secret; mọi thứ khác nằm ở config/
 ├── Makefile                          # entrypoint chuẩn: setup, codegen, test, run
 ├── docker-compose.yml                # postgres, qdrant, nats, jaeger, minio
@@ -261,8 +294,9 @@ myopenworld/
 │   ├── registry.yaml                 # ánh xạ id → path + version + model hint
 │   ├── persona/
 │   │   └── human-gaia/
-│   │       ├── v3.yaml               # front-matter + template Jinja2
-│   │       └── v3.vars.py            # pydantic model cho biến của template
+│   │       └── v3.yaml               # front-matter + template Jinja2
+│   │                                 # (model biến nằm trong package Python,
+│   │                                 #  xem agent_service/prompts/vars/)
 │   ├── cognition/
 │   │   ├── plan.v2.yaml
 │   │   ├── reflect.v1.yaml
@@ -329,6 +363,7 @@ myopenworld/
 │   │       │   └── emit_proposal.py
 │   │       ├── schemas/              # pydantic, sinh từ proto + tự định nghĩa
 │   │       ├── prompts/              # loader + registry + Jinja env
+│   │       │   └── vars/             # pydantic model cho biến của từng template
 │   │       ├── budget/               # §20.2 cognitive budget scheduler
 │   │       ├── routing/              # §20.7 model routing
 │   │       └── consumers/            # NATS consumer
@@ -373,7 +408,7 @@ myopenworld/
 │       └── types/                    # sinh từ schema
 │
 ├── tools/
-│   ├── mow-mcp/                      # ⭐ MCP server cho agent — xem §7
+│   ├── mow-mcp/                      # ⭐ MCP server cho agent — xem §P7
 │   │   └── src/mow_mcp/
 │   │       ├── server.py
 │   │       └── tools/{world,sim,query,debug,assert_,snapshot,repro,scenario,ui}.py
@@ -382,7 +417,7 @@ myopenworld/
 │   └── contentkit/                   # lint + validate + đóng gói content pack
 │
 ├── tests/
-│   ├── scenarios/                    # ⭐ kịch bản given/when/then — xem §7.3
+│   ├── scenarios/                    # ⭐ kịch bản given/when/then — xem §P7.3
 │   │   ├── smoke/
 │   │   ├── life/                     # đói → trộm, bệnh lan, lão hóa
 │   │   ├── society/                  # tội phạm, chính danh, hành động tập thể
@@ -407,6 +442,42 @@ myopenworld/
 `mow-<domain>`. Một crate = một ranh giới module ở §19.2. Crate không được phụ thuộc ngược lên `mow-server`; đồ thị phụ thuộc phải là DAG và được kiểm bằng `cargo-deny` + một test kiến trúc.
 
 ---
+
+### 5.2. Ánh xạ biên module `idea.md §19.2` → crate và service
+
+Một số ranh giới logic ở §19.2 bị cắt qua ranh giới tiến trình. Bảng này là nguồn sự thật cho việc "code này thuộc về đâu".
+
+| Biên module §19.2 | Hiện thực tại | Ghi chú |
+|---|---|---|
+| `simulation-core` | `mow-core` + `mow-action` + `mow-effect` | Tách `action` và `effect` ra crate riêng vì cả hai đủ lớn và có test riêng |
+| `worldgen` | `mow-worldgen`, job chạy ở `mow-worker` | |
+| `spatial` | `mow-spatial` | |
+| `physics` | `mow-physics` | |
+| `life` | `mow-life` | Bao gồm homeostasis, genome, senescence |
+| `society` | `mow-society` | |
+| `knowledge` | `mow-knowledge` | |
+| `items` | `mow-items` | |
+| `scenario` | `mow-scenario` | |
+| `plugin` | `mow-plugin` | |
+| `persistence` | `mow-persist` | |
+| `frontend` | `web/` | |
+| `cognition` | **`services/agent-service`** (Python) **+** `mow-action` | Registry, precondition và validator ở Rust; lập kế hoạch và nhập vai ở Python |
+| `memory` | **`services/memory-service`** (Python) **+** bảng authoritative ở Postgres | Xem §P6.3 |
+| `yuu` | **Bị tách có chủ đích** — xem dưới | |
+
+#### 5.2.1. Vì sao Yuu bị tách làm đôi
+
+§15.1 nói rõ Yuu không phải một LLM toàn quyền mà là control plane gồm các module có quyền hạn khác nhau. Ranh giới cài đặt đi theo đúng ranh giới đó:
+
+| Module Yuu | Ở đâu | Vì sao |
+|---|---|---|
+| World Architect, Species Foundry, Law Forge, Historian/Narrator, God Interface | `services/agent-service/graphs/` | Sinh nội dung bằng LLM; chỉ tạo **proposal** |
+| Director | `agent-service` chọn storylet, `mow-core` áp dụng | Chấm salience cần ngữ cảnh; kích hoạt phải deterministic |
+| Adjudicator | `mow-core` | Giải thích tính hợp lệ **từ state**, phải khớp đúng handler thật |
+| Auditor | `mow-worker` + `mow-devtool` | Dùng chung bộ invariant với harness §P7.4 |
+| Cognition Scheduler | `mow-core` | Phân bổ ngân sách phải deterministic để replay được (§22.9) |
+
+Nếu Cognition Scheduler nằm ở Python, thứ tự và số lượng request LLM sẽ phụ thuộc timing của tiến trình và replay sẽ hỏng. Đây là lý do kỹ thuật, không phải sở thích.
 
 ## 6. Các hệ thống nền
 
@@ -462,7 +533,7 @@ Quy tắc:
 ### 6.3. Memory
 
 ```text
-sim-core (nguồn sự thật)          memory-service (chỉ mục)
+mow-server (nguồn sự thật)        memory-service (chỉ mục)
   event log ────► MemoryRecord ────► mem0.add(...)  ────► Qdrant
   (Postgres)      version, ACL,       user_id  = memory_namespace
                   branch, tombstone   agent_id = persona_version
@@ -494,11 +565,165 @@ sim-core (nguồn sự thật)          memory-service (chỉ mục)
 
 ---
 
+### 6.6. Mô hình dữ liệu
+
+Chỉ liệt kê các bảng mang tính kiến trúc; phần còn lại suy ra được từ schema content.
+
+```sql
+-- Append-only. KHÔNG có UPDATE và KHÔNG có DELETE trên bảng này.
+CREATE TABLE event (
+  event_id         uuid PRIMARY KEY,
+  branch_id        uuid NOT NULL,
+  divine_tick      bigint NOT NULL,
+  world_id         uuid NOT NULL,
+  subsystem_order  smallint NOT NULL,
+  sequence         bigint NOT NULL,
+  kind             text NOT NULL,
+  actor            uuid, target uuid,
+  cause_event_id   uuid,                 -- §17.1 cause chain
+  provenance       text NOT NULL,        -- simulation|llm|yuu|true_god|genesis|devtool
+  law_version      text,                 -- §13.9.5
+  norm_set_version text,                 -- §22.49
+  payload          jsonb NOT NULL,
+  observable_by    jsonb NOT NULL,       -- ai cảm nhận được, bằng giác quan nào
+  trace_id         text
+) PARTITION BY LIST (branch_id);
+
+-- Khóa thứ tự ổn định của §4.4
+CREATE UNIQUE INDEX ON event (branch_id, divine_tick, world_id, subsystem_order, sequence);
+CREATE INDEX ON event (branch_id, cause_event_id);
+CREATE INDEX ON event (branch_id, actor, divine_tick);
+
+CREATE TABLE branch (
+  branch_id uuid PRIMARY KEY,
+  parent_branch_id uuid, fork_event_id uuid, fork_tick bigint,
+  lockfile_hash text NOT NULL, created_at timestamptz
+);
+
+CREATE TABLE snapshot (
+  branch_id uuid, divine_tick bigint,
+  state_hash bytea NOT NULL,             -- mỏ neo determinism §22.9
+  lockfile_hash text NOT NULL,
+  blob_ref text NOT NULL,
+  PRIMARY KEY (branch_id, divine_tick)
+);
+
+CREATE TABLE chunk_delta (
+  branch_id uuid, world_id uuid, cx bigint, cy bigint, cz bigint,
+  revision bigint, blob_ref text,
+  PRIMARY KEY (branch_id, world_id, cx, cy, cz, revision)
+);
+
+-- Bản ghi authoritative của ký ức. Qdrant chỉ là chỉ mục dựng lại được.
+CREATE TABLE memory_record (
+  memory_id uuid PRIMARY KEY,
+  namespace text NOT NULL, persona_id uuid NOT NULL, branch_id uuid NOT NULL,
+  kind text NOT NULL,                    -- episodic|semantic|relationship|procedural|goal|self
+  content jsonb NOT NULL, confidence real,
+  source_event_id uuid, content_version int NOT NULL,
+  acl text NOT NULL,
+  tombstoned_at timestamptz,             -- §11.5
+  embedding_id text
+);
+CREATE INDEX ON memory_record (branch_id, namespace) WHERE tombstoned_at IS NULL;
+
+CREATE TABLE claim (                      -- §12.8, §21.7
+  claim_id uuid PRIMARY KEY, branch_id uuid NOT NULL,
+  kind text NOT NULL, subject_ref text NOT NULL,
+  holder uuid, issued_by uuid, recognized_under text,
+  terms jsonb, provenance text
+);
+
+-- Bản ghi mọi lần gọi model. Đây là thứ làm cho REPLAY mode khả thi (§19.6).
+CREATE TABLE llm_call (
+  call_id uuid PRIMARY KEY, branch_id uuid NOT NULL,
+  entity_id uuid, prompt_id text NOT NULL, prompt_version int NOT NULL,
+  model text NOT NULL, request_hash bytea NOT NULL,
+  response jsonb NOT NULL,
+  tokens_in int, tokens_out int, cost_micros bigint, latency_ms int,
+  recorded_at timestamptz
+);
+CREATE UNIQUE INDEX ON llm_call (branch_id, request_hash);
+```
+
+Bốn quy tắc:
+
+1. **Phân vùng theo `branch_id`.** Fork chỉ tạo partition mới; xóa một nhánh thử nghiệm là `DROP PARTITION`, không phải quét xóa.
+2. **`event` bất biến.** Sửa lịch sử là tạo branch (§4.4), không phải `UPDATE`.
+3. **`state_hash` là mỏ neo.** Mọi so sánh determinism đều dựa vào nó, không dựa vào so sánh dump.
+4. **`llm_call` có unique trên `(branch_id, request_hash)`** nên replay tra được đúng phản hồi cũ, và một request giống hệt không tốn token lần hai.
+
+**Migration**: `sqlx migrate` cho lược đồ Rust sở hữu (event, snapshot, branch, chunk_delta, claim), Alembic cho lược đồ Python sở hữu (memory_record, llm_call). Mỗi bên chỉ migrate bảng của mình; không có service nào `ALTER` bảng của service khác. Migration chạy tự động lúc khởi động ở dev, và là bước tường minh có phê duyệt ở prod.
+
+**Biến thể SQLite (bản desktop, §P3.3):** cùng lược đồ, bỏ `PARTITION BY`, thay bằng index trên `branch_id`; blob nằm ở file segment cạnh save. Lớp `mow-persist` che khác biệt sau một trait duy nhất, và cùng bộ test chạy trên cả hai backend.
+
+### 6.7. LLM Gateway
+
+Mọi lần gọi model đi qua đúng một chỗ, không graph nào được gọi thẳng SDK.
+
+- **Trừu tượng nhà cung cấp**: một `ModelClient` protocol, dùng LiteLLM làm lớp adapter để không phải viết N client. Hỗ trợ OpenAI-compatible, Anthropic và endpoint local (vLLM/Ollama) mà không đổi graph.
+- **Bốn chế độ**, khớp với `SetLlmMode` ở §P7.1 và cài ở gateway chứ không ở graph:
+
+  | Mode | Hành vi |
+  |---|---|
+  | `LIVE` | Gọi thật, ghi vào `llm_call` |
+  | `RECORD` | Như LIVE, nhưng bắt buộc ghi và dùng cho việc tạo bộ replay |
+  | `REPLAY` | Tra `llm_call` theo `request_hash`; thiếu bản ghi là **lỗi**, không phải gọi thật |
+  | `STUB` | Trả plan cố định theo policy; dùng cho test luật, không tốn token |
+
+- **Kiểm soát chi phí**: hạn mức token theo tick / theo entity / theo phiên (§20.2), trần chi phí tuyệt đối có chặn cứng, rate limiter, và circuit breaker theo tỉ lệ lỗi.
+- **Thoái lui**: timeout hoặc breaker mở ⇒ trả về fallback policy của entity (§10.3), sim **không** dừng. Có scenario kiểm tra riêng cho đường này.
+- **Cache**: cache theo `request_hash`, cộng prompt prefix caching của nhà cung cấp, cộng policy compilation ở §20.8.
+- **Ghi nhận**: mỗi lần gọi ghi `prompt_id`, `prompt_version`, `model`, token, chi phí và độ trễ — đây là nguồn cho metric `llm_tokens_per_entity`.
+
+### 6.8. Giao thức đồng bộ frontend
+
+§18.4 yêu cầu simulation gửi snapshot và delta chứ không chia sẻ object reactive. Đây là hình dạng cụ thể của giao thức đó.
+
+**Client đăng ký một *view*, không phải một vùng mô phỏng:**
+
+```protobuf
+message ViewSubscription {
+  string branch_id = 1;
+  string world_id  = 2;
+  BBox   viewport  = 3;   // toa do i64, gui duoi dang high/low
+  ZRange z_range   = 4;
+  repeated string overlays = 5;
+  uint32 lod_hint  = 6;   // goi y cho renderer, KHONG phai fidelity mo phong
+}
+```
+
+**Phân biệt bắt buộc, lấy thẳng từ §8.4:**
+
+| Hành động của người chơi | Loại thông điệp | Hệ quả |
+|---|---|---|
+| Kéo camera, đổi lát `z` | `ViewSubscription` (query) | Chỉ tải dữ liệu để vẽ. **Không** đổi vùng mô phỏng, **không** ghi event |
+| Ghim một vùng để mô phỏng chi tiết | `SetSimulationFocus` (command) | Là transaction, có tick, **ghi event**, ảnh hưởng replay |
+
+Gộp hai thứ này là một lỗi tinh vi nhưng chí mạng: nó khiến lịch sử thế giới phụ thuộc vào việc người chơi đã nhìn đi đâu, đúng thứ mà §22.46 cấm.
+
+**Luồng server → client:**
+
+| Message | Khi nào |
+|---|---|
+| `ChunkSnapshot` | Lúc đăng ký, lúc resync, hoặc khi client tụt quá xa |
+| `ChunkDelta` | Ô bẩn, gộp theo hình chữ nhật, gộp theo ngân sách khung hình |
+| `EntityDelta` | Vị trí, hướng, sprite, effect nhìn thấy được |
+| `EventNotice` | Event mà avatar hoặc chế độ quan sát được phép biết |
+| `Heartbeat` | Giữ nhịp và mang `stream_seq` hiện tại |
+
+**Bốn quy tắc:**
+
+1. Mọi message mang `stream_seq` tăng đơn điệu. Client phát hiện lỗ hổng thì gửi `Resync(from_seq)`; nếu server đã cắt bỏ đoạn đó thì trả `ChunkSnapshot` đầy đủ.
+2. **Backpressure có chủ đích**: client chậm thì server gộp delta mạnh hơn rồi tụt về snapshot định kỳ. Server không bao giờ chặn tick mô phỏng để chờ một client.
+3. Tọa độ đi qua dây dưới dạng cặp high/low hoặc chuỗi; frontend chuyển sang hệ camera-local trong Web Worker (§4.3, §22.10). Không có `Number` 53-bit nào chạm vào tọa độ thô.
+4. Payload chunk dùng đúng nén palette như tầng lưu trữ, nên không có bước chuyển đổi định dạng thứ hai để lệch.
+
 ## 7. ⭐ Harness cho agent: vào thế giới, test diện rộng, bắt bug chính xác
 
-Đây là phần khiến dự án có thể phát triển bằng agent thay vì bằng người ngồi chơi thử. **Nó được xây ở Giai đoạn 0, trước cả gameplay.**
+Đây là phần khiến dự án có thể phát triển bằng agent thay vì bằng người ngồi chơi thử. **Nó được xây ở Giai đoạn 0, trước cả gameplay** (§P9).
 
-### 7.1. `mow-devtool` — cổng gỡ lỗi trong sim-core
+### 7.1. `mow-devtool` — cổng gỡ lỗi trong `mow-server`
 
 Một gRPC service **chỉ tồn tại khi build với feature `devtool`**, không có trong binary release.
 
@@ -546,6 +771,8 @@ service Debug {
 
 `SetLlmMode` là chi tiết nhỏ nhưng quyết định: ở chế độ `REPLAY`, mọi output LLM lấy từ bản ghi nên test hoàn toàn deterministic; ở `STUB`, agent-service trả plan cố định để test luật mà không tốn token.
 
+**Ai thật sự sở hữu chế độ này:** LLM Gateway ở §P6.7, không phải `mow-server` — vì gateway mới là nơi gọi model. `Debug.SetLlmMode` là một **lệnh chuyển tiếp**: nó ghi chế độ mới thành một event trong branch (để replay biết chế độ nào đang chạy), phát control message qua NATS, và chỉ trả về sau khi gateway ack. Không có ack thì trả lỗi, không im lặng coi như thành công — nếu không, một test tưởng mình đang `REPLAY` mà thực ra vẫn `LIVE` sẽ cho kết quả xanh sai.
+
 ### 7.2. `mow-mcp` — MCP server cho agent code
 
 Bọc `Debug` service thành công cụ MCP để agent (Claude Code) gọi trực tiếp. Đây là cách agent "vào thế giới".
@@ -565,7 +792,7 @@ Bọc `Debug` service thành công cụ MCP để agent (Claude Code) gọi tr�
 | UI | `ui_screenshot`, `ui_click`, `ui_read_panel` | Qua Playwright, kiểm tra frontend |
 | Metrics | `metrics_query`, `health_report` | Đọc sức khỏe thế giới |
 
-**Bảo mật:** `mow-mcp` chỉ kết nối được tới sim-core build kèm feature `devtool`, qua loopback, với token trong `.env`. Không có đường nào để nó tồn tại trong bản phát hành.
+**Bảo mật:** `mow-mcp` chỉ kết nối được tới `mow-server` build kèm feature `devtool`, qua loopback, với token trong `.env`. Không có đường nào để nó tồn tại trong bản phát hành.
 
 ### 7.3. Scenario DSL
 
@@ -578,6 +805,18 @@ description: Đói cực độ phải mở khóa hành vi phạm pháp qua §9.7
 worldseed: "test:tiny_village"
 llm_mode: STUB                       # test luật, không test model
 seed_overrides: { rng_stream_salt: "hunger_theft_1" }
+
+# Alias được ràng buộc MỘT LẦN sau genesis, bằng bộ chọn có thứ tự toàn phần.
+# Không được viết id thô vào kịch bản: id sinh ra từ genesis và sẽ đổi khi
+# worldseed đổi, còn bộ chọn thì vẫn đúng.
+bind:
+  "@village":        { kind: settlement, select: first, order: [population desc, id asc] }
+  "@villager.aren":  { kind: entity, in: "@village", tag: Sapient,
+                       select: first, order: [age desc, id asc] }
+  "@villager.bram":  { kind: entity, in: "@village", tag: Sapient,
+                       select: nth, n: 2, order: [age desc, id asc] }
+  "@granary":        { kind: building, in: "@village", tag: food_store,
+                       select: first, order: [id asc] }
 
 given:
   - set_need:     { entity: "@villager.aren", need: hunger, value: 0.04 }
@@ -602,6 +841,15 @@ then:
   - assert_invariants: [INV-22-25, INV-22-04, INV-22-40]
   - assert_no_orphan_entities: true
 ```
+
+**Bốn quy tắc của phần `bind`:**
+
+1. **Bộ chọn phải có thứ tự toàn phần.** `order` bắt buộc kết thúc bằng `id asc` để phá hòa. Thiếu nó thì hai lần chạy có thể chọn hai entity khác nhau và kịch bản trở nên chập chờn.
+2. **Không khớp là lỗi**, không phải bỏ qua. Một kịch bản "xanh" vì bộ chọn không tìm thấy ai là loại kết quả sai tệ nhất.
+3. **Kết quả ràng buộc được ghi vào báo cáo** — alias nào trỏ tới id nào — để khi kịch bản đỏ thì đọc log là biết nó đang nói về ai.
+4. **Worldseed dùng cho test có thể khai báo sẵn `named_entities`**; khi đó kịch bản tham chiếu thẳng tên, không cần bộ chọn. Đây là đường ưu tiên cho world nhỏ viết tay.
+
+**Khẳng định phủ định phải có biên thời gian.** `assert_belief ... not_contains` chỉ có nghĩa tại một thời điểm xác định; runner đánh giá nó ngay sau khối `when` kết thúc, không phải "chưa bao giờ và sẽ không bao giờ". Kịch bản muốn khẳng định mạnh hơn thì dùng `assert_never_within: { days: N, ... }` để runner chạy đủ N ngày rồi mới kết luận.
 
 Runner: `mow-cli scenario run tests/scenarios/**` → báo cáo JUnit + JSON. Mỗi scenario chạy trong world riêng, song song được.
 
@@ -674,12 +922,13 @@ Ba đường tạo bundle:
 | Property (Rust) | `proptest` | Áp/gỡ 1000 effect trả về base; tọa độ biên `i64`; giải quyết đồng thời đối xứng |
 | Bench (Rust) | `criterion` | Tick time, chunk gen, pathfinding |
 | Unit (Python) | `pytest` + `hypothesis` | Validator, budget, ACL, renderer prompt |
+| Graph (Python) | `pytest` + LangGraph test harness | Mỗi graph chạy với `STUB`/`REPLAY`, fixture output cố định; kiểm nhánh lỗi, timeout, retry và fallback |
 | Contract | `tests/contract` | Round-trip Rust↔Python↔TS cho mọi schema |
 | Golden | prompt + narration | Đổi template mà quên bump version thì fail |
-| Scenario | `mow-cli scenario` | Hành vi thế giới, §7.3 |
-| Determinism | `mow-cli determinism` | §7.5 |
-| Soak | nightly | §7.7 |
-| UI | `vitest` + Playwright | Panel, overlay, BigInt coord, WS reconnect |
+| Scenario | `mow-cli scenario` | Hành vi thế giới, §P7.3 |
+| Determinism | `mow-cli determinism` | §P7.5 |
+| Soak | nightly | §P7.7 |
+| UI | `vitest` + Playwright | Panel, overlay, BigInt coord, WS reconnect. Chạy trên bản web trong trình duyệt; đường riêng của Tauri (đường dẫn file, quyền, sidecar) test bằng `tauri-driver` |
 
 ---
 
@@ -693,6 +942,38 @@ Ba đường tạo bundle:
 
 ---
 
+### 8.1. Ngân sách hiệu năng và cổng CI
+
+§23 liệt kê các mục tiêu đo được của thế giới. Bảng này biến chúng thành cổng tự động — mục tiêu không có cổng thì sớm muộn cũng trôi.
+
+| Mục tiêu §23 | Cổng | Chạy khi |
+|---|---|---|
+| Cùng seed → cùng hash chunk | `determinism check --runs 2 --threads 1,8` | mỗi PR |
+| Replay từ snapshot + event = cùng hash | như trên, chế độ replay | mỗi PR |
+| Camera vượt `2^53` vẫn chọn đúng cell | scenario `spatial/far_coords` | mỗi PR |
+| Sim vẫn chạy khi tắt hoàn toàn LLM | mọi scenario ở `llm_mode: STUB` | mỗi PR |
+| Áp rồi gỡ 1000 effect trả về base stat | proptest `effect_apply_remove_identity` | mỗi PR |
+| Kho 4200 thỏi không tạo 4200 entity | scenario + assert số entity | mỗi PR |
+| Save không tăng theo phần chưa khám phá | scenario + đo kích thước save | mỗi PR |
+| Không prompt nào chứa bí mật chưa được biết | prompt leak guard bật trong mọi scenario | mỗi PR |
+| Không memory retrieval chéo entity | test ACL ở `memory-service` | mỗi PR |
+| 10.000 `Animate` không có loop per-tick | bench + assert số lần chạm need | nightly |
+| 200 giờ mô phỏng không lệch trait thiếu event | soak | nightly |
+| Phân bố tuổi phản ánh mức nguy hiểm lịch sử | soak + World Health Report | nightly |
+
+**Ngân sách hiệu năng** (giá trị khởi điểm, hiệu chỉnh sau lần profiling đầu):
+
+| Chỉ số | Ngân sách | Đo ở |
+|---|---|---|
+| `tick_duration_ms` p99, 1 khu định cư active | < 40 ms | bench mỗi PR |
+| Sinh một chunk `32×32×16` | < 8 ms | bench mỗi PR |
+| Round-trip command → ack qua gateway | p95 < 50 ms | e2e |
+| Rebuild chunk texture ở frontend | < 4 ms | Playwright + performance mark |
+| Tăng RAM trong soak | < 50 MB mỗi năm mô phỏng | nightly |
+| Tăng kích thước save trong soak | < 20 MB mỗi năm mô phỏng | nightly |
+
+Vượt ngân sách làm CI **fail**, không phải cảnh báo. Muốn nới thì sửa con số trong PR kèm lý do — như vậy mỗi lần nới đều có dấu vết.
+
 ## 9. Lộ trình
 
 Ánh xạ với Giai đoạn A–F ở §24, **cộng thêm Giai đoạn 0** cho hạ tầng.
@@ -705,12 +986,18 @@ Phạm vi: monorepo, workspace Rust + uv Python, Makefile, docker-compose, CI. `
 - Agent tạo được world qua MCP, tiến 1000 tick, đọc entity, chạy invariant, và nhận báo cáo.
 - `determinism check --runs 2 --threads 1,8` xanh.
 - CI chặn được codegen drift và schema không hợp lệ.
+- Một repro bundle chụp được rồi chạy lại cho **đúng cùng state hash** — vòng lặp báo lỗi đã đóng trước khi có gameplay để báo lỗi.
+- Prompt leak guard chạy được và bắt được một trường hợp rò cố tình cài vào test.
+- Build release **không** chứa symbol nào của `devtool`; có test trên artifact chứng minh điều đó.
+- Bốn trừu tượng của §P3.4 (`VectorIndex`, `MessageBus`, persistence, model client) đã có hai hiện thực và chạy cùng bộ test.
 
 ### Giai đoạn A — Hạt nhân không gian
 
 `mow-worldgen`, `mow-spatial`, chunk lười, save seed + delta, worldseed + lockfile tối thiểu, genesis command. Web: PixiJS tilemap, lát cắt `z`, pan/zoom, floating origin, BigInt ở biên.
 
-**Hoàn thành:** tọa độ vượt `2^53` chính xác; chunk seam không lộ; đào/đặt/save/load/replay cho cùng hash; scenario `spatial/*` xanh.
+Kèm theo: **một bản Tauri chạy được** với backend nhúng và SQLite, dù chỉ hiển thị bản đồ. Để hình thái desktop tới Giai đoạn F mới dựng là rủi ro tích lũy — nó chạm vào persistence, đường dẫn file, đóng gói và quyền hệ thống, những thứ khó sửa muộn.
+
+**Hoàn thành:** tọa độ vượt `2^53` chính xác; chunk seam không lộ; đào/đặt/save/load/replay cho cùng hash; scenario `spatial/*` xanh; bản desktop mở được một save do bản server tạo ra và ngược lại.
 
 ### Giai đoạn B — Khu định cư sống, chưa cần LLM
 
@@ -777,6 +1064,25 @@ Phạm vi: monorepo, workspace Rust + uv Python, Makefile, docker-compose, CI. `
 
 ---
 
+### 10.6. Phụ thuộc, bí mật và dữ liệu người dùng
+
+- **Ghim phiên bản**: `Cargo.lock`, `uv.lock` và `pnpm-lock.yaml` đều được commit. Nâng phụ thuộc là PR riêng, không trộn vào PR tính năng. Renovate chạy hàng tuần, gom theo nhóm.
+- **Bí mật** chỉ nằm ở `.env` hoặc secret manager của môi trường; không bao giờ trong `config/*.yaml` vì các file đó được commit. CI có bước quét bí mật rò vào repo.
+- **Save của người chơi là dữ liệu quý.** Trước mọi migration hoặc thao tác phá hủy diện rộng của True God, engine tự snapshot (§15.5). Save có checksum; mở một save hỏng thì báo lỗi rõ chứ không sửa liều.
+- **Repro bundle có thể chứa nội dung nhạy cảm** do người chơi tạo. Bundle nằm cục bộ theo mặc định; chia sẻ là hành động tường minh của người dùng.
+
+### 10.7. Vòng lặp phát triển content pack
+
+`content/core/` chính là một pack dùng đúng cơ chế mà cộng đồng sẽ dùng — không có đường đặc quyền cho nội dung chính thức. Nhờ vậy hệ plugin được kiểm thử mỗi ngày thay vì chỉ ở Giai đoạn F.
+
+```bash
+mow-cli pack validate content/core      # validate theo JSON Schema
+mow-cli pack test content/core          # chạy scenario test khai báo trong manifest
+mow-cli pack watch content/core         # nạp lại nóng ở dev; world đang chạy nhận version mới qua migration
+```
+
+Nạp nóng chỉ được phép ở dev build và luôn đi qua đường migration/version của §19.7.3 — không có ghi đè định nghĩa tại chỗ, vì như vậy world đang chạy sẽ mất khả năng replay.
+
 ## 11. Rủi ro triển khai
 
 | Rủi ro | Dấu hiệu sớm | Kiểm soát |
@@ -788,6 +1094,7 @@ Phạm vi: monorepo, workspace Rust + uv Python, Makefile, docker-compose, CI. `
 | Codegen drift | Struct viết tay xuất hiện | CI `make codegen && git diff --exit-code` |
 | Scope creep theo `idea.md` | Giai đoạn trượt tiến độ | Mỗi giai đoạn có exit criteria đo được; tính năng ngoài danh sách vào backlog |
 | Frontend gánh luật | Panel tự tính toán thay vì đọc read model | `web/` không import kiểu domain nào ngoài kiểu sinh từ schema |
+| Bản desktop không đóng gói nổi | Phát hiện muộn ở Giai đoạn F, phải viết lại tầng hạ tầng | Bốn trừu tượng ở §P3.4 có từ Giai đoạn 0; bản Tauri chạy được từ Giai đoạn A |
 
 ---
 
@@ -796,11 +1103,17 @@ Phạm vi: monorepo, workspace Rust + uv Python, Makefile, docker-compose, CI. `
 ```bash
 make setup        # toolchain, uv sync, pnpm i, pre-commit
 make up           # docker-compose: postgres, qdrant, nats, jaeger
+make schema       # crates → schemas/*.json  (schemars)
 make codegen      # proto + schema → Rust/Python/TS
+make validate     # validate content/**.yaml và config/**.yaml theo schema
 make test         # unit + contract + scenario smoke
+make determinism  # chạy 2 lần, khác số luồng, so state hash
 make dev          # sim-server (devtool) + gateway + agent + web
+make desktop      # build Tauri với backend nhúng + SQLite
 make mcp          # mow-mcp trên loopback, in ra cấu hình cho Claude Code
 ```
+
+`make schema`, `make codegen` và `make validate` là ba bước tách riêng vì chúng chạy ở ba thời điểm khác nhau: đổi kiểu Rust thì chạy cả ba; sửa một file content thì chỉ cần `make validate`.
 
 Việc đầu tiên đáng làm không phải địa hình mà là **Giai đoạn 0**: khi `mow-mcp` chạy được và `determinism check` xanh, mọi thứ sau đó xây nhanh hơn nhiều, vì mỗi tính năng mới đều có sẵn đường để agent tự kiểm chứng.
 

@@ -39,8 +39,8 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Mô phỏng | Authoritative, event-driven, nhiều cấp độ chi tiết |
 | AI | Utility AI/behavior policy cho việc thường ngày; LLM cho quyết định có ý nghĩa |
 | Dữ liệu định nghĩa | YAML dành cho authoring, kiểm tra và chỉnh sửa; runtime dùng schema đã biên dịch/ECS |
-| Giao diện | Vue cho UI; PixiJS/WebGL hoặc WebGPU cho bản đồ; không dùng DOM cho từng ô |
-| Kiến trúc đích | Tauri + Vue/PixiJS ở frontend, simulation core chạy ngoài UI thread; Rust là lựa chọn đích cho engine nặng |
+| Giao diện | Vue cho UI; PixiJS v8 (WebGPU có fallback WebGL) cho bản đồ; không dùng DOM cho từng ô |
+| Kiến trúc đích | Simulation core Rust authoritative, chạy ngoài UI thread; tầng nhận thức tách tiến trình; frontend Vue/PixiJS; đóng gói Tauri cho desktop. Topology chi tiết ở `docs/plan.md` |
 | Số học authoritative | Số nguyên hoặc fixed-point; float chỉ tồn tại ở renderer và số liệu không commit |
 | Phân tầng sinh vật | `Animate` cho mọi sinh vật; `Sapient` mới có cognition contract và ngân sách LLM |
 | Runtime luật | DSL khai báo cho phần lớn; WASM deterministic có fuel cho luật phức tạp; không Lua, không `eval` |
@@ -139,6 +139,22 @@ Một câu chuyện hay phải đi qua vòng lặp này. Ví dụ, “tham nhũn
 - **Entity**: vật thể có định danh và component; sinh vật chỉ là một nhóm entity đặc biệt.
 - **Soul**: định danh siêu hình tùy theo luật world, có thể duy trì tính liên tục qua chết, triệu hồi hoặc tái sinh.
 - **Law**: phải ghi rõ loại, vì luật vật lý, luật phép thuật, pháp luật xã hội và policy AI không phải một thứ.
+
+Các khái niệm được định nghĩa ở phần sau nhưng dùng xuyên suốt, gom lại đây để tra nhanh:
+
+- **`Animate` / `Sapient`**: hai tầng sinh vật. `Animate` có cơ thể và nhu cầu; `Sapient` thêm cognition contract và mới được nhập vai bằng LLM (§9.1).
+- **`Homeostasis`**: toàn bộ nhu cầu sinh lý và tâm lý của một sinh vật, tính bằng tích phân đóng chứ không tick (§9.7).
+- **Effect**: một model duy nhất cho bệnh, phép, lá chắn, nguyền, nghiện, sang chấn và hiệu ứng cấp vùng. Chỉ đẩy modifier, không ghi base stat (§9.8).
+- **Proper time**: đồng hồ riêng của một entity, tách khỏi thời gian cục bộ của world. Quyết định cách rebase deadline khi qua portal (§4.5).
+- **Instance / stack / aggregate**: ba mức chi tiết của vật phẩm, tương đương LOD của không gian (§8.5.2).
+- **Possession / claim**: chiếm hữu là ground truth vật lý; claim là belief xã hội về việc ai được công nhận là chủ (§12.8.1).
+- **`norm_set`**: bộ chuẩn mực của một jurisdiction, biến một hành vi thành tội hoặc không (§12.5.1).
+- **Talent / knowledge / revelation**: thiên phú là bẩm sinh và không truyền được; kiến thức học và dạy được; khải thị là sự kiện ban thẳng, có provenance (§13.8.1).
+- **Storylet**: đơn vị dữ liệu của event seed — precondition trên state thật, nhiễu loạn điều kiện, salience, và không bao giờ có outcome (§15.6).
+- **Worldseed / lockfile**: worldseed gói seed, generation profile và scenario; lockfile là bản resolve bất biến của mọi phiên bản mà worldseed đó phụ thuộc (§7.6, §7.6.6).
+- **Genesis command**: chuỗi transaction tại tick 0 mà scenario được biên dịch thành; không có đường ghi thẳng state vào save (§7.6.2).
+- **Provenance**: nguồn gốc của một thay đổi hoặc một vật — simulation, LLM, Yuu, True God, genesis hay devtool. Là thứ khiến mọi việc truy ngược được.
+- **Cognition contract**: tập component bắt buộc để một entity có thể nhập vai; thiếu một phần là lỗi tạo entity, không phải cảnh báo (§9.1).
 
 ### 4.2. Bốn tầng luật
 
@@ -290,10 +306,13 @@ Chuyển entity là giao dịch nguyên tử:
 
 1. Reserve entity và phần inventory đi kèm.
 2. Kiểm tra quyền, khối lượng, môi trường đích và năng lượng.
-3. Ghi event rời world nguồn.
-4. Chuyển state sang world đích.
-5. Ghi event đến world đích.
-6. Commit cả hai phía; nếu thất bại thì rollback, không nhân đôi entity.
+3. Áp chế độ tiếp xúc của cổng theo §6.4: kiểm dịch, hàng cấm, quyền cư trú, luật mang sinh vật và linh hồn qua cổng. Bước này có thể từ chối hoặc giữ lại ở vùng cách ly thay vì cho qua.
+4. Kiểm tra khả năng sống ở world đích theo `needs_profile` (§9.7.5) — khí quyển, nhiệt độ, mật độ mana. Không sống nổi mà vẫn đi là một quyết định hợp lệ, nhưng hệ quả phải được áp ngay khi tới.
+5. **Rebase mọi tiến trình có thời hạn theo clock domain của chính nó** (§4.5): tuổi, ủ bệnh, thai kỳ, effect đang chạy, hợp đồng, deadline nghiên cứu. Đây là bước dễ quên nhất và là bước gây ra loại bug tệ nhất.
+6. Ghi event rời world nguồn.
+7. Chuyển state sang world đích.
+8. Ghi event đến world đích, kèm bản ghi những gì đã đi cùng: ký sinh, mầm bệnh, hạt giống, vật phẩm (§9.10.1).
+9. Commit cả hai phía; nếu thất bại thì rollback, không nhân đôi entity.
 
 ### 6.3. Khe nứt tự nhiên hiếm gặp
 
@@ -863,7 +882,8 @@ Luyện tập chỉ tăng khi hành động thật sự sử dụng năng lực,
 
 - Không chỉ có một thanh HP. Body part có mô, chức năng, máu, đau, nhiễm trùng và thương tích.
 - `vitality` có thể hiển thị như chỉ số tổng hợp cho UI, không phải nguồn sự thật duy nhất.
-- Tấn công đi qua các pha: chuẩn bị → nhắm → va chạm/effect → phản ứng → hậu quả.
+- Tấn công chạy trên đúng máy trạng thái ba pha `wind_up → impact → recovery` của §10.8, cộng reaction timeline riêng. Không có mô hình pha thứ hai dành riêng cho chiến đấu.
+- Nhắm mục tiêu là một phần của `wind_up`; hậu quả xã hội và y tế là effect phát sinh sau `impact`, không phải một pha riêng.
 - Armor, vật liệu, góc đánh, động lượng, spell shield và anatomy quyết định thương tích.
 - Khu vực xa có thể giải encounter bằng mô hình tổng hợp nhưng phải tạo casualty/injury hợp lý khi entity quan trọng được materialize.
 - Đầu hàng, bỏ chạy, cứu thương, bắt tù binh và hậu cần có thể quan trọng hơn damage thuần túy.
@@ -1034,8 +1054,10 @@ Không tồn tại một thanh “hạnh phúc” tổng. UI có thể hiển th
 Đây là quyết định hiệu năng quyết định quy mô của toàn dự án. Mỗi need lưu:
 
 ```text
-(value_at_tick, last_update_tick, rate_terms)
+(value_at_tick, last_update_tick, clock_domain, rate_terms)
 ```
+
+`clock_domain` là bắt buộc theo §4.5: nhu cầu sinh lý đếm theo **proper time** của entity, còn nhu cầu gắn với lịch xã hội đếm theo **world local time**. Thiếu trường này thì việc đi qua portal sẽ làm cơn đói nhảy sai.
 
 Giá trị hiện tại được suy ra bằng **tích phân đóng** khi có ai đọc, và scheduler chỉ đặt wake-up tại thời điểm chạm ngưỡng kế tiếp, đúng mô hình event/deadline ở §8.4. Một đàn 40.000 con cá không tốn 40.000 phép cộng mỗi tick; chúng chỉ thức dậy khi đói tới ngưỡng, khi bị săn hoặc khi môi trường đổi.
 
@@ -1388,7 +1410,7 @@ Text hội thoại có thể do LLM viết, nhưng effect xã hội do người 
 
 Không tạo một hệ round cố định tách khỏi simulation. Scheduler theo deadline ở §8.4 và trường `duration` của mỗi action ở §10.5 đã đủ để lượt tự xuất hiện.
 
-Mỗi actor mang `ready_at_local_tick`. Nó chỉ được chọn action khi thời gian cục bộ tới mốc đó:
+Mỗi actor mang `ready_at_local_tick`. Nó chỉ được chọn action khi thời gian cục bộ của world tới mốc đó. Thời lượng hành động được tính bằng **proper time của chính actor** rồi quy đổi sang tick cục bộ khi xếp lịch, theo §4.5:
 
 ```text
 duration = max(min_duration, ceil(base_work / effective_rate))
@@ -2575,17 +2597,18 @@ flowchart LR
     God[True God Console] --> Yuu
 ```
 
-Đề xuất desktop-first:
+Sơ đồ trên là **kiến trúc logic**: nó cố định ai được quyền làm gì, không cố định số tiến trình hay giao thức. Cách chia tiến trình, transport và cơ sở dữ liệu cụ thể được chốt ở `docs/plan.md`; mục này chỉ ràng buộc những điều mà mọi topology đều phải giữ.
 
-- **Tauri 2**: desktop shell và boundary quyền hệ thống.
-- **Vue 3 + TypeScript**: panel, form, timeline, graph và Yuu console.
-- **PixiJS**: render grid 2D.
-- **Rust simulation core**: i64 chuẩn, đa luồng, dữ liệu compact và hiệu năng ổn định.
-- **SQLite/WAL** cho metadata, event, component quan trọng và transaction; chunk payload compact có thể lưu blob/file segment.
-- **Embedding index** dùng chung nhưng namespace theo entity.
-- **LLM Gateway** trừu tượng hóa model local và API cloud, có quota/circuit breaker.
+- **Simulation core viết bằng Rust**: i64 chuẩn, đa luồng, dữ liệu compact, và là nơi duy nhất commit state authoritative.
+- **Vue 3 + TypeScript** cho panel, form, timeline, graph và Yuu console; **PixiJS** cho grid 2D.
+- **Tauri 2** cho bản desktop: shell và boundary quyền hệ thống.
+- **Lưu trữ giao dịch** cho metadata, event, component quan trọng: SQLite/WAL ở bản desktop, PostgreSQL ở bản server. Cùng một lớp trừu tượng persistence, cùng một bộ test. Chunk payload compact lưu blob hoặc file segment ở cả hai.
+- **Embedding index** dùng chung nhưng namespace theo entity, và bản ghi authoritative của ký ức không nằm trong index.
+- **LLM Gateway** trừu tượng hóa model local và API cloud, có quota, circuit breaker và chế độ replay từ bản ghi.
 
 Một prototype thuần web có thể dùng Web Worker + IndexedDB, nhưng baseline desktop phù hợp hơn với save lớn, local model, quyền file và tọa độ 64-bit.
+
+Bất kể topology nào, ba ranh giới sau không được nhượng bộ: chỉ simulation core commit state; tầng nhận thức chỉ đề xuất; frontend không chứa luật authoritative.
 
 ### 19.2. Biên module
 
@@ -2637,11 +2660,11 @@ Không event-source từng thay đổi nhiệt độ nhỏ. Dùng mô hình lai:
 
 Save ghi rõ:
 
-- Schema version.
-- Generator/law/prompt/model version.
+- **Lockfile đã resolve** theo §7.6.6 — engine build, pack version và content hash, WASM ABI, tập migration, version generator và law. Đây là định nghĩa duy nhất của "save này chạy trên cái gì"; không giữ một danh sách version thứ hai ở nơi khác.
+- Prompt/model version đang dùng cho các entity `Sapient`.
 - RNG stream version.
 - Snapshot base và event sequence cuối.
-- Branch ancestry.
+- Branch ancestry và fork event.
 
 ### 19.6. Determinism
 
@@ -2735,13 +2758,22 @@ importance = proximity
            × entity_significance
 ```
 
-Có thêm fairness để một entity ít nổi bật không bị bỏ đói nhận thức mãi mãi. Scheduler có budget theo:
+Mọi thừa số trên phải đo bằng **đại lượng của simulation** — khoảng cách theo ô, số tick kể từ lần nghĩ trước, mức độ hậu quả tính từ state — chứ không bằng đồng hồ tường. Có thêm fairness để một entity ít nổi bật không bị bỏ đói nhận thức mãi mãi.
 
-- Request/giây.
-- Token/phút.
-- Chi phí tiền/phút.
-- Số model local chạy đồng thời.
-- Độ trễ tối đa theo loại quyết định.
+#### 20.2.1. Tách chọn lựa khỏi điều tiết
+
+Đây là một phân biệt bắt buộc, vì gộp hai thứ này sẽ phá §22.9.
+
+| | Quyết định gì | Phải deterministic? | Ở đâu |
+|---|---|---|---|
+| **Selection** | Ở tick này, những entity nào được nghĩ, theo thứ tự nào | **Có** | Trong simulation core |
+| **Throttling** | Gửi request ra ngoài nhanh chậm thế nào | Không | LLM gateway, ngoài simulation |
+
+Selection dùng ngân sách tính theo **cửa sổ tick mô phỏng** (ví dụ: tối đa `N` request cho mỗi 100 tick của một world), sắp xếp theo `(importance, stable_key)`. Cùng state và cùng tick luôn cho ra cùng tập entity được chọn, bất kể máy nhanh hay chậm.
+
+Throttling dùng request/giây, token/phút, chi phí tiền/phút, số model local chạy song song và độ trễ tối đa. Nó **được phép làm chậm** một request nhưng **không được phép đổi tập request hoặc thứ tự của chúng**.
+
+Khi ngân sách cạn hoặc gateway trả timeout, entity rơi về fallback policy ở §10.3, và **quyết định rơi về fallback đó tự nó là một event được ghi**. Nhờ vậy replay tái hiện đúng cả những lúc hệ thống quá tải, thay vì âm thầm cho ra một thế giới khác.
 
 ### 20.3. Khi nào không gọi LLM
 
@@ -2801,6 +2833,8 @@ Với “social scene”, request chung chỉ được nhận transcript, môi t
 - Model mạnh: phản tư, ngoại giao phức tạp, tạo law/species proposal cho Yuu.
 - Embedding chỉ tạo cho memory đạt ngưỡng quan trọng; fact có cấu trúc không cần embedding lại liên tục.
 
+Routing phải là **hàm của chính request** — loại quyết định, mức hậu quả, độ dài context — chứ không phải hàm của tình trạng provider lúc đó. Việc hạ cấp model vì provider lỗi là một đường khác, thuộc §20.10, và phải được ghi lại chứ không được lặng lẽ đội lốt routing bình thường.
+
 ### 20.8. Cache và policy compilation
 
 - Cache theo persona version + situation abstraction + available actions, không theo raw prompt chứa timestamp.
@@ -2808,6 +2842,7 @@ Với “social scene”, request chung chỉ được nhận transcript, môi t
 - Các hành vi lặp lại có thể được LLM đề xuất thành declarative utility policy.
 - Yuu kiểm tra, sandbox và version policy trước khi dùng rộng rãi.
 - Không “compile” hallucination thành code chạy tùy ý.
+- **Cache hit vẫn là một quyết định được ghi lại.** Nó tham chiếu tới phản hồi gốc thay vì tạo phản hồi mới, nhưng event vẫn tồn tại. Nếu không, một lần chạy có cache ấm và một lần chạy cache lạnh sẽ sinh ra hai chuỗi event khác nhau và replay lệch.
 
 Ví dụ, sau nhiều lần thợ mỏ lập cùng kế hoạch, Yuu có thể tạo policy:
 
@@ -2838,6 +2873,7 @@ Raw episode chỉ đưa vào khi cần. Summary luôn giữ link về source đ�
 - Circuit breaker chuyển sang model nhỏ/policy khi provider lỗi.
 - Request/result có trace ID, token, latency, model và prompt version.
 - Entity dùng fallback plan hợp lý như chờ, tự bảo vệ hoặc tiếp tục routine; không nhận quyền năng mới vì model lỗi.
+- **Ghi lại model thật sự đã dùng, không phải model được định tuyến.** Mỗi lần hạ cấp model và mỗi lần rơi hẳn về policy đều là một event có lý do — timeout, breaker mở, hết ngân sách. Nhờ vậy replay tái hiện đúng cả những phiên chạy trong lúc provider đang hỏng, và audit trả lời được câu "vì sao hôm đó cả vùng này hành xử ngờ nghệch".
 
 ### 20.11. Chống trôi persona, mục tiêu và niềm tin
 
@@ -3265,6 +3301,8 @@ economy_profile:
 ```
 
 ## 22. Bất biến phải giữ
+
+> **Số thứ tự ở đây là định danh ổn định.** Mỗi mục là một ID vĩnh viễn dạng `INV-22-<n>`, được tham chiếu trực tiếp từ mã kiểm thử và báo cáo lỗi. Bất biến mới **luôn được thêm vào cuối**; không bao giờ chèn giữa và không bao giờ đánh số lại. Một bất biến bị bãi bỏ thì đánh dấu `[đã bãi bỏ]` và giữ nguyên số, không xóa khỏi danh sách.
 
 1. Một state change authoritative chỉ được commit qua simulation/transaction handler.
 2. LLM chỉ đề xuất intent/cognitive mutation; không trực tiếp ghi health, knowledge, inventory, law hoặc vị trí.
