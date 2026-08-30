@@ -134,9 +134,7 @@ impl Prob {
     /// `rate.scaled(3, 1)`, không phải một phép nhân số thực ở chỗ gọi.
     pub fn scaled(self, num: u64, den: u64) -> MathResult<Prob> {
         if den == 0 {
-            return Err(MathError::DivideByZero {
-                op: "Prob::scaled",
-            });
+            return Err(MathError::DivideByZero { op: "Prob::scaled" });
         }
         let v = (self.0 as u128) * (num as u128) / (den as u128);
         Ok(Prob(v.min(u64::MAX as u128) as u64))

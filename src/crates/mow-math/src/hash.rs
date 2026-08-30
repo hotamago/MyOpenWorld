@@ -15,7 +15,7 @@ use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 
 /// Giá trị hash 32 byte.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 pub struct StateHash(pub [u8; 32]);
 
 impl StateHash {

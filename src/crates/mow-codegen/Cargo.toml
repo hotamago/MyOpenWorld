@@ -1,0 +1,14 @@
+[package]
+name = "mow-codegen"
+description = "Sinh ma va hop dong: ba pipeline, ba nguon khac nhau, khong giao nhau."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "mow-codegen"
+path = "src/main.rs"
+
+[dependencies]
+mow-config = { path = "../mow-config" }

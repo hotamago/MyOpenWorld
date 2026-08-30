@@ -1,0 +1,12 @@
+[package]
+name = "mow-bus"
+description = "Bus thong diep ben: mot proposal da nhan khong duoc mat khi tien trinh chet."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+rusqlite = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

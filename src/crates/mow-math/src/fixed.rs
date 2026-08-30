@@ -254,7 +254,9 @@ impl Unit {
     /// Nhân hai tỉ lệ. Tích của hai giá trị trong `[0,1]` luôn trong `[0,1]`,
     /// và `Fx::mul` chỉ tràn khi toán hạng vượt `2^47`, nên phép này toàn phần.
     pub fn and(self, other: Unit) -> Unit {
-        Unit(Fx((((self.0 .0 as i128) * (other.0 .0 as i128)) >> FRAC_BITS) as i64))
+        Unit(Fx(
+            (((self.0 .0 as i128) * (other.0 .0 as i128)) >> FRAC_BITS) as i64,
+        ))
     }
 }
 

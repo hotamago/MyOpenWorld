@@ -1,0 +1,10 @@
+id: cognition.reflect
+version: 1
+model_hint: { tier: cheap, max_output_tokens: 400 }
+untrusted_slots: [recent_events]
+template: |
+  Ban la {{ persona.name }}. Nhin lai nhung gi vua xay ra.
+
+  {{ recent_events | untrusted }}
+
+  Rut ra toi da ba dieu ban hoc duoc. Moi dieu mot dong.

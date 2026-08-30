@@ -1,0 +1,12 @@
+[package]
+name = "mow-obs"
+description = "Quan sat khi chay: moi dong log kem branch/world/tick, trace command -> event, ngan sach hieu nang."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

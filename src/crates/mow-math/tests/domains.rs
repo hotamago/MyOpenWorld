@@ -199,7 +199,10 @@ fn toa_do_chunk_dung_quanh_goc() {
     assert_eq!(WorldPos::new(-1, 0, 0).chunk_of(size).unwrap().cx, -1);
     assert_eq!(WorldPos::new(-32, 0, 0).chunk_of(size).unwrap().cx, -1);
     assert_eq!(WorldPos::new(-33, 0, 0).chunk_of(size).unwrap().cx, -2);
-    assert_eq!(WorldPos::new(-1, 0, 0).local_in_chunk(size).unwrap(), (31, 0));
+    assert_eq!(
+        WorldPos::new(-1, 0, 0).local_in_chunk(size).unwrap(),
+        (31, 0)
+    );
 }
 
 #[test]
@@ -238,7 +241,11 @@ fn hash_phan_biet_kieu() {
     let b = StateHasher::new().write_i64(1).finish();
     assert_ne!(a, b, "u64 và i64 cho cùng hash");
 
-    let c = StateHasher::new().write_option(Some(1u64), |h, v| { h.write_u64(v); }).finish();
+    let c = StateHasher::new()
+        .write_option(Some(1u64), |h, v| {
+            h.write_u64(v);
+        })
+        .finish();
     assert_ne!(a, c, "Some(x) và x cho cùng hash");
 }
 
@@ -247,12 +254,28 @@ fn hash_tap_khong_phu_thuoc_thu_tu_nhung_day_thi_co() {
     let xuoi = [1u64, 2, 3];
     let nguoc = [3u64, 2, 1];
 
-    let set_a = StateHasher::new().write_set(xuoi.iter().copied(), |h, v| { h.write_u64(v); }).finish();
-    let set_b = StateHasher::new().write_set(nguoc.iter().copied(), |h, v| { h.write_u64(v); }).finish();
+    let set_a = StateHasher::new()
+        .write_set(xuoi.iter().copied(), |h, v| {
+            h.write_u64(v);
+        })
+        .finish();
+    let set_b = StateHasher::new()
+        .write_set(nguoc.iter().copied(), |h, v| {
+            h.write_u64(v);
+        })
+        .finish();
     assert_eq!(set_a, set_b, "tập phải bỏ qua thứ tự");
 
-    let seq_a = StateHasher::new().write_seq(xuoi.iter().copied(), |h, v| { h.write_u64(v); }).finish();
-    let seq_b = StateHasher::new().write_seq(nguoc.iter().copied(), |h, v| { h.write_u64(v); }).finish();
+    let seq_a = StateHasher::new()
+        .write_seq(xuoi.iter().copied(), |h, v| {
+            h.write_u64(v);
+        })
+        .finish();
+    let seq_b = StateHasher::new()
+        .write_seq(nguoc.iter().copied(), |h, v| {
+            h.write_u64(v);
+        })
+        .finish();
     assert_ne!(seq_a, seq_b, "dãy phải giữ thứ tự");
 }
 
@@ -270,11 +293,7 @@ fn hash_on_dinh_giua_cac_lan_chay() {
     // Giá trị neo. Nếu bài này fail mà không có migration đi kèm thì một thay
     // đổi vô tình đã làm mọi save cũ không replay được.
     let h = WorldPos::new(1, -2, 3).state_hash();
-    assert_eq!(
-        h.to_hex(),
-        h.to_hex(),
-        "hash phải thuần"
-    );
+    assert_eq!(h.to_hex(), h.to_hex(), "hash phải thuần");
     let lai = WorldPos::new(1, -2, 3).state_hash();
     assert_eq!(h, lai);
     assert_ne!(h, WorldPos::new(1, -2, 4).state_hash());

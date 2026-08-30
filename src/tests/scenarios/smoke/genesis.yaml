@@ -1,0 +1,23 @@
+scenario: genesis
+description: >
+  The gioi dung len duoc tu worldseed, moi thuc the deu co su kien sinh ra,
+  va toan bo bat bien sach ngay tu tick 0.
+worldseed: "test:tiny_village"
+llm_mode: STUB
+
+bind:
+  "@village":
+    kind: settlement
+    select: first
+    order: ["id asc"]
+
+given: []
+
+when:
+  - step: { ticks: 10 }
+
+then:
+  - assert_entity_count: 5
+  - assert_no_orphan_entities: true
+  - assert_event_exists: { kind: core.entity.spawned }
+  - assert_invariants: { ids: ["INV-22-1", "INV-22-3", "INV-22-11", "INV-22-24", "INV-22-33"] }

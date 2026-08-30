@@ -1,0 +1,13 @@
+.git
+target
+**/target
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+playground-gemini
+*.log
+*.sqlite*
+saves
+worlds
+repro

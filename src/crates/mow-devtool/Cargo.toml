@@ -1,0 +1,24 @@
+[package]
+name = "mow-devtool"
+description = "Cong go loi: harness determinism co bisect theo tick, repro bundle tu chua."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+# Mac dinh TAT. `mow-server` chi bat feature nay o build dev.
+# `deploy/docker/server.Dockerfile` co mot buoc `strings | grep` chung minh
+# khong con symbol nao cua devtool trong ban release.
+default = []
+devtool = []
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

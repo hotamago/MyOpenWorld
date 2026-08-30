@@ -13,7 +13,14 @@ use std::path::Path;
 
 /// Những mẫu tuyệt đối không được xuất hiện.
 const CAM: &[&str] = &[
-    "f32", "f64", "as f32", "as f64", "float", "powf", "sqrt()", "::consts::PI",
+    "f32",
+    "f64",
+    "as f32",
+    "as f64",
+    "float",
+    "powf",
+    "sqrt()",
+    "::consts::PI",
 ];
 
 /// Dòng có đánh dấu này được miễn, và **phải** kèm lý do ngay sau đó.

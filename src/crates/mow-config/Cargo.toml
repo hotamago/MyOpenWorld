@@ -1,0 +1,17 @@
+[package]
+name = "mow-config"
+description = "Cau hinh co lop, co kiem tra, sinh JSON Schema; khoi dong that bai nhanh khi sai."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+figment = { version = "0.10", features = ["yaml", "env"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

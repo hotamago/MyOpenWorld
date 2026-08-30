@@ -1,0 +1,13 @@
+[package]
+name = "mow-vector"
+description = "Chi muc ky uc: luong tu hoa sang so nguyen de truy xuat xac dinh, loc theo dong doi nhanh."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

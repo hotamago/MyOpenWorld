@@ -1,0 +1,11 @@
+[package]
+name = "mow-schema"
+description = "Kieu content sinh tu JSON Schema (pipeline 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+schemars = { workspace = true }

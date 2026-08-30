@@ -1,0 +1,12 @@
+{#
+  Macro bao du lieu khong tin cay. Tuong duong voi filter `untrusted`, danh cho
+  cho nao can bao ca mot khoi thay vi mot bien.
+
+  §22.18: noi dung hoi thoai, sach va memory la du lieu KHONG TIN CAY doi voi
+  prompt he thong.
+#}
+{% macro block(label, content) -%}
+<<<UNTRUSTED {{ label }}
+{{ content }}
+UNTRUSTED>>>
+{%- endmacro %}

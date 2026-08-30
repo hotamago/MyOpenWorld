@@ -1,0 +1,9 @@
+# Moi truong that. DSN va API key den tu bien moi truong MOW_*, khong tu day.
+env: prod
+
+llm:
+  mode: LIVE
+
+observability:
+  log_level: "info"
+  log_format: json

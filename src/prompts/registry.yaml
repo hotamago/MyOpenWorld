@@ -1,0 +1,9 @@
+# So dang ky prompt. Anh xa id -> duong dan.
+#
+# Version nam trong chinh file prompt, khong nam o day: mot prompt co the co
+# nhieu version cung ton tai (world dang chay o v2 trong khi ta thu nghiem v3),
+# va file nay chi noi "tim chung o dau".
+
+prompts:
+  - path: cognition/plan.v2.yaml
+  - path: cognition/reflect.v1.yaml

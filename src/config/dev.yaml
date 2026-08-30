@@ -1,0 +1,5 @@
+env: dev
+
+observability:
+  log_level: "debug"
+  log_format: pretty

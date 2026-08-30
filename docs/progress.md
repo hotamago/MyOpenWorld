@@ -8,14 +8,14 @@
 
 | Phase | Xong | Tổng | % |
 |---|---|---|---|
-| Phase 0 — Bộ khung và harness | 0 | 21 | 0% |
+| Phase 0 — Bộ khung và harness | 9 | 21 | 43% |
 | Phase A — Hạt nhân không gian | 0 | 15 | 0% |
 | Phase B — Khu định cư sống | 0 | 26 | 0% |
 | Phase C — Nhận thức LLM và ký ức | 0 | 21 | 0% |
 | Phase D — Xã hội, tri thức, kinh tế | 0 | 26 | 0% |
 | Phase E — Ma thuật và đa thế giới | 0 | 17 | 0% |
 | Phase F — Yuu/True God và mở rộng | 0 | 21 | 0% |
-| **Tổng** | **0** | **147** | **0%** |
+| **Tổng** | **9** | **147** | **6%** |
 
 Đếm lại bằng lệnh này rồi dán số vào bảng — **không đếm tay, không đọc cả file để đếm**:
 
@@ -72,15 +72,15 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 
 > Mục tiêu: khi phase này xong, agent tự vào được thế giới, tự kiểm chứng, và mọi bug đều tái hiện được. Mọi thứ sau đó xây nhanh hơn nhiều.
 
-- [ ] **P0-01** Monorepo và toolchain — workspace Rust, uv workspace Python, pnpm cho web, `Makefile` với các target ở `§P12`, pre-commit. Xong khi `make setup` chạy sạch trên máy mới.
-- [ ] **P0-02** Môi trường dev — chạy được **không cần Docker**: SQLite, bus in-process, chỉ mục nhúng. `docker-compose` cho server mode là tùy chọn, chỉ cần thiết từ Giai đoạn C. `§P3.4`
-- [ ] **P0-03** `mow-math` — **bảng miền số học** theo `§P10.2.1` (Q16.16 cho tỉ lệ, `u64` thang cho xác suất nhỏ, hữu tỉ cho tốc độ, nguyên có đơn vị cho vật lý), tọa độ i64/i128 checked, hash canonical, named RNG stream. Proptest ở biên `i64::MIN/MAX` **và** test chứng minh `mutation_rate 2.1e-8` không bị làm tròn về 0. `§4.3`, `§19.6`, `§P10.2.1`
+- [x] **P0-01** Monorepo và toolchain — workspace Rust, uv workspace Python, pnpm cho web, `Makefile` với các target ở `§P12`, pre-commit. Xong khi `make setup` chạy sạch trên máy mới.
+- [x] **P0-02** Môi trường dev — chạy được **không cần Docker**: SQLite, bus in-process, chỉ mục nhúng. `docker-compose` cho server mode là tùy chọn, chỉ cần thiết từ Giai đoạn C. `§P3.4`
+- [x] **P0-03** `mow-math` — **bảng miền số học** theo `§P10.2.1` (Q16.16 cho tỉ lệ, `u64` thang cho xác suất nhỏ, hữu tỉ cho tốc độ, nguyên có đơn vị cho vật lý), tọa độ i64/i128 checked, hash canonical, named RNG stream. Proptest ở biên `i64::MIN/MAX` **và** test chứng minh `mutation_rate 2.1e-8` không bị làm tròn về 0. `§4.3`, `§19.6`, `§P10.2.1`
 - [ ] **P0-04** Sinh mã và hợp đồng — `proto/` và `schemas/` sinh ra Rust/Python/TS. CI fail khi mã sinh khác mã đã commit. `§P4`
-- [ ] **P0-05** Config — layer `base → env → MOW_* → CLI`, validate lúc khởi động, sai thì thoát với đường dẫn field. Cả Rust và Python. `§P6.1`
-- [ ] **P0-06** `mow-core` tối thiểu — ECS, clock, event log append-only, transaction handler. Không có đường ghi state nào đi vòng qua nó. `§22.1`
-- [ ] **P0-07** `mow-persist` — trait persistence cộng **một** hiện thực SQLite, và bộ test hợp đồng viết sẵn để backend thứ hai dùng lại nguyên vẹn ở `PC-20`. `§P6.6`, `§P3.4`
-- [ ] **P0-08** Trait `MessageBus` — **một** hiện thực in-process bền trên SQLite, đủ để không mất proposal khi crash. Không tự dựng lại JetStream. `§P3.4`
-- [ ] **P0-09** Trait `VectorIndex` — **một** hiện thực nhúng, kho ký ức nằm ở file riêng **không nằm trong file save** để không tranh chấp khóa với tiến trình sim. `§P3.4`, `§P6.3`
+- [x] **P0-05** Config — layer `base → env → MOW_* → CLI`, validate lúc khởi động, sai thì thoát với đường dẫn field. Cả Rust và Python. `§P6.1`
+- [x] **P0-06** `mow-core` tối thiểu — ECS, clock, event log append-only, transaction handler. Không có đường ghi state nào đi vòng qua nó. `§22.1`
+- [x] **P0-07** `mow-persist` — trait persistence cộng **một** hiện thực SQLite, và bộ test hợp đồng viết sẵn để backend thứ hai dùng lại nguyên vẹn ở `PC-20`. `§P6.6`, `§P3.4`
+- [x] **P0-08** Trait `MessageBus` — **một** hiện thực in-process bền trên SQLite, đủ để không mất proposal khi crash. Không tự dựng lại JetStream. `§P3.4`
+- [x] **P0-09** Trait `VectorIndex` — **một** hiện thực nhúng, kho ký ức nằm ở file riêng **không nằm trong file save** để không tranh chấp khóa với tiến trình sim. `§P3.4`, `§P6.3`
 - [ ] **P0-10** LLM Gateway — `ModelClient` provider-agnostic, bốn chế độ `LIVE/RECORD/REPLAY/STUB`, bảng `llm_call` có unique trên `request_hash`. `§P6.7`
 - [ ] **P0-11** `mow-devtool` — gRPC `Debug` sau feature flag. Có test trên artifact release chứng minh không còn symbol nào của devtool. `§P7.1`
 - [ ] **P0-12** `mow-mcp` — MCP server chạy được từ Claude Code với nhóm World/Time/Query/Verify. Xong khi agent tạo world, tiến 1000 tick, đọc entity và nhận báo cáo invariant. `§P7.2`
@@ -91,7 +91,7 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 - [ ] **P0-17** Prompt registry — YAML + Jinja2 + version + filter `untrusted` + prompt leak guard. Xong khi guard bắt được một ca rò cố tình cài vào test. `§P6.2`, `§8.10.3`
 - [ ] **P0-18** CI — lint, unit, contract, scenario smoke, determinism nhanh, schema validate, quét secret. `§P8.1`
 - [ ] **P0-19** Observability tối thiểu — OTel trace `command → event`, log JSON luôn kèm `branch/world/tick`. `§P8`
-- [ ] **P0-20** Registry pack tối thiểu — manifest, namespace bắt buộc, thứ tự load deterministic, content hash. `content/core` nạp qua đúng cơ chế này, không có loader đặc quyền. `§19.7.2`, `§19.7.3`, `§P10.7`
+- [x] **P0-20** Registry pack tối thiểu — manifest, namespace bắt buộc, thứ tự load deterministic, content hash. `content/core` nạp qua đúng cơ chế này, không có loader đặc quyền. `§19.7.2`, `§19.7.3`, `§P10.7`
 - [ ] **P0-GATE** Cổng Giai đoạn 0 — toàn bộ điều kiện hoàn thành ở `§P9` Giai đoạn 0 xanh.
 
 ---
@@ -259,4 +259,6 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 > Mỗi checkpoint thêm **một dòng**, dạng `YYYY-MM-DD — <việc đã xong hoặc quyết định> — <ID liên quan>`.
 > Giữ tối đa **20 dòng gần nhất**; vượt thì xóa dòng cũ nhất. Đây không phải nơi kể chuyện.
 
-- _(chưa có)_
+- 2026-08-31 — Dựng `src/` (workspace Rust + uv + pnpm + Makefile), 7 crate, 89 test xanh — P0-01/02/03/05/06/07/08/09/20
+- 2026-08-31 — Thêm `deploy/` + `./mow` một lệnh: toolbox cách ly, infra sau `profiles`, kiểm chứng determinism theo số luồng — P0-02
+- 2026-08-31 — `quantize` chuẩn hóa L2 thay vì theo max; chuẩn hóa max làm ký ức gần giống nhau hòa điểm rồi xếp theo id — P0-09

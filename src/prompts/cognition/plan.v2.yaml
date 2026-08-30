@@ -1,0 +1,23 @@
+id: cognition.plan
+version: 2
+model_hint: { tier: standard, max_output_tokens: 800 }
+output_schema: agent_service.schemas.PlanOutput
+vars_model: agent_service.prompts.vars.PlanVars
+untrusted_slots: [observations, memories, overheard_speech]
+template: |
+  Ban la {{ persona.name }}, {{ persona.species }} {{ persona.age }} tuoi.
+
+  ## Dieu ban quan sat duoc ngay luc nay
+  {{ observations | untrusted }}
+
+  ## Dieu ban nho
+  {{ memories | untrusted }}
+
+  ## Dieu ban nghe loang thoang
+  {{ overheard_speech | untrusted }}
+
+  ## Hanh dong ban co the chon
+  {% for a in available_actions %}- {{ a.id }}: {{ a.summary }}
+  {% endfor %}
+
+  Chon MOT hanh dong. Chi duoc chon tu danh sach tren.

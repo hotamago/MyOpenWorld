@@ -1,0 +1,43 @@
+[project]
+name = "myopenworld"
+version = "0.1.0"
+description = "My Open World — uv workspace cho services/ va tools/"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+  "services/api-gateway",
+  "services/agent-service",
+  "services/memory-service",
+  "tools/mow-mcp",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+# Cung tinh than voi `deny(missing_docs)` cua Rust: hop dong phai tuong minh.
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "ruff>=0.8",
+  "mypy>=1.13",
+]

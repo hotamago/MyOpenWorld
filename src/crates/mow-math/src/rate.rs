@@ -93,7 +93,9 @@ impl Rate {
             .num
             .checked_mul(self.den)
             .ok_or_else(|| overflow("Rate::add", other.num, self.den))?;
-        let num = a.checked_add(b).ok_or_else(|| overflow("Rate::add", a, b))?;
+        let num = a
+            .checked_add(b)
+            .ok_or_else(|| overflow("Rate::add", a, b))?;
         Ok(Rate { num, den })
     }
 

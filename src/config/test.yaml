@@ -1,0 +1,18 @@
+# Moi truong test: tat ca trong bo nho, khong mang, khong ghi dia.
+env: test
+
+sim:
+  snapshot_interval: 0
+
+persistence:
+  url: ":memory:"
+
+vector:
+  url: ":memory:vector"
+  dimension: 64
+
+llm:
+  mode: STUB
+
+observability:
+  log_level: "warn"

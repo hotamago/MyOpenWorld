@@ -1,0 +1,119 @@
+name: Determinism
+
+# `plan.md §P7.5` goi day la "cong cu gia tri nhat cua du an". No chay moi PR
+# vi mot lech determinism lot vao master se rat kho truy nguoc: moi commit sau
+# do deu la nghi pham.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: determinism-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    working-directory: src
+
+jobs:
+  threads:
+    name: Cung ket qua bat ke so luong
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        threads: [1, 2, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: chay va ghi hash
+        env:
+          RAYON_NUM_THREADS: ${{ matrix.threads }}
+        run: |
+          cargo run --release -p mow-cli -- determinism --runs 2 --ticks 20000 \
+            > hash-${{ matrix.threads }}.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.threads }}
+          path: src/hash-${{ matrix.threads }}.json
+
+  compare:
+    name: So hash giua cac cau hinh luong
+    needs: threads
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+          merge-multiple: true
+
+      # Day moi la buoc that su kiem tra. Bo qua no thi ba job tren chi chung
+      # minh rang code chay duoc, khong chung minh rang chung cho cung ket qua.
+      - name: moi cau hinh phai cho cung state hash
+        run: |
+          set -eu
+          hashes=$(jq -r '.state_hash' hash-*.json | sort -u)
+          echo "$hashes"
+          if [ "$(echo "$hashes" | wc -l)" -ne 1 ]; then
+            echo "::error::so luong luong lam doi ket qua mo phong (§22.9)"
+            jq -r '"threads=\(input_filename): \(.state_hash)"' hash-*.json
+            exit 1
+          fi
+
+  cross-platform:
+    name: Cung ket qua tren Linux, macOS va Windows
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      # Endianness, kich thuoc kieu, thu tu duyet thu muc — ba thu nay khac nhau
+      # giua cac nen tang, va ca ba deu tung lot vao state hash o cac du an khac.
+      - name: chay
+        run: cargo run --release -p mow-cli -- determinism --runs 2 --ticks 5000 > hash.json
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-${{ matrix.os }}
+          path: src/hash.json
+
+  compare-platforms:
+    name: So hash giua cac he dieu hanh
+    needs: cross-platform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+      - name: moi he dieu hanh phai cho cung state hash
+        run: |
+          set -eu
+          hashes=$(jq -r '.state_hash' hash-*/hash.json | sort -u)
+          echo "$hashes"
+          if [ "$(echo "$hashes" | wc -l)" -ne 1 ]; then
+            echo "::error::he dieu hanh lam doi ket qua mo phong"
+            for f in hash-*/hash.json; do echo "$f: $(jq -r .state_hash "$f")"; done
+            exit 1
+          fi

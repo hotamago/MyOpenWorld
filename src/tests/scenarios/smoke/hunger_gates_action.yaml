@@ -1,0 +1,34 @@
+scenario: hunger_gates_action
+description: >
+  Dieu kien tien quyet duoc tinh tu STATE, khong phai tu loi khai cua ai
+  (§22.5). Chua du doi thi hanh dong bi tu choi; du doi thi no xay ra, va
+  su kien do phai co that trong nhat ky.
+worldseed: "test:tiny_village"
+llm_mode: STUB
+
+bind:
+  "@village":
+    kind: settlement
+    select: first
+    order: ["id asc"]
+  "@aren":
+    kind: entity
+    in: "@village"
+    tag: sapient
+    select: first
+    order: ["age desc", "id asc"]
+
+given:
+  - set_need: { entity: "@aren", need: hunger, value: 4 }
+
+when:
+  - commit_act: { actor: "@aren", act: theft }
+  - run_until:
+      predicate: "event.kind == 'core.act.committed'"
+      max_ticks: 5
+
+then:
+  - assert_event_exists: { kind: core.act.committed }
+  - assert_attr: { entity: "@aren", key: "need.clock_domain", equals: "proper" }
+  - assert_invariants: { ids: ["INV-22-24"] }
+  - assert_no_orphan_entities: true

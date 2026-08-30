@@ -1,0 +1,17 @@
+# Content pack chinh thuc.
+#
+# Khong co gi dac biet o day: no nap qua dung `Registry::add_from_dir` ma mot
+# pack cua cong dong se dung. Do la chu dich (plan.md §P10.7) — neu content
+# chinh thuc di duong rieng thi duong cua cong dong se khong bao gio duoc kiem
+# thu cho toi Giai doan F.
+
+id: core
+version: "0.1.0"
+name: "My Open World — noi dung goc"
+description: "Vat lieu, loai, nhu cau, hieu ung va luat nen tang."
+
+requires: []
+overrides: []
+
+tests:
+  - smoke/genesis.yaml

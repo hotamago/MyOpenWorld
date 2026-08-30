@@ -1,0 +1,41 @@
+# Lop nen. Luon duoc nap truoc moi lop khac.
+# KHONG BAO GIO dat bi mat o day: file nay duoc commit.
+# Bi mat nam o .env, tham chieu qua bien moi truong MOW_*.
+
+env: dev
+
+sim:
+  tick_rate: 20
+  chunk_size: 32
+  active_radius: 3
+  snapshot_interval: 10000
+
+persistence:
+  url: "saves/world.sqlite"
+
+vector:
+  # Phai khac persistence.url — P0-09.
+  url: "memory-index/index.sqlite"
+  dimension: 768
+
+llm:
+  mode: STUB
+  provider: ""
+  model: ""
+  # Do tre nhan thuc co dinh D, theo §20.2.2. Xem tai lieu cua truong nay.
+  cognitive_latency_ticks: 10
+  timeout_ms: 30000
+  cassette_dir: "llm-cassettes"
+
+budget:
+  max_calls_per_tick: 8
+  max_concurrent: 4
+
+content:
+  root: "content"
+  packs: ["core"]
+
+observability:
+  log_level: "info"
+  log_format: pretty
+  otel_endpoint: ""

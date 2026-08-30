@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+# Một PR đẩy nhiều commit thì chỉ chạy commit mới nhất. Không có phần này, CI
+# sẽ xếp hàng dài và phản hồi tới muộn hơn cả lúc người ta đã chuyển việc khác.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # `plan.md §P10.1`: không `unwrap()` trên đường commit, clippy lint chặn.
+  RUSTFLAGS: -D warnings
+
+defaults:
+  run:
+    working-directory: src
+
+jobs:
+  rust:
+    name: Rust — lint, test, hợp đồng
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --all-features
+
+      - name: test
+        run: cargo test --workspace --all-features
+
+      # §P10.2: không f32/f64 trên đường commit. Lint bắt được *phép toán*,
+      # không bắt được một trường f64 nằm im trong struct. Bước này quét mã.
+      - name: không có số thực trên đường commit
+        run: cargo test -p mow-math --test no_float
+
+  codegen-drift:
+    name: Mã sinh khớp mã đã commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+      - uses: arduino/setup-protoc@v3
+        with:
+          version: "27.x"
+
+      # `--check` không ghi gì; nó thoát khác 0 khi mã sinh lệch mã đã commit.
+      # Đây là điều kiện hoàn thành của P0-04.
+      - name: codegen --check
+        run: cargo run -p mow-codegen -- all --check
+
+  scenario:
+    name: Kịch bản khói
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: kiểm cấu trúc kịch bản
+        run: cargo run -p mow-cli -- scenario list tests/scenarios
+
+      - name: chạy kịch bản
+        run: cargo run -p mow-cli -- scenario run tests/scenarios > scenario-report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenario-report
+          path: src/scenario-report.json
+
+  content-pack:
+    name: Content pack hợp lệ
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      # `content/core` đi qua đúng cơ chế mà cộng đồng sẽ dùng (§P10.7).
+      - name: pack validate
+        run: cargo run -p mow-cli -- pack validate content/core
+
+  python:
+    name: Python — lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: sync
+        run: uv sync --all-packages
+
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: pytest
+        run: uv run pytest services tools -q
+
+  secrets:
+    name: Quét bí mật
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # §P10.6: bí mật chỉ ở .env, không bao giờ trong config/*.yaml — những
+      # file đó được commit. Bước này bắt ca cụ thể mà gitleaks có thể bỏ sót:
+      # một DSN có mật khẩu nhúng.
+      - name: không có thông tin đăng nhập trong config/
+        working-directory: src
+        run: |
+          if grep -rEn '://[^/@[:space:]]+:[^/@[:space:]]+@' config/; then
+            echo "::error::config/ chứa URL có thông tin đăng nhập. Đưa vào .env."
+            exit 1
+          fi

@@ -1,0 +1,14 @@
+[package]
+name = "mow-scenario"
+description = "DSL kich ban given/when/then voi bo chon co thu tu toan phan."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
