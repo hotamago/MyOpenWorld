@@ -56,12 +56,13 @@ flowchart TB
     end
 
     VUE <--> WRK
-    WRK <--> WS
+    WRK <-->|"vé kết nối"| WS
     VUE --> REST
     PIXI <--- WRK
     REST --> CORE
-    WS <--> CORE
+    WS --> CORE
     BFF --> CORE
+    WRK <==>|"stream nhị phân, cổng riêng"| CORE
     CORE <-->|"NATS JetStream<br/>CognitionRequest / PlanProposal"| AG
     AG <--> MEM
     MEM <--> QD
@@ -166,22 +167,33 @@ Khác biệt chỉ nằm ở lớp cấu hình và adapter persistence, không �
 
 Đây chính là lý do §10.3 tồn tại, và là điều phải được kiểm chứng bằng một scenario chạy với `llm_mode: STUB` ngay từ Giai đoạn B chứ không phải khi sắp phát hành.
 
-**Cả bốn trừu tượng trên phải có từ Giai đoạn 0.** Viết thẳng vào Qdrant hay NATS rồi mới bọc lại là công việc gấp nhiều lần.
+**Bốn *đường nối* phải có từ Giai đoạn 0, nhưng chỉ **một** hiện thực.** Viết thẳng vào Qdrant hay NATS rồi mới bọc lại là công việc gấp nhiều lần — nhưng duy trì hai hiện thực trước khi có workload thật cũng vậy, và tệ hơn: interface bị thiết kế dựa trên phỏng đoán.
+
+Vì thế **bản desktop là mục tiêu phát triển mặc định**: SQLite, bus in-process, chỉ mục nhúng, model client. Hiện thực thứ hai — Postgres, NATS, Qdrant — được thêm ở Giai đoạn C, khi `agent-service` xuất hiện và nhiều tiến trình thật sự cần nói chuyện với nhau. Lúc đó interface đã bị một workload thật uốn nắn, và bộ test hợp đồng viết sẵn ở Giai đoạn 0 dùng lại nguyên vẹn để chứng minh hai backend tương đương.
+
+Một lưu ý về phạm vi: bus in-process **không cần** ngữ nghĩa durable ngang JetStream. Nó cần đủ bền để không mất proposal khi crash — một hàng đợi trên SQLite là đủ. Tự viết một JetStream thứ hai chính là thứ nguyên tắc 2 ở §P1 nói không nên làm.
 
 ## 4. Hợp đồng và sinh mã
 
 ### 4.1. Nguyên tắc: định nghĩa một lần
 
 ```text
+# Pipeline 1 — RPC.  Nguồn: proto.
 proto/*.proto ────────────► Rust (prost/tonic)
                        ├──► Python (betterproto → pydantic)
                        └──► TypeScript (ts-proto)
 
-crates/*/src/**/*.rs ──────► JSON Schema (schemars)
-  (kiểu content pack)   ├──► Python model (datamodel-code-generator)
-                        ├──► TS type (json-schema-to-typescript)
-                        └──► JSON Schema cho editor (YAML autocomplete)
+# Pipeline 2 — CONTENT.  Nguồn: JSON Schema viết tay trong schemas/content/.
+schemas/content/*.json ───► Rust struct (typify)
+                       ├──► Python model (datamodel-code-generator)
+                       ├──► TS type (json-schema-to-typescript)
+                       └──► schema cho editor (YAML autocomplete)
+
+# Pipeline 3 — CONFIG.  Nguồn: struct Rust.  KHÔNG giao nhau với pipeline 2.
+crates/*/src/config.rs ───► JSON Schema (schemars) ──► validate config/*.yaml
 ```
+
+**Ba pipeline, ba nguồn sự thật khác nhau, không có chu trình.** Kiểu content **không** được định nghĩa bằng Rust rồi sinh ngược ra schema — nếu làm vậy thì schema và code sinh lẫn nhau và CI codegen drift sẽ ghi đè qua lại. Mã sinh ra nằm ở thư mục `generated/` riêng cho từng pipeline và không bao giờ sửa tay.
 
 Không ai được viết tay một struct đã tồn tại ở phía kia. CI có bước `make codegen && git diff --exit-code` — nếu mã sinh ra khác mã đã commit thì build fail.
 
@@ -192,7 +204,7 @@ Có hai hướng, và hướng đúng phụ thuộc ai là chủ hợp đồng:
 | Trường hợp | Hướng | Lý do |
 |---|---|---|
 | **Config ứng dụng** (`config/*.yaml`) | **Code → Schema → validate YAML** | Kiểu do code sở hữu. Sinh JSON Schema từ struct rồi validate YAML lúc CI và lúc khởi động. Đổi struct thì YAML sai bị bắt ngay, không phải lúc chạy. |
-| **Content pack** (`content/**/*.yaml`: species, item, effect, law, norm_set, storylet) | **Schema → Code cho mọi ngôn ngữ** | Schema là hợp đồng với cộng đồng modder (§19.7). Nó phải ổn định và version hóa độc lập với code. |
+| **Content pack** (`content/**/*.yaml`: species, item, effect, law, norm_set, storylet) | **Schema viết tay → Code cho mọi ngôn ngữ** | Schema là hợp đồng với cộng đồng modder (§19.7). Nó phải ổn định và version hóa độc lập với code, nên nó là nguồn chứ không phải sản phẩm. |
 
 Cả hai hướng đều cho ra thứ anh muốn — YAML có autocomplete trong editor, sai là báo lỗi ngay — nhưng không hướng nào sinh struct từ một file YAML tùy ý, vì như vậy schema sẽ trôi theo dữ liệu mẫu thay vì ngược lại.
 
@@ -335,7 +347,7 @@ myopenworld/
 │   ├── mow-scenario/                 # worldseed, lockfile, genesis, prehistory
 │   ├── mow-persist/                  # event log, snapshot, delta, migration
 │   ├── mow-devtool/                  # debug API, invariant runner, determinism harness
-│   ├── mow-server/                   # [bin] gRPC + NATS + WS
+│   ├── mow-server/                   # [bin] gRPC + NATS + stream nhị phân world-state
 │   └── mow-worker/                   # [bin] job runner
 │
 ├── services/                         # Python
@@ -541,7 +553,8 @@ Quy tắc:
 - `vars_model` là pydantic model; thiếu biến hoặc sai kiểu là lỗi lúc render, không phải lúc model trả lời lung tung.
 - Mỗi lần render, `(prompt_id, version)` được ghi vào `CognitionEvent` (§22.15).
 - `prompts/golden/` giữ bản render mẫu với input cố định; đổi template mà quên bump version thì golden test fail.
-- **Prompt leak guard** chạy ngay trong renderer: so nội dung sắp gửi với tập bí mật mà entity chưa có quyền biết (§8.10.3, §22.40). Vi phạm ⇒ ném exception, không phải cảnh báo.
+- **Phòng thủ chính là ACL lúc truy xuất, không phải quét chuỗi lúc render.** Hàm lấy observation, tri thức và ký ức phải lọc sạch thứ entity không được biết **trước khi** dữ liệu chạm vào biến template. Quét chuỗi bắt được khẩu quyết và tên riêng — thứ tồn tại dưới dạng chuỗi cố định — nhưng không bao giờ bắt được rò rỉ ngữ nghĩa kiểu "kẻ phản bội là người mặc áo xanh".
+- **Prompt leak guard là lưới cuối**, chạy trong renderer, so nội dung sắp gửi với tập bí mật dạng chuỗi (§8.10.3, §22.40). Vi phạm ⇒ ném exception. Nó bắt lỗi cài đặt của tầng ACL, không thay thế tầng đó.
 
 ### 6.3. Memory
 
@@ -553,12 +566,22 @@ mow-server (nguồn sự thật)        memory-service (chỉ mục)
                                       run_id   = branch_id
 ```
 
+**Ai được ghi ký ức canonical:** chỉ `mow-server`. Ký ức và belief chi phối quyết định của NPC, nên chúng **là state authoritative** và phải đi qua đúng transaction handler như mọi state khác (§22.1). `memory-service` chỉ trả về `MemoryMutationProposal`; Rust validate rồi commit, và sở hữu luôn migration của bảng `memory_record`. Nếu để Python ghi thẳng, state sẽ đổi ngoài event log và ngoài state hash.
+
 **Cảnh báo kiến trúc quan trọng:** mem0 rất tiện cho trích xuất và hợp nhất ký ức, nhưng nó **không phải nguồn sự thật**. §11.5 đòi hỏi branch scope, ACL, version và tombstone — những thứ mem0 không mô hình hóa nguyên bản. Vì vậy:
 
 - Bản ghi authoritative nằm ở Postgres, gắn với event nguồn.
 - mem0 + Qdrant là **chỉ mục có thể dựng lại**. Mất chỉ mục thì rebuild từ event log, không mất dữ liệu.
 - Ánh xạ ba trường isolation của mem0 (`user_id`/`agent_id`/`run_id`) sang `namespace`/`persona_version`/`branch_id`, và **mọi truy vấn bắt buộc đi qua `acl.py`** — không có đường tắt gọi thẳng mem0 từ graph.
-- Fork branch dùng copy-on-write ở tầng Postgres; chỉ mục được dựng lười cho branch mới.
+- Fork branch dùng copy-on-write ở tầng Postgres. Chỉ mục vector **không sao chép**: mỗi điểm mang `created_branch_id` và `tombstoned_in_branches`, còn mọi truy vấn bắt buộc chèn bộ lọc theo **dòng dõi**:
+
+  ```text
+  created_branch_id ∈ ancestry(current_branch)
+  AND current_branch ∉ tombstoned_in_branches
+  AND created_tick <= fork_tick(branch tương ứng)
+  ```
+
+  Không có bộ lọc dòng dõi này thì nhánh con đọc phải ký ức mà nó đã quên, hoặc ký ức mới của nhánh con rò ngược sang nhánh cha. Lọc phẳng theo `branch_id` không diễn đạt được "thấy ký ức của cha tới điểm fork, không thấy sau đó".
 - Xóa/sửa ký ức tạo tombstone trước, vô hiệu điểm vector, rồi mới reindex. Có test chứng minh vector cũ không trả về trong khoảng rebuild.
 
 ### 6.4. Sandbox luật
@@ -632,7 +655,7 @@ CREATE TABLE memory_record (
   memory_id uuid PRIMARY KEY,
   namespace text NOT NULL, persona_id uuid NOT NULL, branch_id uuid NOT NULL,
   kind text NOT NULL,                    -- episodic|semantic|relationship|procedural|goal|self
-  content jsonb NOT NULL, confidence real,
+  content jsonb NOT NULL, confidence_q16 int NOT NULL,   -- fixed-point, KHONG dung real
   source_event_id uuid, content_version int NOT NULL,
   acl text NOT NULL,
   tombstoned_at timestamptz,             -- §11.5
@@ -650,23 +673,29 @@ CREATE TABLE claim (                      -- §12.8, §21.7
 -- Bản ghi mọi lần gọi model. Đây là thứ làm cho REPLAY mode khả thi (§19.6).
 CREATE TABLE llm_call (
   call_id uuid PRIMARY KEY, branch_id uuid NOT NULL,
+  request_id uuid NOT NULL,               -- idempotency, §20.2.2
   entity_id uuid, prompt_id text NOT NULL, prompt_version int NOT NULL,
-  model text NOT NULL, request_hash bytea NOT NULL,
-  response jsonb NOT NULL,
+  model text NOT NULL,                    -- model THAT SU DUNG, ke ca khi ha cap
+  request_hash bytea NOT NULL,
+  request_tick bigint NOT NULL,           -- T
+  admission_tick bigint NOT NULL,         -- T + D, thoi diem ap vao the gioi
+  state text NOT NULL,                    -- accepted|fallback|cancelled|expired
+  response jsonb,                         -- NULL neu fallback
   tokens_in int, tokens_out int, cost_micros bigint, latency_ms int,
   recorded_at timestamptz
 );
-CREATE UNIQUE INDEX ON llm_call (branch_id, request_hash);
+CREATE UNIQUE INDEX ON llm_call (branch_id, request_id);
+CREATE INDEX ON llm_call (branch_id, request_hash);
 ```
 
 Bốn quy tắc:
 
-1. **Phân vùng theo `branch_id`.** Fork chỉ tạo partition mới; xóa một nhánh thử nghiệm là `DROP PARTITION`, không phải quét xóa.
+1. **Phân vùng theo hash của `branch_id` với số partition cố định**, không phải một partition cho mỗi branch — mỗi lần rewind tạo một partition mới sẽ làm phình catalog và chậm lập kế hoạch truy vấn. Lịch sử của một branch là một **chuỗi segment bất biến có con trỏ tới checkpoint cha**; truy vấn đi theo lineage thay vì đọc một partition duy nhất, nên fork vẫn rẻ mà không phải sao chép event của cha.
 2. **`event` bất biến.** Sửa lịch sử là tạo branch (§4.4), không phải `UPDATE`.
 3. **`state_hash` là mỏ neo.** Mọi so sánh determinism đều dựa vào nó, không dựa vào so sánh dump.
-4. **`llm_call` có unique trên `(branch_id, request_hash)`** nên replay tra được đúng phản hồi cũ, và một request giống hệt không tốn token lần hai.
+4. **`llm_call` unique trên `(branch_id, request_id)`** cho idempotency, và có index trên `request_hash` để cache. `admission_tick` là thứ replay dùng để áp kết quả đúng thời điểm; thiếu nó thì độ trễ mạng rò vào state và §22.9 sụp (§20.2.2).
 
-**Migration**: `sqlx migrate` cho lược đồ Rust sở hữu (event, snapshot, branch, chunk_delta, claim), Alembic cho lược đồ Python sở hữu (memory_record, llm_call). Mỗi bên chỉ migrate bảng của mình; không có service nào `ALTER` bảng của service khác. Migration chạy tự động lúc khởi động ở dev, và là bước tường minh có phê duyệt ở prod.
+**Migration**: `sqlx migrate` cho lược đồ Rust sở hữu — event, snapshot, branch, chunk_delta, claim, **memory_record và llm_call**. Python không sở hữu bảng nào trên đường commit; nó đọc và đề xuất. Alembic chỉ dùng cho bảng vận hành thuần của service Python (hàng đợi nội bộ, cache), không cho state của thế giới. Mỗi bên chỉ migrate bảng của mình; không có service nào `ALTER` bảng của service khác. Migration chạy tự động lúc khởi động ở dev, và là bước tường minh có phê duyệt ở prod.
 
 **Biến thể SQLite (bản desktop, §P3.3):** cùng lược đồ, bỏ `PARTITION BY`, thay bằng index trên `branch_id`; blob nằm ở file segment cạnh save. Lớp `mow-persist` che khác biệt sau một trait duy nhất, và cùng bộ test chạy trên cả hai backend.
 
@@ -729,6 +758,15 @@ Gộp hai thứ này là một lỗi tinh vi nhưng chí mạng: nó khiến l�
 
 1. Mọi message mang `stream_seq` tăng đơn điệu. Client phát hiện lỗ hổng thì gửi `Resync(from_seq)`; nếu server đã cắt bỏ đoạn đó thì trả `ChunkSnapshot` đầy đủ.
 2. **Backpressure có chủ đích**: client chậm thì server gộp delta mạnh hơn rồi tụt về snapshot định kỳ. Server không bao giờ chặn tick mô phỏng để chờ một client.
+
+**Hai đường truyền, không phải một.** Dòng world-state là nhị phân, tần số cao, hàng chục nghìn ô mỗi giây — đẩy nó qua `api-gateway` bằng Python nghĩa là serialize hai lần và nghẽn ở event loop. Vì vậy:
+
+| Đường | Ai phục vụ | Chở gì |
+|---|---|---|
+| REST + read model | `api-gateway` | Đăng nhập, phiên, command, dữ liệu panel, tần số thấp |
+| Stream nhị phân | **`mow-server`, cổng riêng** | `ChunkSnapshot`, `ChunkDelta`, `EntityDelta`, `EventNotice` |
+
+Client xin **vé kết nối** ngắn hạn từ gateway rồi mở stream thẳng tới `mow-server`. Gateway vẫn là nơi duy nhất cấp quyền và vẫn là nơi duy nhất nhận command; nó chỉ không nằm trên đường dữ liệu nóng.
 3. Tọa độ đi qua dây dưới dạng cặp high/low hoặc chuỗi; frontend chuyển sang hệ camera-local trong Web Worker (§4.3, §22.10). Không có `Number` 53-bit nào chạm vào tọa độ thô.
 4. Payload chunk dùng đúng nén palette như tầng lưu trữ, nên không có bước chuyển đổi định dạng thứ hai để lệch.
 
@@ -759,7 +797,7 @@ Ranh giới quan trọng nhất: **panel không được tự tính**. Nếu m�
 
 Thang màu cho vật liệu, overlay và định danh nằm trong `content/` dưới dạng dữ liệu, không hard-code trong code vẽ. Có một bước CI chạy bộ kiểm tra tương phản và mù màu trên các bảng đó, cho cả chế độ sáng và tối.
 
-Ràng buộc đã tính ra ở §18.6.2 được cài thành kiểm tra thật: một bảng phân loại dùng cho **bản đồ** chỉ hợp lệ tới ba định danh; khai báo bảng bản đồ nhiều hơn ba màu làm CI fail, kèm gợi ý chuyển sang hoa văn và nhãn.
+Ràng buộc đã tính ra ở §18.6.2 được cài thành kiểm tra thật, và nó **phân biệt hai loại bảng**: bảng đánh dấu `identity_critical: true` (phe, sở hữu) chỉ hợp lệ tới ba định danh và vượt là CI fail; bảng nền môi trường (biome) không chịu trần đó nhưng vẫn phải qua kiểm tra tương phản với nền và với sắc phủ overlay.
 
 #### 6.9.4. Chế độ nhận thức lọc ở server
 
@@ -837,7 +875,7 @@ service Debug {
   // Ảnh chụp và du hành
   rpc Snapshot(SnapshotRequest) returns (SnapshotRef);
   rpc DiffSnapshots(DiffRequest) returns (StateDiff);
-  rpc Restore(SnapshotRef) returns (Ack);
+  rpc Restore(SnapshotRef) returns (BranchRef);   // LUON tao branch moi, §4.4
   rpc Fork(ForkRequest) returns (BranchRef);
 
   // Tái hiện lỗi
@@ -847,6 +885,8 @@ service Debug {
   rpc SetLlmMode(LlmMode) returns (Ack);  // LIVE | RECORD | REPLAY | STUB
 }
 ```
+
+`Restore` **luôn trả về một branch mới**, không bao giờ tua ngược trong cùng branch — §4.4 cấm sửa quá khứ, và một `Restore` tại chỗ sẽ làm head của event log lệch với state. Chỉ world thử nghiệm dùng một lần mới được reset tại chỗ, và nó được đánh dấu là disposable ngay từ lúc tạo.
 
 `SetLlmMode` là chi tiết nhỏ nhưng quyết định: ở chế độ `REPLAY`, mọi output LLM lấy từ bản ghi nên test hoàn toàn deterministic; ở `STUB`, agent-service trả plan cố định để test luật mà không tốn token.
 
@@ -979,7 +1019,13 @@ Ba đường tạo bundle:
 2. **Tự động**: invariant runner phát hiện vi phạm.
 3. **Agent**: `repro_capture` qua MCP.
 
-`mow-cli repro run <bundle>` tái hiện chính xác. `mow-cli repro bisect <bundle> --invariant INV-22-20` tìm tick đầu tiên vi phạm.
+**Bundle phải tự chứa.** `git sha` và lockfile chỉ *định danh* artifact, không bảo đảm artifact còn tồn tại trên máy nhận. Vì vậy bundle mang theo, dưới dạng content-addressed:
+
+- Toàn bộ blob mà event tham chiếu — chunk delta, payload transaction.
+- Snapshot của definition đang hiệu lực và các module WASM đúng hash.
+- **Journal mọi input không deterministic**: command đã nhận và tick nhận, output của worker, và mọi thứ đến từ ngoài simulation.
+
+`mow-cli repro run <bundle>` kiểm tra đủ phụ thuộc trước khi chạy và **từ chối chạy nếu thiếu**, thay vì chạy ra một kết quả khác rồi báo là tái hiện được. `mow-cli repro bisect <bundle> --invariant INV-22-20` tìm tick đầu tiên vi phạm.
 
 > Quy trình khi anh tìm ra lỗi: bấm "Báo lỗi" trong game → đưa tôi thư mục bundle → tôi có thể tái hiện chính xác, bisect, sửa, và để lại một scenario trong `tests/scenarios/regression/`.
 
@@ -1040,6 +1086,10 @@ Ba đường tạo bundle:
 | 200 giờ mô phỏng không lệch trait thiếu event | soak | nightly |
 | Phân bố tuổi phản ánh mức nguy hiểm lịch sử | soak + World Health Report | nightly |
 
+**Ngân sách theo phase, không phải một mốc ở cuối.** Plan không thể vừa nói "vượt ngân sách là CI fail" vừa hoãn việc đạt ngân sách tới Giai đoạn F — như vậy hoặc CI luôn đỏ, hoặc câu "fail CI" là giả. Mỗi phase đặt ngân sách của riêng nó cho phạm vi đang có, và ngân sách được siết dần. Benchmark bắt đầu từ Giai đoạn A; Giai đoạn F chỉ nâng quy mô, không phải lần đầu đo.
+
+**Rò rỉ không được đo bằng "mỗi năm mô phỏng".** Một trần dạng "RAM tăng dưới 50 MB mỗi năm" cho phép một world 200 năm phình 10 GB — đó là cấp phép cho rò rỉ chứ không phải phát hiện rò rỉ. Thay bằng: **RAM phải đạt mặt bằng ổn định sau giai đoạn khởi động**, đo theo số entity active và chunk đang giữ, cộng đếm object còn sống để bắt rò. Save đo theo bytes trên mỗi event và mỗi chunk delta, cộng hiệu suất nén khi compaction.
+
 **Ngân sách hiệu năng** (giá trị khởi điểm, hiệu chỉnh sau lần profiling đầu):
 
 | Chỉ số | Ngân sách | Đo ở |
@@ -1048,8 +1098,9 @@ Ba đường tạo bundle:
 | Sinh một chunk `32×32×16` | < 8 ms | bench mỗi PR |
 | Round-trip command → ack qua gateway | p95 < 50 ms | e2e |
 | Rebuild chunk texture ở frontend | < 4 ms | Playwright + performance mark |
-| Tăng RAM trong soak | < 50 MB mỗi năm mô phỏng | nightly |
-| Tăng kích thước save trong soak | < 20 MB mỗi năm mô phỏng | nightly |
+| RAM sau khởi động | Đạt mặt bằng; không tăng đơn điệu theo thời gian mô phỏng | nightly |
+| RAM theo tải | Tuyến tính theo entity active và chunk đang giữ, không theo tuổi world | nightly |
+| Kích thước save | Bytes/event và bytes/chunk-delta trong ngưỡng; compaction đạt tỉ lệ nén mục tiêu | nightly |
 
 Vượt ngân sách làm CI **fail**, không phải cảnh báo. Muốn nới thì sửa con số trong PR kèm lý do — như vậy mỗi lần nới đều có dấu vết.
 
@@ -1124,6 +1175,23 @@ Kèm theo: **một bản Tauri chạy được** với backend nhúng và SQLite
 - Mọi phép tọa độ dùng `checked_*`; tràn là lỗi xác định (§22.11).
 - Hash state dùng thuật toán canonical, ổn định giữa các phiên bản Rust.
 
+#### 10.2.1. Một fixed-point không đủ cho mọi miền
+
+Q16.16 có bước nhỏ nhất là `2^-16 ≈ 1.53e-5`. Đặc tả của chính dự án này có những đại lượng nhỏ hơn thế nhiều bậc — `mutation_rate_per_locus: 2.1e-8` ở §21.2 lưu vào Q16.16 sẽ thành **0**, và đột biến biến mất khỏi thế giới. Vì vậy phải có bảng miền, không phải một kiểu duy nhất:
+
+| Miền | Biểu diễn | Ví dụ |
+|---|---|---|
+| Tỉ lệ chuẩn hóa `[0,1]` | Q16.16 | `focus`, `visibility`, `fatigue`, `CraftQuality` |
+| Xác suất nhỏ và tỉ lệ hiếm | `u64` thang cố định (Q0.64) hoặc ngưỡng nguyên so với RNG | `mutation_rate`, xác suất lây, tỉ lệ backfire |
+| Tốc độ theo thời gian | Số hữu tỉ `num/den` hoặc số nguyên đã scale theo đơn vị/tick | drain nhu cầu, tốc độ hao mòn, tỉ lệ đồng hồ |
+| Đại lượng vật lý | Số nguyên có đơn vị khai báo | `mMU`, joule, mL, kcal, gram, mK |
+| Tiền tệ | Số nguyên đơn vị nhỏ nhất | `mMU`, xu chia nhỏ |
+| Tọa độ | `i64` checked, trung gian `i128` | §4.3 |
+
+Mỗi kiểu khai báo đơn vị và thang trong type, không phải trong tên biến. Chuyển đổi giữa các miền là hàm tường minh có kiểm tra tràn, không phải ép kiểu ngầm.
+
+**Cơ sở dữ liệu cũng theo quy tắc này.** Không có cột `real` hay `double precision` nào trên đường commit — chúng phá cả determinism lẫn tính nhất quán giữa hai backend.
+
 ### 10.3. Đồng thời
 
 - Job song song chỉ tạo proposal; commit tuần tự theo `stable_key` (§19.6).
@@ -1152,7 +1220,7 @@ Kèm theo: **một bản Tauri chạy được** với backend nhúng và SQLite
 
 ### 10.7. Vòng lặp phát triển content pack
 
-`content/core/` chính là một pack dùng đúng cơ chế mà cộng đồng sẽ dùng — không có đường đặc quyền cho nội dung chính thức. Nhờ vậy hệ plugin được kiểm thử mỗi ngày thay vì chỉ ở Giai đoạn F.
+`content/core/` chính là một pack dùng đúng cơ chế mà cộng đồng sẽ dùng — không có đường đặc quyền cho nội dung chính thức. **Điều này buộc registry tối thiểu phải có từ sớm**: manifest, namespace, thứ tự load deterministic và content hash nằm ở Giai đoạn 0/A, không phải Giai đoạn F. Nếu để muộn, các phase giữa sẽ chạy bằng một loader đặc quyền tạm thời, và khi chuyển sang cơ chế thật thì id, lockfile và hash của mọi save cũ đều đổi. Cái được hoãn tới F chỉ là UI quản lý pack, nạp nóng và tier WASM cộng đồng. Nhờ vậy hệ plugin được kiểm thử mỗi ngày thay vì chỉ ở Giai đoạn F.
 
 ```bash
 mow-cli pack validate content/core      # validate theo JSON Schema

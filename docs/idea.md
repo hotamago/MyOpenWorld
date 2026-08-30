@@ -312,7 +312,9 @@ Chuyển entity là giao dịch nguyên tử:
 6. Ghi event rời world nguồn.
 7. Chuyển state sang world đích.
 8. Ghi event đến world đích, kèm bản ghi những gì đã đi cùng: ký sinh, mầm bệnh, hạt giống, vật phẩm (§9.10.1).
-9. Commit cả hai phía; nếu thất bại thì rollback, không nhân đôi entity.
+9. Commit theo **escrow hai pha**, vì hai world có thể nằm ở hai partition và hai vòng tick khác nhau: entity rời world nguồn được đưa vào bản ghi trung chuyển; world đích spawn và commit; chỉ khi có xác nhận thì bản ghi trung chuyển mới được giải phóng. Crash ở bất kỳ điểm nào để lại một bản ghi trung chuyển có thể dò lại và hoàn tất hoặc hoàn tác — không nhân đôi và không bốc hơi.
+
+Một câu "commit cả hai phía rồi rollback nếu lỗi" là chưa đủ: không có giao thức nào bảo đảm hai bên cùng thành công khi chúng không chia sẻ một transaction.
 
 ### 6.3. Khe nứt tự nhiên hiếm gặp
 
@@ -535,6 +537,10 @@ Mỗi vật liệu có các thuộc tính có đơn vị hoặc giá trị chu�
 
 Mọi chuyển cấp độ phải giữ các đại lượng quan trọng: dân số, tài nguyên, thương vong, công trình, quan hệ, tri thức và event lịch sử.
 
+**Mỗi subsystem tự khai báo hợp đồng LOD của mình** gồm bốn phần: `aggregate` (gộp xuống), `materialize` (dựng lại lên), danh sách đại lượng bảo toàn, và một bất biến round-trip kiểm tra được. Không có một hàm gộp chung cho mọi thứ, vì thứ cần bảo toàn của quan hệ xã hội khác hẳn thứ cần bảo toàn của trữ lượng quặng.
+
+Hệ quả cho thi công: một subsystem **chưa tồn tại thì chưa có gì để bảo toàn**. LOD được xây theo từng subsystem cùng lúc với subsystem đó, không phải xây một lần từ đầu rồi vá sau — vá sau nghĩa là viết lại promotion/demotion và làm đổi hash của mọi save cũ.
+
 ### 8.4. Tick và scheduler
 
 - Render hướng tới 60 FPS nhưng độc lập simulation.
@@ -585,6 +591,8 @@ Nhờ vậy một nhân vật đói có thể dùng lưỡi cày làm vũ khí, 
 | **Instance** | Entity đầy đủ, có id riêng | Có trạng thái cá biệt hóa: tên riêng, provenance đáng kể, chất lượng vượt ngưỡng, effect đang mang, hư hỏng riêng, đang bị tranh chấp, đang là vật chứng |
 | **Stack** | `(item_def, count, material, quality_bucket, condition_bucket)` | Hàng hóa đồng nhất trong kho, trên xe, trong túi |
 | **Aggregate** | Tồn kho theo khu vực | Vùng xa theo §8.3 |
+
+Ba mức đều nằm trong ECS: instance là entity riêng, còn stack và aggregate là component trên entity vật chứa (§22.32). Thứ được thăng lên instance **giữ nguyên provenance** — id mới được cấp nhưng chuỗi nguồn gốc nối liền với lô nó tách ra, nên không có đứt gãy lịch sử.
 
 Chuyển giữa ba mức là **deterministic và ghi event**. Một thỏi sắt được rèn thành thanh kiếm mà người thợ đặt tên thì được thăng lên instance; một thanh kiếm tầm thường nằm trong kho hai mươi năm không ai nhớ thì rút xuống stack. Điều kiện thăng/giáng là dữ liệu, không phải cảm tính, để §22.9 vẫn giữ.
 
@@ -1062,6 +1070,10 @@ Không tồn tại một thanh “hạnh phúc” tổng. UI có thể hiển th
 Giá trị hiện tại được suy ra bằng **tích phân đóng** khi có ai đọc, và scheduler chỉ đặt wake-up tại thời điểm chạm ngưỡng kế tiếp, đúng mô hình event/deadline ở §8.4. Một đàn 40.000 con cá không tốn 40.000 phép cộng mỗi tick; chúng chỉ thức dậy khi đói tới ngưỡng, khi bị săn hoặc khi môi trường đổi.
 
 Khi `rate_terms` đổi — trời trở lạnh, entity bắt đầu chạy, bị thương — engine chốt giá trị tại tick đó rồi mở một đoạn tích phân mới. Mọi phép tính dùng số nguyên hoặc fixed-point theo §19.6.
+
+**Đánh thức phải được rải ra.** Tích phân lười tiết kiệm ở trạng thái bình thường nhưng dồn cục khi có kích thích diện rộng: cháy làng hay tiếng chuông báo động đánh thức hàng nghìn entity trong đúng một tick, và tick đó sẽ vọt lên hàng trăm mili giây.
+
+Vì vậy đánh thức hàng loạt được phân bổ qua vài tick kế tiếp theo thứ tự ổn định — gần trước, `reaction_speed` cao trước — với một trần số entity được đánh thức mỗi tick. Thứ tự này là **deterministic**, nên nó không phải một thủ thuật hiệu năng làm hỏng replay mà là một phần của mô hình: người ở gần và người phản xạ nhanh biết chuyện sớm hơn, đúng như §10.8.2 đã quy định cho phản ứng.
 
 #### 9.7.3. Nhu cầu sinh động cơ, không sinh hành vi
 
@@ -2639,7 +2651,11 @@ Trên biểu đồ cột, hai màu chỉ cần phân biệt được với hàng
 
 Hệ quả cho thiết kế:
 
-> Trên bản đồ, **màu chỉ chở được tối đa ba định danh**. Từ định danh thứ tư trở đi, danh tính phải do **hoa văn, kiểu viền và nhãn trực tiếp** chở, còn màu chỉ là củng cố.
+> Trên bản đồ, **màu chỉ chở được tối đa ba định danh then chốt**. Từ định danh thứ tư trở đi, danh tính phải do **hoa văn, kiểu viền và nhãn trực tiếp** chở, còn màu chỉ là củng cố.
+
+Trần này áp cho **overlay định danh then chốt** — phe kiểm soát, quyền sở hữu, phe trong trận — nơi nhầm hai vùng là một lỗi chơi game thật.
+
+Nó **không** áp cho nền phân loại môi trường như biome, vốn có nhiều hơn ba giá trị và vốn đã có tín hiệu phụ mạnh: hoa văn địa hình, độ cao, thảm thực vật. Nhầm rừng thưa với thảo nguyên là chuyện thẩm mỹ, không phải lỗi quyết định. Nền môi trường vẫn phải qua kiểm tra tương phản với nền và với sắc phủ overlay, chỉ là không chịu trần ba.
 
 Một thế giới có mười hai quốc gia vì thế không được tô mười hai màu. Nó dùng ba màu cho ba khối liên minh đang quan tâm, hoa văn cho từng nước bên trong khối, và phần còn lại gộp thành "khác" — đúng cách bản đồ chính trị thật vẫn làm.
 
@@ -2982,9 +2998,11 @@ Mục tiêu: mọi hệ thống trong tài liệu này phải mở rộng đư�
 | **Core** | Bất biến engine, ECS, event commit, transaction, coordinate math | Rust | Không mod được. Đây là tầng 1 của §4.2 |
 | **Content pack** | Material, species, need, effect, action, knowledge node, culture, `norm_set`, talent, scenario, biome, sprite, bản địa hóa | Dữ liệu khai báo | Chỉ thêm định nghĩa vào registry |
 | **Behavior module** | Luật/spell Tier 1, generator địa hình, behavior policy, model kinh tế thay thế | WASM theo contract §13.9.3 | Hàm thuần, trả đề xuất, có fuel |
-| **UI plugin** | Panel, overlay, biểu đồ, công cụ phân tích | Vue + read model | Chỉ đọc read model và gửi command đã có schema |
+| **UI plugin** | Panel, overlay, biểu đồ, công cụ phân tích | Vue chạy trong **iframe khác origin, CSP nghiêm, không có token và không có capability của shell** | Chỉ nhận read model và gửi command qua message allowlist có schema |
 
 Ranh giới quan trọng nhất: **không lớp nào ngoài Core được ghi state trực tiếp.** Content pack thêm định nghĩa; behavior module trả đề xuất; UI plugin gửi command. Một plugin sai hoặc độc hại có thể làm thế giới mất cân bằng, nhưng không thể phá cấu trúc save hay vượt ACL.
+
+**Với UI plugin, khai báo không phải là ranh giới.** JavaScript nạp cùng origin với shell đọc được token cục bộ, DOM và mọi kênh mạng mà cửa sổ chủ có — nghĩa là nó giả làm người chơi hoặc True God được. Manifest không ngăn được điều đó. Ranh giới thật phải là kỹ thuật: iframe hoặc worker **khác origin**, CSP chặn mạng ngoài, không truyền token, và giao tiếp duy nhất qua một message allowlist có schema. Plugin nào cần nhiều hơn thế thì không còn là UI plugin.
 
 #### 19.7.2. Định danh có namespace
 
@@ -3070,6 +3088,32 @@ Selection dùng ngân sách tính theo **cửa sổ tick mô phỏng** (ví dụ
 Throttling dùng request/giây, token/phút, chi phí tiền/phút, số model local chạy song song và độ trễ tối đa. Nó **được phép làm chậm** một request nhưng **không được phép đổi tập request hoặc thứ tự của chúng**.
 
 Khi ngân sách cạn hoặc gateway trả timeout, entity rơi về fallback policy ở §10.3, và **quyết định rơi về fallback đó tự nó là một event được ghi**. Nhờ vậy replay tái hiện đúng cả những lúc hệ thống quá tải, thay vì âm thầm cho ra một thế giới khác.
+
+#### 20.2.2. Thời điểm kết quả được nhận, và vì sao nó phải cố định
+
+§20.2.1 chốt việc **chọn ai được nghĩ** là deterministic. Nhưng còn một nửa nữa, và thiếu nó thì replay vẫn vỡ: **kết quả được áp vào thế giới lúc nào.**
+
+Gọi model qua mạng có độ trễ dao động từ vài trăm mili giây tới vài giây, tức là vài tick tới vài chục tick mô phỏng. Nếu proposal được áp ngay khi nó về tới, thì lần chạy nhanh áp ở tick 110, lần chạy chậm áp ở tick 125 — và thế giới đã khác nhau trong khoảng đó. Ghi output vào event không cứu được, vì bản ghi không nói nó **đáng lẽ** được áp ở tick nào.
+
+**Độ trễ nhận thức là đại lượng trong game, không phải độ trễ mạng.** Khi một entity bắt đầu nghĩ ở tick `T`, scheduler ấn định luôn `D` — thời gian suy nghĩ tính bằng tick, suy ra từ loại quyết định và `cognition_rate` của chính entity (§10.7.1). Kết quả được áp **đúng tại `T + D`**, không sớm hơn dù model trả lời nhanh, không muộn hơn dù model trả lời chậm.
+
+Vòng đời một yêu cầu nhận thức là một máy trạng thái authoritative, và **chỉ simulation core được chuyển trạng thái**:
+
+```text
+Scheduled ─(gửi)→ Pending ─┬─(có kết quả trước T+D)──→ Accepted   @ tick T+D
+                           ├─(chưa có kết quả tại T+D)→ Fallback   @ tick T+D
+                           ├─(điều kiện tiền đề mất)───→ Cancelled
+                           └─(quá hạn giữ chỗ)─────────→ Expired
+```
+
+Bốn quy tắc:
+
+1. **Kết quả về muộn sau khi đã `Fallback` thì bị bỏ**, không được áp. Nó vẫn được ghi vào bản ghi để audit, nhưng không chạm vào state.
+2. **Mỗi yêu cầu có `request_id` và idempotent.** Kết quả về hai lần chỉ áp một lần.
+3. **Event ghi cả `request_tick` lẫn `admission_tick`.** Replay dựng lại đúng thời điểm áp, không phải thời điểm model trả lời.
+4. Model trả lời nhanh hơn `D` **không** làm entity phản ứng nhanh hơn. Nếu muốn nhân vật nghĩ nhanh thì tăng `cognition_rate` của nó, đó là một thuộc tính của thế giới chứ không phải may mắn về đường truyền.
+
+Cách này biến độ trễ hạ tầng thành thứ không quan sát được từ bên trong thế giới, và đó chính là điều kiện để §22.9 đứng vững.
 
 ### 20.3. Khi nào không gọi LLM
 
@@ -3631,7 +3675,7 @@ economy_profile:
 29. Mọi id do plugin đăng ký phải có namespace; ghi đè phải khai báo tường minh và xung đột là lỗi, không phải thắng theo thứ tự load.
 30. Save ghi pack set, version và content hash; thiếu hoặc lệch thì từ chối load thay vì load một phần.
 31. Không plugin nào được cấp quyền ghi state authoritative, nới bất biến engine hoặc đọc memory namespace mà nó không sở hữu.
-32. Vật phẩm là entity có component; không tồn tại bảng vật phẩm song song với ECS.
+32. Vật phẩm ở mức **instance** là một ECS entity có component. Vật phẩm ở mức **stack/aggregate** là component dữ liệu gắn trên entity vật chứa, dùng chung định nghĩa và cùng bộ luật, không có `EntityId` riêng. Không tồn tại một hệ vật phẩm thứ hai nằm ngoài ECS.
 33. Một vật phẩm nằm ở đúng một trong ba nơi — cell, container hoặc inventory. Chuyển chỗ là transaction, không nhân đôi và không bốc hơi.
 34. `CraftQuality` bất biến sau khi chế tác; sửa chữa chỉ phục hồi `Condition`.
 35. Vật phẩm không lưu giá trị; giá là kết quả của thị trường và belief của người đánh giá.
