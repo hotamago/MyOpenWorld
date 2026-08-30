@@ -1,0 +1,171 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# My Open World — compose gốc.
+#
+# Chạy bằng một lệnh duy nhất từ thư mục gốc repo:
+#
+#     ./mow up          # dựng toolbox, cài phụ thuộc
+#     ./mow test        # chạy toàn bộ test trong môi trường cách ly
+#     ./mow shell       # vào trong toolbox
+#     ./mow infra up    # bật Postgres/NATS/Qdrant/Jaeger cho server mode
+#     ./mow down        # dọn
+#
+# Hai nhóm dịch vụ tách hẳn nhau bằng `profiles`:
+#
+#   (không profile) toolbox — luôn có, đủ để build và test toàn bộ dự án.
+#   `infra`         Postgres, NATS, Qdrant, Jaeger, MinIO — chỉ cần từ Giai
+#                   đoạn C khi `PC-20` dựng hiện thực thứ hai cho server mode
+#                   (`plan.md §P3.4`). Trước đó SQLite + bus in-process là đủ,
+#                   và bắt mọi người chạy 5 container để sửa một dòng math thì
+#                   là thuế vô ích.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: myopenworld
+
+x-common-env: &common-env
+  MOW_ENV: ${MOW_ENV:-dev}
+  RUST_BACKTRACE: ${RUST_BACKTRACE:-1}
+  RUST_LOG: ${RUST_LOG:-info,mow=debug}
+  # Determinism harness phải chạy được với số luồng khác nhau (§P7.5); giá trị
+  # này được ghi đè khi so hash giữa các lần chạy.
+  RAYON_NUM_THREADS: ${RAYON_NUM_THREADS:-}
+
+services:
+  # ── Môi trường build/test cách ly ──────────────────────────────────────────
+  toolbox:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/toolbox.Dockerfile
+      args:
+        UID: ${MOW_UID:-1000}
+        GID: ${MOW_GID:-1000}
+    image: myopenworld/toolbox:local
+    environment:
+      <<: *common-env
+      # Trong container, "server mode" trỏ tới các container infra chứ không
+      # phải localhost của máy thật.
+      MOW_DATABASE__URL: postgres://mow:mow@postgres:5432/mow
+      MOW_BUS__URL: nats://nats:4222
+      MOW_VECTOR__URL: http://qdrant:6333
+      MOW_OTEL__ENDPOINT: http://jaeger:4317
+    volumes:
+      - ../..:/workspace:cached
+      # Cache nằm trên volume có tên: rebuild nhanh, và không đụng vào
+      # `target/` của máy thật — hai toolchain khác nhau dùng chung một
+      # `target/` là nguồn của những lỗi link rất khó hiểu.
+      - cargo-cache:/cache/cargo
+      - target-cache:/cache/target
+      - uv-cache:/cache/uv
+      - pnpm-cache:/cache/pnpm
+    working_dir: /workspace/src
+    # Giữ container sống để `exec` vào được mà không phải dựng lại mỗi lần.
+    command: ["sleep", "infinity"]
+    stdin_open: true
+    tty: true
+    init: true
+
+  # ── Hạ tầng cho server mode (profile `infra`) ──────────────────────────────
+  postgres:
+    profiles: ["infra"]
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: mow
+      POSTGRES_PASSWORD: mow
+      POSTGRES_DB: mow
+      # Bảng `event` là append-only và ghi rất nhiều; tăng WAL để không
+      # checkpoint liên tục khi soak chạy 200 năm mô phỏng (§P7.7).
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - shared_buffers=512MB
+      # `synchronous_commit=off` chỉ an toàn vì đây là môi trường test: mất
+      # vài giao dịch cuối khi máy sập là chấp nhận được ở đây, không bao giờ
+      # ở prod.
+      - -c
+      - synchronous_commit=off
+    ports: ["${MOW_PG_PORT:-55432}:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mow -d mow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  nats:
+    profiles: ["infra"]
+    image: nats:2.10-alpine
+    # JetStream bật tường minh: bus phải **bền**, vì mất một proposal nghĩa là
+    # một hành động của NPC biến mất không dấu vết (§P0-08).
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      - "${MOW_NATS_PORT:-54222}:4222"
+      - "${MOW_NATS_MON_PORT:-58222}:8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  qdrant:
+    profiles: ["infra"]
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "${MOW_QDRANT_PORT:-56333}:6333"
+      - "${MOW_QDRANT_GRPC_PORT:-56334}:6334"
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  jaeger:
+    profiles: ["infra"]
+    image: jaegertracing/all-in-one:1.62
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${MOW_JAEGER_UI_PORT:-56686}:16686"
+      - "${MOW_OTLP_PORT:-54317}:4317"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:14269/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    profiles: ["infra"]
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: mow
+      MINIO_ROOT_PASSWORD: mowmowmow
+    ports:
+      - "${MOW_MINIO_PORT:-59000}:9000"
+      - "${MOW_MINIO_CONSOLE_PORT:-59001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cargo-cache:
+  target-cache:
+  uv-cache:
+  pnpm-cache:
+  pgdata:
+  natsdata:
+  qdrantdata:
+  miniodata:

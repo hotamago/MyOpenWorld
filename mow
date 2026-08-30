@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# `mow` — một lệnh duy nhất cho mọi thứ chạy trong môi trường cách ly.
+#
+#   ./mow up                 dựng toolbox và bật nó
+#   ./mow shell              vào trong toolbox
+#   ./mow test [đối số...]   chạy test (mặc định: toàn bộ)
+#   ./mow build              build workspace Rust
+#   ./mow lint               fmt + clippy + quét số thực
+#   ./mow exec <lệnh...>     chạy một lệnh bất kỳ bên trong
+#   ./mow infra up|down      hạ tầng server mode (Postgres/NATS/Qdrant/...)
+#   ./mow logs [dịch vụ]     xem log
+#   ./mow down               tắt
+#   ./mow reset              tắt và **xóa cả volume** (mất cache và dữ liệu test)
+#   ./mow doctor             kiểm tra máy thật có đủ điều kiện chạy không
+#   ./mow native <lệnh...>   chạy thẳng trên máy thật, không qua container
+#
+# Bản PowerShell tương đương: `.\mow.ps1`.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_FILE="$REPO_ROOT/src/deploy/compose/docker-compose.yml"
+SERVICE=toolbox
+
+# UID/GID được truyền vào lúc build để file sinh ra trong container thuộc về
+# bạn chứ không thuộc về root. Trên Windows và macOS thì Docker Desktop đã lo
+# việc này, nên giá trị mặc định 1000 là vô hại.
+MOW_UID="$(id -u 2>/dev/null || echo 1000)"
+MOW_GID="$(id -g 2>/dev/null || echo 1000)"
+export MOW_UID MOW_GID
+
+c_red=$'\033[31m'; c_grn=$'\033[32m'; c_ylw=$'\033[33m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
+say()  { printf '%s▸%s %s\n' "$c_grn" "$c_off" "$*"; }
+warn() { printf '%s!%s %s\n' "$c_ylw" "$c_off" "$*" >&2; }
+die()  { printf '%s✗%s %s\n' "$c_red" "$c_off" "$*" >&2; exit 1; }
+
+compose() {
+  docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+need_docker() {
+  command -v docker >/dev/null 2>&1 \
+    || die "không tìm thấy \`docker\`. Cài Docker Desktop, hoặc dùng \`./mow native <lệnh>\` để chạy thẳng trên máy."
+  docker info >/dev/null 2>&1 \
+    || die "Docker có cài nhưng daemon không chạy. Bật Docker Desktop rồi thử lại."
+}
+
+# Bật toolbox nếu nó chưa chạy — để `./mow test` dùng được ngay mà không phải
+# nhớ gọi `up` trước.
+ensure_up() {
+  need_docker
+  if [ -z "$(compose ps -q "$SERVICE" 2>/dev/null)" ] \
+     || [ -z "$(docker ps -q --filter "id=$(compose ps -q "$SERVICE")" 2>/dev/null)" ]; then
+    say "toolbox chưa chạy, đang bật..."
+    compose up -d --build "$SERVICE"
+  fi
+}
+
+in_box() {
+  ensure_up
+  compose exec -T "$SERVICE" bash -lc "$*"
+}
+
+cmd="${1:-help}"; shift || true
+
+case "$cmd" in
+  up)
+    need_docker
+    say "dựng toolbox (lần đầu sẽ lâu — nó tải cả Rust, Node và uv)"
+    compose up -d --build "$SERVICE"
+    say "cài phụ thuộc"
+    in_box "cargo fetch --locked || cargo fetch"
+    say "sẵn sàng. \`./mow shell\` để vào, \`./mow test\` để chạy test."
+    ;;
+
+  down)
+    need_docker
+    compose --profile infra down
+    say "đã tắt (volume vẫn còn — dùng \`./mow reset\` nếu muốn xóa)"
+    ;;
+
+  reset)
+    need_docker
+    warn "sẽ xóa toàn bộ volume: cache build, dữ liệu Postgres/Qdrant của môi trường test."
+    read -r -p "Gõ 'xoa' để xác nhận: " ans
+    [ "$ans" = "xoa" ] || die "hủy"
+    compose --profile infra down -v
+    say "đã xóa sạch"
+    ;;
+
+  shell)
+    ensure_up
+    compose exec "$SERVICE" bash
+    ;;
+
+  exec)
+    [ $# -gt 0 ] || die "cần một lệnh: ./mow exec cargo tree"
+    in_box "$*"
+    ;;
+
+  build)
+    in_box "cargo build --workspace ${*:-}"
+    ;;
+
+  test)
+    if [ $# -gt 0 ]; then
+      in_box "cargo test $*"
+    else
+      say "test Rust"
+      in_box "cargo test --workspace --all-features"
+    fi
+    ;;
+
+  lint)
+    say "fmt"
+    in_box "cargo fmt --all -- --check"
+    say "clippy"
+    in_box "cargo clippy --workspace --all-targets --all-features -- -D warnings"
+    ;;
+
+  fmt)
+    in_box "cargo fmt --all"
+    ;;
+
+  # Determinism harness (§P7.5): chạy lại cùng một kịch bản với số luồng khác
+  # nhau rồi so state hash. Chạy trong container nghĩa là số luồng thật sự do
+  # ta điều khiển, không phụ thuộc máy ai có bao nhiêu nhân.
+  determinism)
+    ensure_up
+    for n in 1 2 8; do
+      say "chạy với RAYON_NUM_THREADS=$n"
+      compose exec -T -e RAYON_NUM_THREADS="$n" "$SERVICE" \
+        bash -lc "cargo test --workspace determinism -- --nocapture"
+    done
+    ;;
+
+  infra)
+    need_docker
+    sub="${1:-up}"; shift || true
+    case "$sub" in
+      up)
+        say "bật Postgres, NATS, Qdrant, Jaeger, MinIO"
+        compose --profile infra up -d
+        say "Jaeger UI:  http://localhost:${MOW_JAEGER_UI_PORT:-56686}"
+        say "Qdrant UI:  http://localhost:${MOW_QDRANT_PORT:-56333}/dashboard"
+        say "MinIO UI:   http://localhost:${MOW_MINIO_CONSOLE_PORT:-59001}"
+        ;;
+      down) compose --profile infra stop postgres nats qdrant jaeger minio ;;
+      *) die "infra up | infra down" ;;
+    esac
+    ;;
+
+  logs)
+    need_docker
+    compose --profile infra logs -f "${1:-}"
+    ;;
+
+  ps)
+    need_docker
+    compose --profile infra ps
+    ;;
+
+  native)
+    [ $# -gt 0 ] || die "cần một lệnh: ./mow native cargo test -p mow-math"
+    cd "$REPO_ROOT/src"
+    exec "$@"
+    ;;
+
+  doctor)
+    printf '%sKiểm tra môi trường%s\n' "$c_dim" "$c_off"
+    ok=0
+    for tool in docker cargo rustc python node pnpm uv git; do
+      if command -v "$tool" >/dev/null 2>&1; then
+        printf '  %s✓%s %-8s %s\n' "$c_grn" "$c_off" "$tool" "$("$tool" --version 2>&1 | head -1)"
+      else
+        printf '  %s✗%s %-8s không có\n' "$c_ylw" "$c_off" "$tool"
+        ok=1
+      fi
+    done
+    if docker info >/dev/null 2>&1; then
+      printf '  %s✓%s docker daemon đang chạy\n' "$c_grn" "$c_off"
+    else
+      printf '  %s✗%s docker daemon không chạy — chỉ dùng được `./mow native`\n' "$c_ylw" "$c_off"
+    fi
+    [ "$ok" -eq 0 ] && say "đủ để chạy mọi thứ trên máy thật" \
+                    || warn "thiếu vài thứ trên máy thật; container vẫn chạy đủ"
+    ;;
+
+  help|--help|-h)
+    sed -n '2,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    ;;
+
+  *)
+    die "không hiểu lệnh \`$cmd\`. Xem \`./mow help\`."
+    ;;
+esac

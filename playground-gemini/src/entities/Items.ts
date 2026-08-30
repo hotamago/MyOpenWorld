@@ -1,0 +1,147 @@
+// Items, Equipment, and Consumables Database
+
+import { Item, ItemCategory, ItemRarity } from '../core/Types';
+
+export const ITEM_DATABASE: Record<string, Omit<Item, 'quantity'>> = {
+  // --- FOODS ---
+  wild_berries: {
+    id: 'wild_berries',
+    name: 'Wild Forest Berries',
+    description: 'Sweet and tart red berries gathered from the woodland understory.',
+    category: ItemCategory.FOOD,
+    rarity: ItemRarity.COMMON,
+    icon: '🍒',
+    weight: 0.2,
+    maxStack: 20,
+    effects: { hunger: -25, energy: 5, mood: 10 },
+    value: 2,
+  },
+  wheat_grain: {
+    id: 'wheat_grain',
+    name: 'Harvested Wheat',
+    description: 'Golden stalks of grain ready to be baked into hearty bread.',
+    category: ItemCategory.FOOD,
+    rarity: ItemRarity.COMMON,
+    icon: '🌾',
+    weight: 0.5,
+    maxStack: 30,
+    effects: { hunger: -10, mood: 2 },
+    value: 3,
+  },
+  hearty_bread: {
+    id: 'hearty_bread',
+    name: 'Hearth-Baked Bread',
+    description: 'Crusty loaf of sourdough baked over village ovens.',
+    category: ItemCategory.FOOD,
+    rarity: ItemRarity.UNCOMMON,
+    icon: '🍞',
+    weight: 0.6,
+    maxStack: 10,
+    effects: { hunger: -50, energy: 15, mood: 20 },
+    value: 8,
+  },
+  golden_apple: {
+    id: 'golden_apple',
+    name: 'Sun-Blessed Apple',
+    description: 'A miraculous fruit glowing with divine restorative warmth.',
+    category: ItemCategory.FOOD,
+    rarity: ItemRarity.RARE,
+    icon: '🍎',
+    weight: 0.3,
+    maxStack: 5,
+    effects: { hunger: -70, health: 40, energy: 40, mood: 35 },
+    value: 50,
+  },
+  mana_mushroom: {
+    id: 'mana_mushroom',
+    name: 'Phosphor Shroom',
+    description: 'A glowing purple fungi vibrating with concentrated ley-mana.',
+    category: ItemCategory.FOOD,
+    rarity: ItemRarity.UNCOMMON,
+    icon: '🍄',
+    weight: 0.1,
+    maxStack: 15,
+    effects: { hunger: -15, mana: 50, mood: 15 },
+    value: 12,
+  },
+
+  // --- RESOURCES ---
+  oak_wood: {
+    id: 'oak_wood',
+    name: 'Oak Lumber',
+    description: 'Sturdy timber logs for construction and hearth fires.',
+    category: ItemCategory.RESOURCE,
+    rarity: ItemRarity.COMMON,
+    icon: '🪵',
+    weight: 2.0,
+    maxStack: 20,
+    value: 4,
+  },
+  iron_ore: {
+    id: 'iron_ore',
+    name: 'Raw Iron Ore',
+    description: 'Heavy chunks of unrefined metal dug from mountain veins.',
+    category: ItemCategory.RESOURCE,
+    rarity: ItemRarity.UNCOMMON,
+    icon: '⛏️',
+    weight: 3.5,
+    maxStack: 15,
+    value: 10,
+  },
+  mana_crystal_shard: {
+    id: 'mana_crystal_shard',
+    name: 'Resonant Mana Shard',
+    description: 'Prismatic crystal pulsing with arcane vibrations.',
+    category: ItemCategory.RESOURCE,
+    rarity: ItemRarity.RARE,
+    icon: '💎',
+    weight: 0.4,
+    maxStack: 10,
+    value: 35,
+  },
+
+  // --- TOOLS & ARTIFACTS ---
+  forged_pickaxe: {
+    id: 'forged_pickaxe',
+    name: 'Dwarven Pickaxe',
+    description: 'Masterfully balanced steel tool for extracting heavy ores.',
+    category: ItemCategory.TOOL,
+    rarity: ItemRarity.UNCOMMON,
+    icon: '🔨',
+    weight: 3.0,
+    maxStack: 1,
+    value: 25,
+  },
+  ranger_bow: {
+    id: 'ranger_bow',
+    name: 'Yew Wood Bow',
+    description: 'Flexible hunting bow crafted by elven artisans.',
+    category: ItemCategory.TOOL,
+    rarity: ItemRarity.UNCOMMON,
+    icon: '🏹',
+    weight: 1.5,
+    maxStack: 1,
+    value: 30,
+  },
+  celestial_amulet: {
+    id: 'celestial_amulet',
+    name: 'Amulet of Gaia',
+    description: 'Ancient relic radiating True God benevolence.',
+    category: ItemCategory.ARTIFACT,
+    rarity: ItemRarity.CELESTIAL,
+    icon: '✨',
+    weight: 0.5,
+    maxStack: 1,
+    effects: { health: 100, mood: 50, mana: 100 },
+    value: 500,
+  },
+};
+
+export function createItem(itemId: string, quantity: number = 1): Item {
+  const base = ITEM_DATABASE[itemId] || ITEM_DATABASE.wild_berries;
+  return {
+    ...base,
+    id: itemId,
+    quantity: Math.max(1, Math.min(quantity, base.maxStack)),
+  };
+}

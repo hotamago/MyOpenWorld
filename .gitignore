@@ -1,2 +1,182 @@
-# Scaffolding tam thoi khi patch tai lieu
+# ─────────────────────────────────────────────────────────────────────────────
+# My Open World — .gitignore
+#
+# Nguyên tắc: lockfile ĐƯỢC commit (plan.md §P10.6 — Cargo.lock, uv.lock,
+# pnpm-lock.yaml đều ghim phiên bản). Mọi thứ sinh ra được từ nguồn thì không.
+# Ngoại lệ có chủ đích: schemas/ và mã sinh từ proto ĐƯỢC commit, vì CI phải so
+# được mã sinh với mã đã commit để bắt trôi hợp đồng (§P4).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Scaffolding tạm khi patch tài liệu ───────────────────────────────────────
 .patch/
+.ic/
+.ic2/
+.fx/
+.rev/
+
+# ── Rust ─────────────────────────────────────────────────────────────────────
+target/
+**/*.rs.bk
+*.pdb
+# criterion và flamegraph
+/src/target/
+criterion/
+flamegraph.svg
+perf.data
+perf.data.old
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+.python-version
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+.hypothesis/
+
+# ── Node / web ───────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.vite/
+.turbo/
+*.tsbuildinfo
+web/dist/
+src/web/dist/
+.eslintcache
+.stylelintcache
+
+# ── Tauri ────────────────────────────────────────────────────────────────────
+src-tauri/target/
+src/deploy/tauri/target/
+*.app
+*.dmg
+*.msi
+*.AppImage
+*.deb
+*.rpm
+
+# ── Bí mật ───────────────────────────────────────────────────────────────────
+# §P10.6: bí mật CHỈ ở .env, không bao giờ trong config/*.yaml (được commit).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/testdata/**/*.key
+secrets/
+.secrets.baseline.local
+
+# ── Dữ liệu chạy: save, world, chỉ mục ───────────────────────────────────────
+# Save của người chơi là dữ liệu quý (§P10.6) nhưng không thuộc về repo.
+saves/
+worlds/
+*.mowsave
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-journal
+# Kho ký ức nằm ở file riêng, tách khỏi file save (§P3.4 / P0-09).
+memory-index/
+qdrant_storage/
+.mow/
+
+# ── Sản phẩm của harness agent ───────────────────────────────────────────────
+# Repro bundle có thể chứa nội dung nhạy cảm do người chơi tạo (§P10.6):
+# mặc định nằm cục bộ, chia sẻ phải là hành động tường minh.
+repro/
+*.repro.tar.zst
+determinism-out/
+soak-out/
+world-health-report-*.json
+trace-*.json
+
+# ── Bản ghi LLM ──────────────────────────────────────────────────────────────
+# Chế độ RECORD sinh cassette lớn và có thể chứa prompt thật.
+llm-cassettes/
+*.cassette.jsonl
+
+# ── Content pack đã đóng gói ─────────────────────────────────────────────────
+# Nguồn ở content/ được commit; bản .mowpack là sản phẩm build.
+*.mowpack
+content/**/dist/
+
+# ── Atlas và asset nướng ─────────────────────────────────────────────────────
+# Icon và tile atlas là hàm thuần của dữ liệu trong content/ (§18.14.1),
+# nên nướng lại được và không cần nằm trong lịch sử.
+**/generated/atlas/
+*.atlas.png
+*.atlas.json
+
+# ── Test ─────────────────────────────────────────────────────────────────────
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+tests/e2e/screenshots/actual/
+tests/e2e/screenshots/diff/
+
+# ── Log ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Playground của agent khác ────────────────────────────────────────────────
+# Thư mục này do Gemini (agy) tự quản; giữ nguồn, bỏ sản phẩm build và log chạy.
+playground-gemini/agy_run.log
+playground-gemini/node_modules/
+playground-gemini/dist/
+
+# ── IDE và hệ điều hành ──────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ── Tạm ──────────────────────────────────────────────────────────────────────
+tmp/
+.tmp/
+*.tmp
+*.bak
+*.orig
+*.rej

@@ -1,0 +1,19 @@
+[package]
+name = "mow-math"
+description = "Miền số học xác định cho My Open World: fixed-point, xác suất, tốc độ, đơn vị vật lý, tọa độ, hash và RNG có tên."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+schemars = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Open World — Gaia Simulation Playground</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌌</text></svg>" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Top Control & Clock Header -->
+      <header id="topbar-container"></header>
+
+      <!-- Main World Viewport & Sidebars -->
+      <main class="main-workspace">
+        <!-- Canvas Viewport -->
+        <div class="canvas-wrapper">
+          <canvas id="world-canvas"></canvas>
+
+          <!-- Minimap Widget -->
+          <div class="minimap-container">
+            <span class="minimap-label">Minimap</span>
+            <canvas id="minimap-canvas" width="150" height="150"></canvas>
+          </div>
+
+          <!-- Dynamic Heatmap Overlay Legend -->
+          <div id="legend-container"></div>
+
+          <!-- Bottom Left Chronicle Event Stream -->
+          <div id="chronicle-container"></div>
+        </div>
+
+        <!-- Sidebar Inspector Panel -->
+        <aside id="inspector-container"></aside>
+      </main>
+
+      <!-- Modals and Popovers -->
+      <div id="inventory-modal-container" style="display: none;"></div>
+      <div id="help-modal-container" style="display: none;"></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
