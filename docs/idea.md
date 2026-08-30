@@ -53,6 +53,8 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Lượt hành động | Không có round cố định; lượt sinh ra từ `ready_at` trên chính timeline mô phỏng |
 | Thời gian tiến trình | Mỗi tiến trình khai báo clock domain; qua portal thì rebase theo domain đó |
 | Khóa phiên bản | Worldseed chia sẻ trỏ tới lockfile đã resolve, không phải khoảng version |
+| Kết quả xã hội | Volition tính bằng quy tắc trên social state; LLM chọn ý định, engine tính kết quả |
+| Event seed | Storylet có precondition và salience, chỉ đặt điều kiện, không bao giờ đặt kết quả |
 
 ### 2.1. Những điều cố ý không làm
 
@@ -71,6 +73,8 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 - Không có “tỉ lệ rơi đồ huyền thoại”. Vật phẩm phi thường đến từ tay nghề, lịch sử, phép thuật hoặc nguồn gốc dị thường.
 - Không cho vật phẩm bất tử; hao mòn là cống chính của nền kinh tế.
 - Không lưu một con số “giá trị” bên trong vật phẩm.
+- Không gán sẵn nghề nghiệp cho dân cư; chuyên môn hóa phải nảy sinh từ việc họ quan sát được nhau.
+- Không để văn bản LLM ghi thẳng belief, kể cả khi nó rất tự tin.
 
 ## 3. Trải nghiệm và vòng lặp gameplay
 
@@ -867,6 +871,29 @@ Luyện tập chỉ tăng khi hành động thật sự sử dụng năng lực,
 - Tử vong tách body, identity và soul theo luật world.
 - Nếu có soul, ký ức có thể mất một phần, bị khóa, chuyển sang afterlife, tái sinh hoặc được triệu hồi. Không tự động hồi sinh chỉ vì còn record trong database.
 
+#### 9.5.1. Di truyền định lượng
+
+`Genotype`/`Phenotype` ở §9.1 cần một mô hình thật, nếu không việc lai giống, dòng dõi quý tộc và thuần hóa quái vật chỉ là trang trí.
+
+Phần lớn đặc điểm đáng quan tâm — chiều cao, sức bền, tuổi thọ, ái lực mana, khuynh hướng tính cách — là **đa gen**: nhiều locus, mỗi locus đóng góp một phần nhỏ. Mô hình tối thiểu:
+
+```text
+phenotype = giá_trị_di_truyền_cộng_gộp
+          + hiệu_ứng_môi_trường      (dinh dưỡng, bệnh, khí hậu, mana)
+          + tương_tác_gen×môi_trường
+          + nhiễu
+```
+
+Ba tham số quyết định cảm giác chơi:
+
+- **`h²` (hệ số di truyền)** cho mỗi trait: con giống cha mẹ đến đâu. `h²` cao thì dòng dõi có ý nghĩa; `h²` thấp thì hoàn cảnh quyết định. Đặt khác nhau cho từng trait là cách rẻ nhất để có một thế giới nơi “con nhà nòi” đúng với vài thứ và sai với nhiều thứ khác.
+- **Tương tác gen×môi trường**: cùng một genotype cho ra phenotype khác nhau ở vùng đói kém và vùng trù phú. Điều này khiến chọn giống ở một nơi rồi mang sang nơi khác có thể thất bại.
+- **Hệ số cận huyết `F` và suy thoái cận huyết**: giao phối cận huyết làm giảm giá trị trung bình của các trait gắn với sức sống, và mức giảm phụ thuộc cả kiểu giao phối lẫn cấu trúc di truyền của quần thể — không phải một hình phạt cố định.
+
+Hệ quả rơi ra mà không cần viết riêng: một dòng họ quý tộc khép kín để giữ huyết thống sẽ tự suy yếu qua vài thế hệ và tự tạo ra khủng hoảng kế vị ở §12.9; một quần thể rồng bị săn xuống dưới ngưỡng sẽ mắc kẹt trong nút thắt di truyền; và **chọn giống có định hướng trở thành một `Project` nhiều thế hệ ở §13.5** — đúng loại việc mà một quốc gia làm để có ngựa chiến tốt hơn hoặc một giáo phái làm để tạo ra người có ái lực mana.
+
+Yuu ở §15.2 điều khiển phân phối ban đầu; sau đó chính chọn lọc, môi trường và quyết định của nhân vật mới là thứ dịch chuyển quần thể.
+
 ### 9.6. Tạo loài bởi Yuu
 
 Quy trình bắt buộc:
@@ -1092,6 +1119,22 @@ Hệ quả rơi ra tự nhiên, không cần hệ thống riêng cho từng th�
 
 Reputation là dữ liệu theo bộ ba `(người quan sát, người bị quan sát, khía cạnh)`, có confidence và provenance, lưu trong `Relationship` và trong knowledge base của tổ chức. Nó không bao giờ là một con số toàn cục.
 
+#### 9.9.4. Trật tự chuẩn mực của danh tiếng
+
+Danh tiếng lan được không có nghĩa là hợp tác sẽ ổn định. Điều quyết định là **văn hóa đó dùng chuẩn mực bậc mấy** để chấm điểm hành vi:
+
+- **Bậc một**: chỉ nhìn hành động. Ai từ chối giúp thì bị coi là xấu, **kể cả khi họ từ chối giúp một kẻ lừa đảo.** Đây là gót chân Achilles nổi tiếng của mô hình image scoring: trừng phạt kẻ xấu làm hỏng danh tiếng của chính người trừng phạt, nên không ai dám trừng phạt, và kẻ lừa đảo sống khỏe.
+- **Bậc hai**: nhìn cả hành động lẫn danh tiếng của đối tượng. Từ chối giúp một kẻ đã bị coi là xấu thì **không** làm hỏng danh tiếng của mình. Hợp tác ổn định hơn, nhưng đòi hỏi cộng đồng phải đồng thuận về việc ai là kẻ xấu — tức là đòi hỏi mạng lưới thông tin ở §12.15 hoạt động đủ tốt.
+
+Chọn bậc chuẩn mực là một trường trong culture ở §12.3, và nó tạo ra khác biệt quan sát được ngay:
+
+- Ở văn hóa bậc một, người tự xử trở thành tội phạm và cộng đồng chịu đựng kẻ xấu.
+- Ở văn hóa bậc hai, người tự xử có thể được ca ngợi — cho tới khi họ nhắm sai người, vì danh tiếng của nạn nhân là **belief**, và belief có thể sai.
+
+Danh tiếng lan theo cạnh của mạng xã hội với giới hạn khoảng cách, không phải phát sóng toàn cầu. Một kẻ lừa đảo chỉ cần đi đủ xa là có danh tiếng sạch — và đó là lý do giấy giới thiệu, người bảo lãnh và thư tín có giá trị thật trong thương mại ở §12.17.
+
+Tham khảo: [Evolution of gossip-based indirect reciprocity](https://www.nature.com/articles/srep37931), [Indirect reciprocity under opinion synchronization](https://www.pnas.org/doi/10.1073/pnas.2418364121).
+
 ### 9.10. Diễn thế sinh thái và loài xâm lấn
 
 §7.3 sinh hệ sinh thái ban đầu và §8.3 mô phỏng quần thể theo LOD. Thiếu phần ở giữa: hệ sinh thái **thay đổi theo thời gian**.
@@ -1298,6 +1341,34 @@ Một câu dài tốn thời gian thật. Trong lúc nhân vật đang nói, ng�
 Thanh thời gian chỉ hiển thị lượt của avatar và những hành động địch **đã được telegraph** qua observation hợp lệ. Không hiển thị tên spell bí mật, thời điểm impact chính xác hay chỉ số đối phương nếu avatar chưa đủ tri giác và kiến thức. Đây là §22.4 áp cho giao diện.
 
 Phân tầng LLM ở §10.3 không đổi: LLM chọn chiến thuật khi giao tranh bắt đầu hoặc khi kế hoạch gãy; tactical policy chọn từng micro-action mỗi khi `ready_at` tới. Không có controller LLM cho từng đòn đánh.
+
+### 10.12. Trao đổi xã hội và volition
+
+§10.11 đặt hành động xã hội lên timeline và §10.6 khẳng định “câu nói không tự động thành công”. Còn thiếu một câu trả lời: **người nghe quyết định thế nào?** Không thể để LLM tự tuyên bố kết quả, cũng không nên rút một con xúc xắc.
+
+Dùng mô hình **trao đổi xã hội**: đơn vị cơ bản không phải một câu nói mà là một cặp `ý định → phản hồi`.
+
+```text
+SocialExchange
+  initiator, responder, type            (mời, dọa, hứa, xin lỗi, tố cáo, tán tỉnh...)
+  → volition(initiator)   : điểm muốn thực hiện
+  → volition(responder)   : điểm muốn chấp nhận
+  → outcome               : chấp nhận / từ chối / phản đề nghị
+  → hiệu ứng lan tỏa      : lên cả người thứ ba đang quan sát
+```
+
+Volition được tính bằng một tập **quy tắc ảnh hưởng có trọng số** chạy trên social state — trait và values (§9.9), quan hệ hiện tại, địa vị (§12.10), nghĩa vụ và nợ (§11.2), và lịch sử tương tác đã có. Từ đơn giản (“dễ làm điều tử tế với bạn bè hơn”) tới phức hợp (“ghen khi thấy bạn thân dành nhiều thời gian cho một người mình không ưa, trong khi lâu rồi không gặp mình”).
+
+Bốn ràng buộc:
+
+1. **LLM chọn ý định, engine tính kết quả.** LLM đề xuất `type` và nội dung; volition và outcome do quy tắc quyết định. Đây là §22.5 áp cho tương tác xã hội.
+2. **Văn bản là lớp trình bày.** Câu chữ do LLM viết làm cho cảnh sống động, nhưng nó không phải nguồn sự thật của kết quả.
+3. **Mọi trao đổi có dư chấn lên người thứ ba.** Ai chứng kiến thì cập nhật belief về cả hai bên theo §9.9.3. Đây là chỗ danh tiếng thật sự được tạo ra.
+4. **Tập quy tắc là dữ liệu, mở rộng được.** Content pack ở §19.7 có thể thêm quy tắc ảnh hưởng cho một nền văn hóa, một loài hoặc một tôn giáo, mà không đụng vào engine.
+
+Cách này cho ra những tình huống mà một thanh “thuyết phục” không bao giờ tạo được: một lời đề nghị hợp lý bị từ chối vì người nghe đang mất mặt trước đám đông, hoặc một lời dọa nạt phản tác dụng vì có người thứ ba chứng kiến.
+
+Tham khảo: [Prom Week: Social Physics as Gameplay](https://dl.acm.org/doi/10.1145/2159365.2159425).
 
 ## 11. Ký ức và RAG riêng cho từng thực thể
 
@@ -1751,6 +1822,21 @@ Thất nghiệp, bóc lột, đình công (§12.11), đào tạo nghề và tran
 
 Một cây cầu sập hoặc một vụ cướp đường vì thế lan thành thiếu hàng, tăng giá và vi phạm hợp đồng — với cause chain đầy đủ, không phải một sự kiện “giá tăng” xuất hiện từ hư không.
 
+#### 12.17.3. Chuyên môn hóa nảy sinh từ việc nhìn thấy nhau
+
+Một phát hiện từ các mô phỏng nhiều tác tử quy mô lớn đáng để đưa thẳng vào thiết kế: khi một nhóm cá thể giống hệt nhau được thả vào cùng một môi trường, **vai trò nghề nghiệp phân hóa chỉ khi chúng quan sát được nhau đang làm gì.** Ở điều kiện đối chứng bị chặn tri giác xã hội, tất cả làm cùng một việc, lặp đi lặp lại.
+
+Vì thế phân công lao động trong world này **không được gán sẵn**. Nó phải rơi ra từ:
+
+- Thấy người khác đã làm việc gì và làm tốt tới đâu.
+- Thấy chỗ nào đang thiếu người.
+- Uy tín và thu nhập quan sát được của từng nghề (§12.15.2).
+- Cơ hội học nghề thật sự có ở §13.10.
+
+Hệ quả kiểm chứng được: một khu định cư bị chia cắt, nơi người ta không thấy việc của nhau, sẽ có cơ cấu nghề nghèo nàn hơn một khu định cư có chợ và quán — dù hai nơi có cùng tài nguyên. Và đó là một lý do nữa để §12.18.2 quan trọng.
+
+Tham khảo: [Project Sid: Many-agent simulations toward AI civilization](https://arxiv.org/abs/2411.00114).
+
 ### 12.18. Thửa đất, địa điểm thường nhật và văn hóa vật chất
 
 #### 12.18.1. Đô thị mọc theo thửa đất
@@ -1770,6 +1856,18 @@ Giếng nước, bếp chung, chợ, quán rượu, nhà tắm, đền, bến xe
 Lịch lễ hội, thi đấu, âm nhạc, món ăn, trang phục và nghệ thuật tiêu thụ tài nguyên thật, tạo việc làm thật, phát tín hiệu địa vị theo §12.10 và lan theo uy tín ở §12.15.2.
 
 Một thế giới chỉ có thảm họa, tội phạm và chiến tranh không phải một thế giới sống động — nó chỉ là một thế giới u ám. Phần lớn thời gian của phần lớn nhân vật phải là chuyện thường ngày.
+
+#### 12.18.4. Nghệ thuật là một dạng ghi chép
+
+Chạm khắc, tranh, sử thi, bài hát và tượng đài **mô tả sự kiện có thật** trong event log. Một bức phù điêu trong đền có thể ghi lại một trận đánh, một lời thề, hoặc một vị vua đang giẫm lên kẻ thù.
+
+Điều đó biến tác phẩm nghệ thuật thành ba thứ cùng lúc:
+
+- **Vật phẩm** theo §8.5, có vật liệu, chất lượng, tác giả và provenance.
+- **Vật mang thông tin** theo §8.8, nên nó truyền tri thức và có thể bị hiểu sai.
+- **Bằng chứng** theo §12.5.3 — một bức khắc có thể chứng minh ai đã ở đâu, hoặc bị dùng để dựng chuyện.
+
+Và vì nó đi qua đúng cơ chế trôi dạt ở §8.9.2, nghệ thuật tuyên truyền trở thành một hành vi tự nhiên: khắc lại lịch sử theo ý người cầm quyền, đục bỏ tên một người khỏi mọi bia đá, hoặc dựng tượng cho một chiến thắng chưa từng xảy ra. Nhà khảo cổ đời sau sẽ phải đối chiếu nhiều nguồn để biết chuyện gì thật sự xảy ra — và người chơi thì có Legends view để so hai lớp.
 
 ### 12.19. Di cư, tị nạn và cộng đồng ly tán
 
@@ -2148,6 +2246,42 @@ Yuu phải phân biệt ba loại lệnh:
 - **Command**: True God yêu cầu thực hiện ngay; vẫn phải transaction và log.
 
 Nếu yêu cầu mơ hồ nhưng có thể suy ra từ state, Yuu tự tạo phương án mặc định an toàn và trình preview. Với thay đổi phá hủy diện rộng, Yuu tự snapshot trước commit.
+
+### 15.6. Storylet: cấu trúc dữ liệu cho event seed
+
+§15.4 quy định Director theo dõi pressure và đề xuất sự kiện, nhưng chưa nói nó **chọn từ đâu**. Nếu để LLM tự nghĩ ra sự kiện mỗi lần thì mất tính kiểm chứng, mất khả năng mod, và rất dễ lặp.
+
+Dùng cấu trúc **storylet** với lựa chọn theo độ phù hợp:
+
+```yaml
+schema: storylet/v1
+id: "storylet:mine_flooding"
+preconditions:                       # vị từ trên world state, không phải văn bản
+  - { kind: infrastructure_exists, type: mine, depth_below: -40 }
+  - { kind: pressure, name: water_table_rising, min: 0.5 }
+  - { kind: not_recent, event: "storylet:mine_flooding", within_days: 900 }
+salience:                            # điểm phù hợp, cao hơn thì dễ được chọn hơn
+  base: 0.4
+  boost:
+    - { when: player_focus_region, by: 0.2 }
+    - { when: settlement_depends_on_mine, by: 0.35 }
+perturbation:                        # CHỈ đổi điều kiện thế giới
+  - { effect: "effect.region.flooding", target: mine_lower_levels }
+  - { resource_delta: { ore_output: -0.7 } }
+outcomes: null                       # không có. Nhân vật tự quyết định
+budget_cost: 2
+cooldown_days: 900
+provenance: yuu_director
+```
+
+Bốn quy tắc bắt buộc:
+
+1. **Storylet chỉ đặt điều kiện, không bao giờ đặt kết quả.** Trường `outcomes` cố ý luôn rỗng. Đây là §17.3 được diễn đạt thành cấu trúc dữ liệu thay vì thành lời hứa.
+2. **Precondition là vị từ trên state thật.** Không có storylet nào kích hoạt được nếu thế giới chưa có nguyên nhân — đúng nguyên tắc “khuếch đại nguyên nhân đã tồn tại” ở §15.4.
+3. **Chọn theo salience trong ngân sách và cooldown**, nên Director không thể liên tục nhắm vào một entity chỉ vì người chơi đang xem.
+4. **Storylet là điểm mở rộng của plugin.** Cộng đồng đóng góp bộ storylet theo văn hóa, khí hậu hoặc thời đại, đăng ký qua registry §19.7 với namespace riêng.
+
+Ngoài ra, storylet còn là dữ liệu **auditable**: audit view ở §15.4 hiển thị được đúng storylet nào đã kích hoạt, vì precondition nào, và salience bao nhiêu — thay vì một câu giải thích do LLM viết ra sau khi mọi chuyện đã xong.
 
 ## 16. True God và quyền can thiệp
 
@@ -2564,6 +2698,41 @@ Raw episode chỉ đưa vào khi cần. Summary luôn giữ link về source đ�
 - Circuit breaker chuyển sang model nhỏ/policy khi provider lỗi.
 - Request/result có trace ID, token, latency, model và prompt version.
 - Entity dùng fallback plan hợp lý như chờ, tự bảo vệ hoặc tiếp tục routine; không nhận quyền năng mới vì model lỗi.
+
+### 20.11. Chống trôi persona, mục tiêu và niềm tin
+
+Đây là rủi ro vận hành lớn nhất của một thế giới chạy hàng trăm giờ. Nghiên cứu gần đây về tác tử LLM chạy dài mô tả ba dạng trôi: **trôi ngữ nghĩa** (rời dần khỏi ý định ban đầu), **trôi phối hợp** (đồng thuận giữa nhiều tác tử tan rã), và **trôi hành vi** (xuất hiện chiến lược không ai định trước). Nguyên nhân gốc là ngữ cảnh gần nhất lấn át mục tiêu ban đầu.
+
+Kiến trúc trong tài liệu này đã miễn nhiễm phần lớn, nhưng phải giữ đúng bốn nguyên tắc sau:
+
+#### 20.11.1. State là mỏ neo, không phải hội thoại
+
+Persona, trait, values, mục tiêu và quan hệ **luôn được dựng lại từ state authoritative** ở mỗi chu trình nhận thức, không bao giờ được mang sang từ output LLM lần trước. Đây là lý do §9.1 bắt buộc cognition contract nằm trong ECS chứ không nằm trong lịch sử chat. Không có chuỗi hội thoại dài để mà mục ruỗng.
+
+#### 20.11.2. Kế hoạch có chân trời tốt hơn từng bước một
+
+Tác tử lập kế hoạch có chân trời giữ được mục tiêu tốt hơn tác tử quyết định từng bước. §20.5 đã dùng kế hoạch có thời hạn; giữ nguyên hướng đó và ưu tiên mở rộng chân trời kế hoạch thay vì tăng tần suất gọi model.
+
+#### 20.11.3. Đồng thuận phải qua bằng chứng, không qua sự tự tin
+
+Trong hệ nhiều tác tử LLM, khi một tác tử khẳng định điều gì đó một cách chắc nịch, những tác tử khác có xu hướng **hùa theo thay vì phản biện**. Nếu để lọt vào simulation, cả một thành phố sẽ tin một điều sai chỉ vì một NPC nói to.
+
+Chặn ở đúng chỗ đã có sẵn: văn bản LLM **không bao giờ ghi thẳng belief**. Mọi cập nhật belief đi qua đường diễn giải ở §10.2 với độ tin cậy của nguồn, bằng chứng và tính cách người nghe. Tin đồn vẫn lan — nhưng lan theo mô hình ở §12.15, nơi nó có thể bị bác bỏ, chứ không lan vì model thích đồng ý.
+
+#### 20.11.4. Trôi là bug hoặc là cốt truyện, không có ở giữa
+
+Auditor ở §15.1 định kỳ so hành vi thực tế của một nhân vật với `traits` và `values` của nó. Khi lệch vượt ngưỡng, chỉ có hai khả năng hợp lệ:
+
+- **Có nguyên nhân**: sang chấn, cải đạo, nghiện, lời thề, effect điều khiển tâm trí — tức là có event và có cause chain. Đây là nhân vật đang phát triển, và nó phải cập nhật `Personality` qua đúng đường ở §9.9.
+- **Không có nguyên nhân**: đây là trôi, và là bug. Ghi log, cảnh báo, không âm thầm bỏ qua.
+
+Ranh giới này biến một vấn đề kỹ thuật khó đo thành một bất biến kiểm chứng được: **mọi thay đổi tính cách phải truy được về một sự kiện.**
+
+#### 20.11.5. Ranh giới của mô phỏng
+
+Ghi rõ trong tài liệu và trong UI: đây là một thế giới hư cấu chạy trên mô hình ngôn ngữ. Hành vi của NPC là kết quả của luật, state và model — **không phải bằng chứng về con người thật**, không phải dự báo xã hội học, và không nên được trích dẫn như vậy.
+
+Tham khảo: [ContextEcho — Persona Drift in Long Agentic Sessions](https://arxiv.org/pdf/2605.24279), [LLM-Based Social Simulations Require a Boundary](https://arxiv.org/pdf/2506.19806).
 
 ## 21. Schema minh họa
 
@@ -2990,6 +3159,11 @@ economy_profile:
 47. Effect chỉ biểu diễn hậu quả dẫn xuất; policy, claim và quan hệ giữ nguồn sự thật của chính chúng.
 48. Module `AgentModuleContext` không được cấp capability đọc authoritative; registry từ chối nạp nếu manifest xin sai loại context.
 49. Version `norm_set` tại thời điểm hành vi được ghi vào event; sửa luật không hồi tố lên vụ đã xử.
+50. Persona, trait, values và mục tiêu được dựng lại từ state authoritative ở mỗi chu trình; không bao giờ mang sang từ output LLM lần trước.
+51. Mọi thay đổi tính cách phải truy được về một sự kiện có nguyên nhân; lệch không có nguyên nhân là bug và phải được Auditor báo.
+52. Kết quả của một trao đổi xã hội do quy tắc volition trên social state quyết định; văn bản do LLM viết chỉ là lớp trình bày.
+53. Storylet chỉ đặt điều kiện thế giới, không bao giờ đặt kết quả; trường `outcomes` luôn rỗng.
+54. Storylet chỉ kích hoạt khi precondition trên state thật được thỏa; không có sự kiện nào không có nguyên nhân sẵn có trong world.
 
 ## 23. Mục tiêu kỹ thuật có thể đo
 
@@ -3022,6 +3196,11 @@ Các con số là mục tiêu baseline để kiểm chứng kiến trúc, có th
 - Người đang ủ bệnh đi qua portal sang world nhanh gấp 10 lần không khỏi hoặc chết tức thì.
 - Cùng một lockfile cho cùng hash thế giới khởi đầu, kể cả sau khi engine đã lên version mới.
 - Mở chunk theo hai đường camera khác nhau cho cùng tàn tích, cùng biên giới và cùng mối thù.
+- Một dòng họ khép kín nhiều đời cho thấy suy giảm sức sống đo được, không phải một sự kiện gán tay.
+- Cùng một lời đề nghị cho hai người nghe khác nhau ra hai kết quả khác nhau, và giải thích được vì sao bằng social state.
+- Một khu định cư bị chặn tri giác xã hội có cơ cấu nghề nghèo hơn khu có chợ, với cùng tài nguyên.
+- Chạy 200 giờ mô phỏng không làm nhân vật lệch khỏi `traits` mà không có event giải thích.
+- Audit view chỉ ra đúng storylet nào đã kích hoạt, vì precondition nào, salience bao nhiêu.
 
 Không đặt cam kết số lượng “một triệu NPC real-time” trước khi có benchmark. Quy mô thật phải được đo riêng cho entity active, scheduled, dormant và aggregate.
 
@@ -3074,7 +3253,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - LLM gateway, typed plan, validator, timeout/fallback.
 - Đối thoại và reflection cho nhân vật quan trọng.
 - Tính cách năm lớp §9.9 và reputation tách khỏi trait thật.
-- Hành động xã hội trên cùng timeline §10.11 và vòng đời thông điệp §12.15.
+- Hành động xã hội trên cùng timeline §10.11, trao đổi xã hội và volition §10.12, vòng đời thông điệp §12.15.
+- Chống trôi persona §20.11: Auditor so hành vi với trait và báo lệch không có nguyên nhân.
 
 **Điều kiện hoàn thành**:
 
@@ -3096,6 +3276,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Vật phẩm mang thông tin: sách, bản đồ, sao chép có lỗi theo §8.8.
 - Năng lực nhà nước, chuỗi ủy quyền, chính danh và đa tầng pháp luật §12.13–§12.14.
 - Hành động tập thể §12.11, quản trị tài nguyên chung §12.12, tôn giáo như thể chế §12.16.
+- Storylet pool và Director chọn theo salience §15.6.
+- Di truyền định lượng §9.5.1 và trật tự chuẩn mực danh tiếng §9.9.4.
 - Tín dụng, bó quyền tài sản, lao động và vận chuyển §12.8.7–§12.8.8, §12.17.
 
 **Điều kiện hoàn thành**:
@@ -3178,6 +3360,9 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 | Deadline không rebase khi qua portal | Bệnh khỏi hoặc nợ đáo hạn tức thì | Clock domain bắt buộc, rebase trong transaction transfer |
 | Version range trong worldseed | Cùng seed ra hai thế giới khác nhau | Resolve thành lockfile bất biến trước genesis |
 | Lịch sử phụ thuộc đường đi camera | Thế giới không có quá khứ ổn định | Macro-delta commit trước khi mở chunk |
+| Trôi persona sau nhiều giờ chạy | Nhân vật mất tính nhất quán, mất niềm tin | State là mỏ neo, kế hoạch có chân trời, Auditor báo lệch không có nguyên nhân |
+| NPC hùa theo lời khẳng định tự tin | Cả thành phố tin một điều sai vì một câu nói | Belief chỉ cập nhật qua diễn giải có nguồn và bằng chứng |
+| Director tự nghĩ ra sự kiện mỗi lần | Không audit được, lặp, phi lý | Storylet pool có precondition, salience, ngân sách và cooldown |
 
 ## 26. Một kịch bản emergent hoàn chỉnh
 
@@ -3213,4 +3398,5 @@ My Open World đạt đúng tầm nhìn khi:
 - Một người ngoài dự án thêm được loài, bệnh, luật hoặc cả một nền văn minh bằng content pack mà không cần sửa engine.
 - Hai người chơi trao đổi worldseed và nhận được cùng một thế giới khởi đầu, kiểm chứng bằng hash.
 - Một thanh kiếm kể được lịch sử của chính nó: ai rèn, qua tay ai, giết ai, ai vá lại — và điều người ta tin về nó lệch ở đâu so với điều đã thật sự xảy ra.
+- Một nhân vật chạy suốt hàng trăm giờ vẫn là chính nó, và mọi lần nó thay đổi đều có một sự kiện đứng đằng sau.
 - True God có toàn quyền nhưng luôn có công cụ preview, giải thích, snapshot và hoàn tác để tự do thử nghiệm.
