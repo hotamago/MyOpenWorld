@@ -282,6 +282,9 @@ myopenworld/
 │       ├── needs/
 │       ├── effects/
 │       ├── items/
+│       ├── icons/                    # bóng nguyên thủy SVG, có namespace theo pack
+│       ├── heraldry/                 # chia trường, hình, bảng màu huy hiệu
+│       ├── portrait/                 # lớp paper-doll theo loài
 │       ├── laws/                     # DSL Tier 0
 │       ├── modules/                  # WASM Tier 1 (.wasm + .wat nguồn)
 │       ├── knowledge/
@@ -391,14 +394,24 @@ myopenworld/
 │       │   ├── knowledge-graph/
 │       │   ├── multiverse/
 │       │   ├── seed-vault/
+│       │   ├── inventory/            # túi đồ, trang bị, thẻ vật phẩm §18.15
+│       │   ├── cause-chain/           # §18.10
+│       │   ├── legends/              # biên niên sử hai lớp §18.11
 │       │   ├── yuu-console/
 │       │   └── truegod-console/
 │       ├── render/                   # PixiJS, KHÔNG chứa luật
 │       │   ├── app.ts
+│       │   ├── atlas.ts              # nướng tile từ material definition §18.5.1
 │       │   ├── tilemap.ts            # @pixi/tilemap, chunk texture
-│       │   ├── overlays/             # §18.2
+│       │   ├── overlays/             # data texture 1 kênh + thang màu §18.6
+│       │   ├── icons/               # hợp thành 5 lớp §18.14.1 + atlas
+│       │   ├── heraldry/            # giải ràng buộc luật màu, dấu nhánh thứ §18.14.3
+│       │   ├── portrait/            # chồng lớp paper-doll từ phenotype §18.14.4
+│       │   ├── labels/               # lớp HTML trên canvas, không dùng Pixi text
+│       │   ├── legend/               # legend bắt buộc khi overlay bật §18.6.3
+│       │   ├── cutaway.ts            # ẩn mái/tường che thực thể đang theo dõi
 │       │   ├── camera.ts             # floating origin §18.4
-│       │   └── palette.ts
+│       │   └── palette/              # bảng màu nạp từ content/, đã qua CI kiểm tra
 │       ├── worker/
 │       │   ├── net.worker.ts         # WS, decode protobuf
 │       │   ├── chunkcache.ts
@@ -718,6 +731,72 @@ Gộp hai thứ này là một lỗi tinh vi nhưng chí mạng: nó khiến l�
 2. **Backpressure có chủ đích**: client chậm thì server gộp delta mạnh hơn rồi tụt về snapshot định kỳ. Server không bao giờ chặn tick mô phỏng để chờ một client.
 3. Tọa độ đi qua dây dưới dạng cặp high/low hoặc chuỗi; frontend chuyển sang hệ camera-local trong Web Worker (§4.3, §22.10). Không có `Number` 53-bit nào chạm vào tọa độ thô.
 4. Payload chunk dùng đúng nén palette như tầng lưu trữ, nên không có bước chuyển đổi định dạng thứ hai để lệch.
+
+### 6.9. Kiến trúc frontend
+
+`§18` quy định người chơi nhìn thấy gì. Mục này quy định code được tổ chức thế nào để giữ đúng lời hứa đó.
+
+#### 6.9.1. Bốn lớp, quyền hạn khác nhau
+
+| Lớp | Được làm | **Không bao giờ** |
+|---|---|---|
+| `worker/` | Nhận WS, giải mã protobuf, cache chunk, đổi tọa độ i64 → camera-local | Quyết định hiển thị |
+| `render/` | Vẽ lưới, sprite, overlay, nhãn bằng PixiJS | Biết về domain; import kiểu nào ngoài kiểu sinh từ schema |
+| `panels/` | Bố cục, tương tác, gửi command | Tính toán luật; suy ra giá trị mà server chưa gửi |
+| `stores/` | Trạng thái UI và cache read model | Là nguồn sự thật cho bất cứ thứ gì thuộc thế giới |
+
+Ranh giới quan trọng nhất: **panel không được tự tính**. Nếu một panel cần một con số suy ra, nó xin read model; server tính bằng đúng code mà simulation dùng. Nếu không, sẽ có hai hiện thực của cùng một công thức và chúng sẽ lệch nhau.
+
+#### 6.9.2. Đường vẽ
+
+- **Tile atlas sinh lúc nạp**, không phải asset vẽ tay. Diện mạo mỗi vật liệu suy ra từ material definition theo §18.5.1, nướng thành atlas một lần rồi tái dùng. Modder thêm vật liệu là có tile ngay.
+- **Chunk vẽ bằng `@pixi/tilemap`**, rebuild chỉ khi chunk bẩn, cull ngoài viewport.
+- **Overlay là một data texture một kênh**, lấy mẫu trong shader và ánh xạ qua thang màu — **không phải** một sprite mỗi ô. Đây là khác biệt giữa mượt và giật khi bật overlay trên vài chục nghìn ô.
+- **Nhãn nằm ở lớp HTML riêng** phía trên canvas, không phải text object của Pixi: chọn được, đọc được bằng screen reader, và không phá batch.
+- **Floating origin** quanh camera; tọa độ thô không bao giờ chạm `Number` 53-bit (§22.10).
+
+#### 6.9.3. Bảng màu là dữ liệu đã được kiểm tra
+
+Thang màu cho vật liệu, overlay và định danh nằm trong `content/` dưới dạng dữ liệu, không hard-code trong code vẽ. Có một bước CI chạy bộ kiểm tra tương phản và mù màu trên các bảng đó, cho cả chế độ sáng và tối.
+
+Ràng buộc đã tính ra ở §18.6.2 được cài thành kiểm tra thật: một bảng phân loại dùng cho **bản đồ** chỉ hợp lệ tới ba định danh; khai báo bảng bản đồ nhiều hơn ba màu làm CI fail, kèm gợi ý chuyển sang hoa văn và nhãn.
+
+#### 6.9.4. Chế độ nhận thức lọc ở server
+
+Read model nhận `epistemic_mode` cùng identity của người xem và **chỉ trả về những gì chế độ đó được phép thấy** (§18.9). Client không bao giờ nhận dữ liệu rồi ẩn đi.
+
+Có một test e2e cho việc này: ở chế độ hóa thân, chụp toàn bộ payload WebSocket trong một phiên và khẳng định không có trường nào thuộc về thứ avatar chưa biết. Đây là phiên bản frontend của prompt leak guard ở §P6.2.
+
+#### 6.9.6. Đường sinh biểu tượng
+
+Icon, huy hiệu và chân dung ở §18.14 đều là **hợp thành từ dữ liệu**, nên chúng có một pipeline chung chứ không phải ba hệ thống rời.
+
+```text
+content/**/icons/*.svg        (bóng nguyên thủy, ~100 cái, vẽ tay)
+content/**/heraldry/*.svg     (chia trường, hình trên trường)
+content/**/portrait/*.svg     (lớp paper-doll)
+        │
+        ▼  composer chạy lúc build hoặc lúc nạp pack
+   khóa hợp thành = hash(bóng, vật liệu, bậc chất lượng, huy hiệu, dấu nguồn)
+        │
+        ▼
+   sprite atlas + bảng tra khóa → runtime chỉ lấy mẫu, không dựng lại mỗi khung hình
+```
+
+Bốn ràng buộc:
+
+1. **Khóa hợp thành là hàm thuần của dữ liệu.** Cùng món đồ luôn ra cùng icon, mọi máy, mọi lần chạy (§18.14.6). Khóa cũng chính là khóa cache.
+2. **Huy hiệu giải bằng ràng buộc, không quay lại thử.** Mỗi thành phần chọn màu từ tập hợp lệ đối với thứ nó nằm lên, theo luật màu ở §18.14.3. Vòng lặp thử-lại chạy số lần khác nhau giữa hai lần chạy và sẽ phá determinism.
+3. **Icon được lọc theo người xem trước khi gửi.** Dấu chất lượng, huy hiệu effect và dấu tranh chấp đi qua đúng read model có `epistemic_mode` ở §P6.9.4 — client không nhận rồi ẩn (§18.14.5).
+4. **CI kiểm tra độ phủ.** Mọi `species`, `item_def`, `effect` và `organization` phải giải ra được một icon; thiếu thì lùi về bóng nhóm cha, không có nhóm cha là lỗi validate pack.
+
+Về thư viện: huy hiệu học có sẵn bộ sinh mã nguồn mở dùng đúng văn phạm blazon — dùng lại hoặc lấy làm tham chiếu thay vì tự viết từ đầu. Paper-doll cũng có bộ layer chuẩn khoảng 15 lớp để bám theo.
+
+#### 6.9.5. Input và command
+
+- Mọi hành động đổi thế giới đi qua command có schema (§19.3), không có ngoại lệ.
+- **Không có optimistic UI cho state authoritative.** Người chơi ra lệnh đào một ô thì ô đó đổi khi engine ack, không đổi ngay rồi hoàn tác nếu lệnh bị từ chối. Trạng thái "đang chờ" được vẽ rõ.
+- Camera và lựa chọn là trạng thái UI thuần, không đi qua command — trừ `SetSimulationFocus`, vốn là command thật theo §P6.8.
 
 ## 7. ⭐ Harness cho agent: vào thế giới, test diện rộng, bắt bug chính xác
 

@@ -2554,7 +2554,7 @@ Sau đó nhà vua có thể thương lượng, xâm lược, đầu tư nghiên 
 - Ổ dịch, vùng kiểm dịch và `hygiene_load`.
 - Portal graph và event heatmap.
 
-Màu có pattern/icon phụ để không phụ thuộc hoàn toàn vào khả năng phân biệt màu.
+Cách chọn thang màu, trần số định danh trên bản đồ và quy tắc legend nằm ở §18.6. Màu luôn có hoa văn hoặc icon phụ để không phụ thuộc hoàn toàn vào khả năng phân biệt màu.
 
 ### 18.3. Giao diện chính
 
@@ -2568,6 +2568,10 @@ Màu có pattern/icon phụ để không phụ thuộc hoàn toàn vào khả n�
 - **Multiverse view**: world graph, portal, time scale và access policy.
 - **Yuu console**: chat, proposal diff, test result, commit/rollback.
 - **True God console**: transaction editor, snapshot, branch và prompt/law editor.
+- **Cause chain view**: truy ngược và truy xuôi từ một event bất kỳ (§18.10).
+- **Legends**: biên niên sử hai lớp — đã xảy ra và người ta tin là đã xảy ra (§18.11).
+
+Chi tiết từng panel, chế độ nhận thức và quy tắc dễ đọc nằm ở §18.9–§18.13.
 
 ### 18.4. Hiệu năng renderer
 
@@ -2577,6 +2581,298 @@ Màu có pattern/icon phụ để không phụ thuộc hoàn toàn vào khả n�
 - Culling mọi chunk ngoài viewport.
 - Simulation gửi snapshot/delta, không chia sẻ object reactive khổng lồ.
 - Renderer dùng floating origin quanh camera để không mất precision ở tọa độ rất lớn.
+
+### 18.5. Ngôn ngữ thị giác của lưới
+
+Một ô vuông phải chở rất nhiều sự thật cùng lúc: vật liệu, nhiệt, mana, quyền sở hữu, thực thể đứng trên nó, effect đang tác động. Nếu mỗi hệ thống tự chọn cách vẽ, bản đồ thành nhiễu. Vì thế **kênh thị giác được phân bổ cố định**, và mỗi hệ thống chỉ được dùng kênh của mình:
+
+| Kênh | Chở thông tin gì | Ai được dùng |
+|---|---|---|
+| Màu nền ô | Vật liệu chủ đạo | `mow-physics` — suy ra từ `MaterialComposition` |
+| Hoa văn nền | Trạng thái vật chất: cháy, ngập, nứt, đóng băng | Effect trên `cell` (§9.8.6) |
+| Viền ô | Ranh giới sở hữu và biên giới chính trị | `claim` và `norm_set` (§12.8) |
+| Sprite/icon | Thực thể và vật phẩm đứng trên ô — hợp thành theo §18.14.1 | `mow-life`, `mow-items` |
+| Huy hiệu nhỏ trên sprite | Effect đáng chú ý mà người quan sát **nhận biết được** | `perceptible_as` (§9.8.2) |
+| Sắc phủ toàn ô | **Đúng một** overlay dữ liệu đang bật | §18.6 |
+| Độ mờ | Lát cắt ma phía trên/dưới lát hiện tại | Renderer |
+
+Hai quy tắc bắt buộc:
+
+1. **Overlay là nhóm loại trừ.** Chỉ một overlay dữ liệu được bật tại một thời điểm. Chồng hai thang màu lên nhau là cách nhanh nhất biến bản đồ thành vô nghĩa.
+2. **Sắc phủ không được nuốt màu vật liệu.** Overlay dùng độ mờ thấp và giữ nguyên hoa văn, để người chơi luôn biết mình đang nhìn địa hình nào.
+
+#### 18.5.1. Hình dạng ô sinh ra từ dữ liệu vật liệu
+
+Không vẽ tay từng tile. Diện mạo một vật liệu **suy ra từ chính thuộc tính của nó** ở §8.2: màu và độ mờ đã có sẵn trong material definition; độ cứng và cấu trúc quyết định hoa văn hạt; trạng thái lỏng/khí quyết định độ trong.
+
+Nhờ vậy một modder thêm vật liệu mới ở `content/` được diện mạo miễn phí và nhất quán, không cần biết vẽ. Sprite tùy chọn vẫn được phép ghi đè khi vật liệu đó xứng đáng có nét riêng.
+
+#### 18.5.2. Vật thể cao hơn một ô
+
+Cây, tháp, rồng lớn chiếm nhiều ô theo cả `z`. Chúng được vẽ bằng phép chiếu lên lát đang xem, nhưng **occupancy vẫn ở 3D** (§18.1). Ô nào bị che thì có dấu hiệu che, để người chơi không tưởng rằng bên dưới là trống.
+
+Chế độ cutaway tự ẩn mái và tường đang che thực thể đang theo dõi — nhưng chỉ ẩn ở tầng hiển thị, không đụng tới dữ liệu.
+
+### 18.6. Màu cho overlay dữ liệu
+
+Overlay ở §18.2 là bản đồ nhiệt trên lưới. Chúng tuân theo bốn quy tắc, và bốn quy tắc này **kiểm tra được bằng máy** chứ không phải chuyện thẩm mỹ.
+
+#### 18.6.1. Chọn thang theo việc mà dữ liệu làm
+
+| Việc | Thang | Overlay áp dụng |
+|---|---|---|
+| Độ lớn, một chiều | **Tuần tự**: một sắc, nhạt → đậm | Mana, corruption, dân số, bất mãn, `hygiene_load`, mật độ tội phạm, tỉ lệ mắc bệnh |
+| Cực, có mốc trung tính có ý nghĩa | **Phân kỳ**: hai sắc + xám trung tính ở giữa | Nhiệt độ quanh ngưỡng dễ chịu, cán cân cung–cầu, chênh lệch di cư vào/ra, lạm phát so với mốc |
+| Định danh, không có thứ tự | **Phân loại**: thứ tự sắc cố định | Biome, phe kiểm soát, tuyến thương mại |
+| Trạng thái | **Bảng trạng thái riêng** + icon + nhãn | Vùng kiểm dịch, vùng cấm, cảnh báo |
+
+**Không bao giờ dùng cầu vồng cho độ lớn**, và không bao giờ đặt một sắc ở điểm giữa của thang phân kỳ — điểm giữa phải là xám trung tính, nếu không người đọc không tìm được mốc 0.
+
+#### 18.6.2. Trần cứng: bản đồ chỉ chở được ba định danh bằng màu
+
+Đây là ràng buộc quan trọng nhất và nó là **con số tính ra được**, không phải ý kiến.
+
+Trên biểu đồ cột, hai màu chỉ cần phân biệt được với hàng xóm của nó trong thứ tự. Trên bản đồ thì **bất kỳ hai vùng nào cũng có thể nằm cạnh nhau**, nên mọi cặp đều phải phân biệt được. Kiểm tra bộ màu phân loại chuẩn theo chế độ "mọi cặp" cho kết quả:
+
+- Ba sắc đầu tiên: đạt. Cặp tệ nhất ΔE 9.2 với người mù màu, ΔE 24.0 với thị giác bình thường.
+- Thêm sắc thứ tư: **hỏng**. Cặp vàng–cam rơi xuống ΔE 13.7 với thị giác bình thường, dưới sàn 15 — nghĩa là ngay cả người nhìn màu đầy đủ cũng khó tách hai vùng đó.
+
+Hệ quả cho thiết kế:
+
+> Trên bản đồ, **màu chỉ chở được tối đa ba định danh**. Từ định danh thứ tư trở đi, danh tính phải do **hoa văn, kiểu viền và nhãn trực tiếp** chở, còn màu chỉ là củng cố.
+
+Một thế giới có mười hai quốc gia vì thế không được tô mười hai màu. Nó dùng ba màu cho ba khối liên minh đang quan tâm, hoa văn cho từng nước bên trong khối, và phần còn lại gộp thành "khác" — đúng cách bản đồ chính trị thật vẫn làm.
+
+Kênh gỡ trần này là **hình dạng**: huy hiệu và icon phân biệt được nhiều danh tính hơn màu rất nhiều lần và không phụ thuộc khả năng phân biệt màu. Xem §18.14.
+
+#### 18.6.3. Legend luôn có, và nhãn không phụ thuộc màu
+
+- Mọi overlay đang bật đều hiện legend, kèm đơn vị thật (`mMU`, `°C`, người/ô), không phải "thấp → cao".
+- Từ hai định danh trở lên là có legend; ba định danh trở xuống thì **cũng** ghi nhãn trực tiếp trên bản đồ.
+- Chữ trên giao diện dùng màu chữ, không dùng màu của chuỗi dữ liệu. Ô màu nhỏ đặt cạnh nhãn mới là thứ chở danh tính.
+- Có sẵn chế độ hoa văn thay màu, cho người mù màu và cho lúc in.
+- Mọi overlay đều có **bảng số tương ứng** ở Inspector; bản đồ không bao giờ là đường duy nhất để đọc một con số.
+
+#### 18.6.4. Chế độ tối là thang riêng
+
+Nền tối không dùng cùng bước màu với nền sáng bằng cách đảo ngược. Mỗi chế độ có bộ bước riêng, chọn cho đúng nền của nó, và cả hai đều phải qua cùng bộ kiểm tra.
+
+### 18.7. Thang zoom và điều gì đổi ở mỗi mức
+
+| Mức | Thấy gì | Nguồn dữ liệu |
+|---|---|---|
+| Ô | Vật liệu, nhiệt, chất lỏng, vật phẩm, thực thể đơn lẻ | State thật của cell |
+| Công trình | Phòng, kho, người bên trong, hàng đợi ở địa điểm (§12.18.2) | State thật |
+| Khu định cư | Nhà, đường, nghề nghiệp, dòng hàng hóa | State thật, gộp để hiển thị |
+| Vùng | Khí hậu, biên giới, tuyến thương mại, dịch bệnh, dân số | **Mô hình tổng hợp** ở §8.3 |
+| World | Địa hình vĩ mô, thế lực, mana, rift | Mô hình tổng hợp |
+| Multiverse | Đồ thị world, portal, tỉ lệ thời gian, access policy | Metadata |
+
+**Quy tắc trung thực:** từ mức Vùng trở lên, phần lớn con số là **kết quả của mô hình tổng hợp**, không phải đếm từng cá thể. Giao diện phải nói rõ điều đó — một chỉ báo nhỏ "ước lượng theo mô hình vùng" — thay vì để người chơi tưởng mình đang xem số đếm chính xác. Đây là §8.3 được đưa ra mặt tiền.
+
+Đổi zoom là thay đổi **cách nhìn**, không phải thay đổi độ chi tiết mô phỏng. Muốn nâng fidelity của một vùng thì phải ghim nó bằng lệnh có ghi event (§8.4).
+
+### 18.8. Điều khiển thời gian
+
+- Tạm dừng, bước một tick, và các mức tốc độ. Đổi tốc độ **không bao giờ đổi mô hình authoritative** (§8.4); máy không theo kịp thì simulation chạy chậm lại so với đồng hồ thật, không đổi sang mô hình thô hơn.
+- **Dừng khi tới lượt** (`pause-on-ready`): ở chế độ hóa thân, thế giới tự dừng mỗi khi avatar tới `ready_at`, cho cảm giác theo lượt mà timeline authoritative vẫn là một (§10.11.2).
+- **Chạy đến khi**: người chơi đặt điều kiện dừng — "đến khi mùa đông tới", "đến khi có người chết", "đến khi công trình xong" — rồi tua nhanh. Đây là phiên bản người chơi của `RunUntil` trong harness, và nó là cách chính để chơi ở quy mô thế kỷ.
+- **Mốc tự dừng**: sự kiện đủ quan trọng theo bộ lọc của người chơi sẽ tự tạm dừng và nhảy camera tới nơi, kèm một dòng giải thích lấy từ event thật.
+
+### 18.9. Chế độ nhận thức của giao diện
+
+Đây là phần dễ làm hỏng nhất, vì toàn bộ chiều sâu của §10.2 sẽ tan biến nếu giao diện vô tình cho xem thứ nhân vật không biết.
+
+Giao diện có **ba chế độ nhận thức**, và chế độ đang bật luôn hiển thị rõ:
+
+| Chế độ | Thấy gì | Dùng khi |
+|---|---|---|
+| **Hóa thân** | Chỉ những gì avatar quan sát được hoặc tin. Bản đồ chưa đi qua thì mờ. Chỉ số người khác là **ước đoán**, có sai số | Chơi như một cư dân |
+| **Quan sát** | Ground truth của vùng đang xem, nhưng mọi giá trị được **ghi nhãn là sự thật của thế giới**, phân biệt rõ với belief của nhân vật | Theo dõi một cá thể, một thành phố, một nền văn minh |
+| **True God** | Mọi thứ, cộng provenance của từng thay đổi | Quản trị và can thiệp |
+
+Ba ràng buộc:
+
+1. **Belief và sự thật không bao giờ được vẽ giống nhau.** Khi hai lớp cùng hiện, sự thật là giá trị đặc, belief là giá trị có viền đứt kèm mức tin cậy.
+2. **Chuyển chế độ là hành động tường minh**, không phải hệ quả phụ của việc mở một panel.
+3. **Lọc ở phía máy chủ, không phải ẩn ở phía client.** Read model chỉ gửi những gì chế độ hiện tại được phép thấy. Ẩn bằng CSS nghĩa là dữ liệu đã nằm trong máy người chơi và bất kỳ ai mở devtool trình duyệt cũng đọc được — điều đó biến §10.2 thành trang trí.
+
+### 18.10. Xem chuỗi nhân quả
+
+`§23` yêu cầu người chơi truy được từ một biến cố lớn về tận nguyên nhân. Đây là giao diện thực hiện lời hứa đó, và nó là thứ phân biệt "thế giới sống" với "AI tự nghĩ ra".
+
+Từ bất kỳ event nào, mở được một khung xem hai chiều:
+
+- **Ngược lên**: những event đã dẫn tới nó, theo `cause_event_id`, dừng ở mức người chơi chọn.
+- **Xuôi xuống**: những gì nó đã gây ra.
+- **Bối cảnh**: actor, target, precondition đã kiểm, **version của law và của `norm_set` đang hiệu lực lúc đó** (§22.49), và ai quan sát được bằng giác quan nào.
+- **Nhảy tới**: bấm vào một mắt xích là camera và thời gian nhảy tới đúng chỗ, đúng lúc.
+
+Quy tắc: khung này **chỉ hiển thị event có thật trong log**. Không có câu giải thích nào do model viết ra sau khi mọi chuyện đã xong (§22.17). Yuu được phép tóm tắt, nhưng bản tóm tắt luôn kèm đường dẫn về các event nguồn.
+
+### 18.11. Biên niên sử hai lớp
+
+Theo §8.9.2, truyền thuyết là ảnh biến dạng của chuỗi provenance thật. Giao diện phải cho thấy **cả hai lớp cạnh nhau**:
+
+- **Đã xảy ra**: dựng từ event log.
+- **Người ta tin là đã xảy ra**: dựng từ belief đang lưu hành trong một văn hóa, một tổ chức, hoặc một cá thể cụ thể.
+
+Chỗ hai lớp lệch nhau được đánh dấu, và bấm vào là thấy lệch từ đâu — ai kể lại sai, ở đời nào, vì động cơ gì. Với vật phẩm, cùng khung này hiển thị chuỗi đổi chủ thật đặt cạnh truyền thuyết về nó.
+
+### 18.12. Console Yuu và True God
+
+- **Yuu console**: hội thoại, nhưng mọi đề xuất đều hiện ra dưới dạng **diff dữ liệu có preview**, kèm phạm vi ảnh hưởng, chi phí, thực thể bị ảnh hưởng, luật bị chạm và báo cáo rủi ro (§15.5). Chấp nhận, sửa, hoặc hủy.
+- **True God console**: transaction editor, snapshot, branch, và trình sửa law/prompt có version. Mọi can thiệp đều ghi provenance, kể cả khi True God chọn giả vờ đó là chuyện tự nhiên — audit view vẫn phân biệt được (§15.2).
+- **Audit view**: lọc event theo provenance để trả lời "cái gì tự nhiên, cái gì do Yuu, cái gì do tôi".
+
+### 18.13. Đọc được mà không cần đọc bảng số
+
+`§25` xếp "siêu thực tế thành khó hiểu" là một rủi ro thật. Bốn nguyên tắc chống lại nó:
+
+1. **Triệu chứng trước, con số sau.** Mặc định hiển thị trạng thái bằng ngôn ngữ người: "gầy trơ xương, ho ra máu, đi khập khiễng" — không phải `hunger: 0.12, effect.grey_lung: 340`. Số đầy đủ luôn có, sau một cú bấm.
+2. **Mọi con số đều bấm được về nguồn.** Một giá trị suy ra phải chỉ ra được nó suy ra từ đâu (§9.2). Người chơi thấy `can_fly: false` thì phải xem được là vì cánh gãy hay vì quá tải.
+3. **"Vì sao?" ở khắp nơi.** Mọi quyết định của NPC, mọi thay đổi giá, mọi bản án đều có affordance hỏi lý do, và câu trả lời dựng từ dữ liệu chứ không từ model.
+4. **Không đổ tường số.** Panel mặc định hiện thứ liên quan tới điều người chơi đang làm; phần còn lại nằm sau tab. Một entity có hàng trăm trường; hiện hết cùng lúc là cách chắc chắn nhất khiến không ai đọc gì.
+
+### 18.14. Hệ biểu tượng và hình ảnh
+
+`§18.6.2` chốt rằng bản đồ chỉ chở được ba định danh bằng màu. Icon là kênh gỡ trần đó: hình dạng phân biệt được nhiều hơn màu rất nhiều lần, không phụ thuộc khả năng phân biệt màu, và đọc được cả khi in đen trắng.
+
+Nhưng thế giới này có hàng nghìn vật liệu, loài, vật phẩm, effect và thế lực. **Không thể vẽ tay từng cái.** Vì thế biểu tượng phải là thứ được **hợp thành từ dữ liệu**, đúng như tile được sinh từ material definition ở §18.5.1.
+
+#### 18.14.1. Icon là năm lớp chồng nhau, không phải một sprite
+
+| Lớp | Chở gì | Lấy từ |
+|---|---|---|
+| **Bóng** | Đây là loại vật gì: kiếm, rìu, sách, thảo dược, quặng, thú, người | `item_def.form` / `species.anatomy` |
+| **Chất liệu** | Sắc và hoa văn hạt của vật liệu | `MaterialComposition` (§8.5) |
+| **Dấu chất lượng** | Bậc tay nghề, hiển thị rời rạc từ giá trị liên tục | `CraftQuality` (§8.6.2) |
+| **Huy hiệu trạng thái** | Nứt, cháy, phù phép, bị nguyền, ôi thiu, hết charge | `Condition` và `EffectSet` |
+| **Dấu nguồn gốc** | Dấu thợ, huy hiệu thế lực, dấu "đồ gian", dấu thánh vật | `craft_marks`, `claim`, `provenance` |
+
+Một thanh kiếm thép kiệt tác đang mang phép băng và bị tranh chấp quyền sở hữu đọc ra thành: bóng kiếm + sắc thép + khung chất lượng cao + huy hiệu rune + dấu tranh chấp. Không ai phải vẽ riêng nó.
+
+**Trần cứng: tối đa hai huy hiệu hiện cùng lúc.** Vượt quá thì icon thành nhiễu và mất luôn công dụng. Cái nào hiện được quyết định theo mức liên quan tới người xem — thợ rèn thấy tình trạng trước, quan thuế thấy nguồn gốc trước.
+
+#### 18.14.2. Ngân sách bộ nguyên thủy
+
+Khoảng **100 bóng** vẽ tay là đủ phủ toàn bộ thế giới, vì tổ hợp mới là thứ tạo ra đa dạng chứ không phải số lượng file. Bộ nguyên thủy nằm trong `content/` dưới dạng SVG, nên content pack thêm được bóng riêng cho loài hoặc vật phẩm của mình.
+
+Ràng buộc kiểm tra được: **mọi `species`, `item_def` và `effect` phải giải ra được một icon**. Thiếu bóng phù hợp thì lùi về bóng của nhóm cha; không có cả nhóm cha thì đó là lỗi lúc validate pack, không phải một ô trống lúc chạy.
+
+#### 18.14.3. Huy hiệu: dòng dõi đọc được từ lá cờ
+
+Thế lực, dòng họ, phường hội và giáo phái mang **huy hiệu sinh theo văn phạm huy hiệu học thật**: chia trường, màu nền, và hình trên đó.
+
+Hai quy tắc mượn thẳng từ huy hiệu học, và cả hai đều có công dụng cơ học chứ không phải trang trí:
+
+1. **Luật màu**: không đặt kim loại lên kim loại, không đặt màu lên màu. Luật này tồn tại suốt nhiều thế kỷ vì đúng một lý do — **để nhìn rõ từ xa**. Nó chính là một chuẩn tương phản có trước khi ai đó nghĩ ra chữ "tương phản", và nó cho ta miễn phí thứ mà §18.6 phải kiểm tra bằng máy.
+
+   Cài đặt: **giải ràng buộc, không quay xúc xắc rồi thử lại.** Mỗi thành phần chọn màu từ tập hợp lệ đối với thứ nó nằm lên. Vòng lặp thử-lại có thể chạy số lần khác nhau giữa hai lần chạy và sẽ phá determinism.
+
+2. **Nhánh thứ thừa kế huy hiệu của nhánh chính, cộng đúng một dấu khác biệt.** Đây là chỗ hệ thống này trở nên đáng giá: huy hiệu **tự nó mã hóa đồ thị huyết thống** ở §12.9. Nhìn hai lá cờ là biết hai bên cùng dòng máu và bên nào là nhánh thứ, trước khi có bất kỳ dòng thoại nào giải thích. Tranh chấp kế vị, ly khai và hôn nhân chính trị vì thế đọc được ngay trên bản đồ.
+
+Huy hiệu xuất hiện trên biên giới, cờ, quân, con dấu, văn tự và claim (§12.8.5). Nó là thứ chở danh tính thế lực từ định danh thứ tư trở đi, đúng như §18.6.2 yêu cầu.
+
+#### 18.14.4. Chân dung sinh vật
+
+Chân dung dựng bằng **chồng lớp**, khoảng 15 lớp là đủ, mỗi lớp vài phương án — cách làm chuẩn của các hệ paper-doll. Nguồn dữ liệu của từng lớp đã có sẵn:
+
+```text
+loài → thể trạng → tuổi → sắc da → tóc → mắt → nét mặt
+  → sẹo và thương tích        (§9.4 body part)
+  → trang phục theo văn hóa   (§12.3)
+  → trang phục theo địa vị    (§12.10)
+  → trang bị đang mặc         (§18.15.4)
+  → dấu hiệu effect           (§9.8.2 perceptible_as)
+  → biểu cảm theo mood        (§9.9)
+```
+
+Deterministic từ `genotype_seed` cộng phenotype: cùng một cá thể luôn ra cùng chân dung, và **con cái trông giống cha mẹ** vì lớp hình thái lấy từ cùng bộ gen ở §9.5.2. Đây là thứ khiến dòng họ có gương mặt.
+
+Chân dung cập nhật theo trạng thái: gầy đi khi đói lâu, xanh xao khi bệnh, già đi theo đường cong ở §9.5.6, thêm sẹo sau mỗi trận. Nhân vật mang lịch sử của mình trên mặt.
+
+#### 18.14.5. Biểu tượng cũng phải tuân thủ tri giác
+
+Đây là chỗ dễ rò nhất, cùng loại với §18.9 và §8.10.3.
+
+- Món đồ **chưa được thẩm định** không hiện dấu chất lượng — nó hiện dấu hỏi. Muốn biết thì cần kỹ năng thẩm định hoặc người biết xem (§8.6.4).
+- Phép ẩn và lời nguyền chỉ hiện huy hiệu nếu người xem **nhận biết được** nó theo `perceptible_as`.
+- Người chưa từng gặp hiện bóng chung với đúng những gì đã quan sát được, không phải chân dung đầy đủ.
+- Người cải trang hiện chân dung của lớp cải trang, cho tới khi có ai đó nhìn ra.
+- Dấu "đồ gian" chỉ hiện với người biết có tranh chấp claim (§12.8.1).
+
+Ở chế độ quan sát và True God, những thứ trên hiện đầy đủ nhưng **ghi nhãn rõ là sự thật của thế giới**, không lẫn với thứ nhân vật biết.
+
+#### 18.14.6. Biểu tượng là một ngôn ngữ, nên phải ổn định
+
+Người chơi học được hệ biểu tượng này sau vài giờ và từ đó đọc bản đồ bằng liếc mắt. Điều đó chỉ đúng nếu:
+
+- Cùng dữ liệu luôn cho cùng icon, mọi lần chạy, mọi máy.
+- **Không bao giờ đổi ý nghĩa của một bóng hoặc một huy hiệu đã phát hành.** Muốn đổi thì thêm cái mới, giống quy tắc ID ở §22 và §19.7.2.
+- Content pack đăng ký bóng của mình theo namespace, không ghi đè bóng của core.
+
+### 18.15. Túi đồ, trang bị và thẻ vật phẩm
+
+`§8.5`–`§8.10` định nghĩa vật phẩm rất kỹ nhưng chưa nói người chơi cầm nắm chúng thế nào. Mục này lấp phần đó, và mọi thứ ở đây đều là hệ quả của mô hình đã có chứ không phải quy ước mới.
+
+#### 18.15.1. Sức chứa là thể tích và khối lượng, không phải số ô
+
+`Form` ở §8.5 đã có thể tích và khối lượng, nên túi đồ dùng thẳng hai đại lượng đó:
+
+- Mang được bao nhiêu phụ thuộc sức, thể trạng và vật chứa đang có — không phải một con số ô cố định.
+- Quá tải **không bị chặn**; nó làm chậm, tốn stamina và tăng nguy cơ chấn thương, theo đúng thuộc tính suy ra ở §9.2.
+- Hai thanh hiển thị riêng cho thể tích và khối lượng, vì hết chỗ và quá nặng là hai vấn đề khác nhau: lông vũ hết chỗ trước, vàng nặng trước.
+
+#### 18.15.2. Đống và cá thể trông khác nhau
+
+Đây là §8.5.2 đưa ra mặt tiền, và nó phải nhìn thấy được ngay:
+
+- **Đống**: một icon, một con số đếm, không có tên riêng. 4200 thỏi sắt là một dòng.
+- **Cá thể**: icon riêng, tên riêng nếu có, dấu chất lượng, tình trạng theo bộ phận, chuỗi provenance mở được.
+
+Khoảnh khắc một vật được thăng lên cá thể — thợ rèn đặt tên cho thanh kiếm, món đồ trở thành vật chứng — giao diện phải cho thấy điều đó xảy ra, vì đó là lúc nó bắt đầu có lịch sử.
+
+#### 18.15.3. Thẻ vật phẩm: chất lượng không phải tình trạng
+
+Mọi thẻ vật phẩm hiện hai đại lượng **tách hẳn**, vì §8.6.1 nói chúng khác nhau:
+
+- **Chất lượng chế tác** — bậc, bất biến, kèm tên người làm và trường phái.
+- **Tình trạng** — theo từng bộ phận: lưỡi cùn 62%, chuôi mục 22%, cùng lịch sử sửa chữa và ai đã sửa.
+
+Nhờ vậy người chơi phân biệt được một kiệt tác đã hao mòn với một món tầm thường còn mới — hai thứ mà một thanh "độ bền" duy nhất sẽ gộp làm một và làm mất hẳn chiều sâu của §8.6.
+
+Thẻ còn hiện: vật liệu theo bộ phận, effect đang mang (nếu nhận biết được), charges còn lại và nguồn nạp (§8.10.7), cổng sử dụng mà người cầm **chưa qua được** (§8.10.2), khối lượng và thể tích, và chuỗi provenance.
+
+#### 18.15.4. Trang bị gắn với cơ thể, không gắn với ô
+
+§9.4 nói cơ thể có bộ phận, nên trang bị cũng vậy: mặc vào bộ phận nào, và **có lớp** — áo lót, giáp xích, áo khoác ngoài. Hệ quả rơi ra tự nhiên:
+
+- Loài có giải phẫu khác thì chỗ mặc khác. Rồng không đội mũ.
+- Mất một tay thì mất luôn khả năng dùng thứ cần hai tay, tính qua thuộc tính suy ra chứ không qua một cờ riêng.
+- Che phủ theo bộ phận quyết định thương tích ở đâu (§9.8.3), nên hở cổ là hở thật.
+- Nhìn vào chân dung là thấy đang mặc gì, vì lớp trang bị nằm trong chồng lớp ở §18.14.4.
+
+#### 18.15.5. Vật chứa lồng nhau và hàng đang trên đường
+
+Túi trong hòm, hòm trong xe, xe trong đoàn. Giao diện cho mở lồng nhau và cho thấy tổng khối lượng dồn lên.
+
+Với hàng đang vận chuyển (§12.17.2), thẻ hiển thị người áp tải, tuyến đường, thời điểm dự kiến, hao hụt dọc đường và **ai đang chịu trách nhiệm ở khúc này** — vì mất hàng ở khúc nào quyết định ai đền.
+
+#### 18.15.6. Những gì người chơi không được biết
+
+Túi đồ là chỗ dễ vô tình cho xem quá nhiều. Ở chế độ hóa thân:
+
+- Chất lượng của món chưa thẩm định hiện dấu hỏi, kèm khoảng ước lượng nếu nhân vật có chút nghề.
+- Phép ẩn không hiện cho tới khi có ai phát hiện.
+- **Giá là ước lượng của nhân vật**, không phải giá thị trường thật — §8.6.4 nói giá nằm ở belief người đánh giá. Một kiệt tác trong tay người không biết xem hiện giá của một món đồ thường.
+- Món đồ gian chỉ hiện dấu tranh chấp nếu nhân vật biết có tranh chấp.
+
+Đây không phải hạn chế tiện ích. Nó chính là thứ làm cho thẩm định trở thành một kỹ năng đáng học và cho kẻ lừa đảo có đất sống.
+
+#### 18.15.7. So sánh và ra quyết định
+
+Khi so hai món, giao diện **không được rút về một điểm số duy nhất** — điều đó mâu thuẫn trực tiếp với §2.1 và làm mất mọi đánh đổi. Thay vào đó là bảng cạnh nhau theo từng chiều: khối lượng, chức năng khả dụng, tình trạng theo bộ phận, effect, cổng sử dụng, và **cái gì sẽ mất đi nếu đổi** — vì đổi giáp nhẹ lấy giáp nặng là đánh đổi tốc độ lấy che phủ, không phải một con số lớn hơn.
 
 ## 19. Kiến trúc phần mềm đề xuất
 
