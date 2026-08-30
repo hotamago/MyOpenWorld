@@ -50,6 +50,9 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Vật phẩm | Là entity có component, không có engine riêng; instance/stack/aggregate theo LOD |
 | Giá trị | Không lưu trong vật phẩm; giá hình thành ở thị trường và trong belief người đánh giá |
 | Sở hữu | Possession là ground truth vật lý, claim là belief xã hội; hai thứ tách hẳn |
+| Lượt hành động | Không có round cố định; lượt sinh ra từ `ready_at` trên chính timeline mô phỏng |
+| Thời gian tiến trình | Mỗi tiến trình khai báo clock domain; qua portal thì rebase theo domain đó |
+| Khóa phiên bản | Worldseed chia sẻ trỏ tới lockfile đã resolve, không phải khoảng version |
 
 ### 2.1. Những điều cố ý không làm
 
@@ -176,6 +179,21 @@ Quy tắc mặc định:
 
 Cách này cho phép một ngày ở World 3 bằng nhiều năm ở World 1 nhưng vẫn tránh nghịch lý ghi đè lịch sử.
 
+### 4.5. Clock domain của tiến trình
+
+§4.4 định nghĩa đồng hồ của world. Nhưng nhu cầu, bệnh, thai kỳ, hợp đồng, deadline nghiên cứu và effect đều là **tiến trình có thời hạn**, và mỗi tiến trình phải khai báo nó đếm theo đồng hồ nào:
+
+| Clock domain | Dùng cho |
+|---|---|
+| `world_local` | Mùa màng, thời tiết, lịch xã hội, hạn hợp đồng |
+| `divine` | Điều phối liên-world, lịch của Yuu, thứ tự event toàn multiverse |
+| `proper` | Thời gian riêng của entity: tuổi, đói, ủ bệnh, hồi phục |
+| `law_defined` | Đồng hồ đặc biệt do luật quy định: lời nguyền theo tuần trăng, giao ước theo chu kỳ thần |
+
+Khi một entity đi qua portal sang world có tỉ lệ thời gian khác, **mọi deadline phải được rebase theo domain của chính tiến trình đó**, không phải đổi đồng loạt. Thiếu quy tắc này thì một người đang ủ bệnh sẽ khỏi hoặc chết ngay lập tức chỉ vì bước qua cổng — và một hợp đồng vay có thể đáo hạn tức thì.
+
+Rebase là một phép biến đổi xác định, ghi event, và là một phần của portal transfer transaction ở §22.8. Chênh lệch thời gian giữa hai world vì thế trở thành một cơ chế chơi được: gửi người sang world chảy nhanh để nghiên cứu, hoặc giam kẻ thù ở world chảy chậm.
+
 ## 5. Các world nền tảng
 
 Tên và con số dưới đây là mặc định thiết kế, có thể đổi trong dữ liệu.
@@ -278,6 +296,24 @@ Khe nứt không xuất hiện từ RNG thuần túy. Nó cần các điều ki�
 - Có xung đột domain, thí nghiệm thất bại hoặc artifact làm neo.
 
 Yuu tính `rift_score` từ những biến này, áp dụng seed deterministic và event budget. Vì vậy người chơi có thể điều tra nguyên nhân, dự đoán hoặc ngăn chặn khe nứt.
+
+### 6.4. Chế độ tiếp xúc và kiểm dịch cổng
+
+Mở được cổng mới là bước đầu. Thứ quyết định cổng đó trở thành cái gì là **chế độ tiếp xúc** mà hai phía thiết lập sau đó:
+
+- Kiểm dịch sinh học và ma thuật, thời gian cách ly, quyền từ chối nhập cảnh.
+- Thuế quan và hàng cấm.
+- Chuẩn đo lường chung, vì hai world không mặc định dùng cùng đơn vị.
+- Quy chế pháp nhân: một tổ chức ở world này có tồn tại về mặt pháp lý ở world kia không.
+- Quyền cư trú và quyền lao động.
+- Luật mang sinh vật, vật phẩm và linh hồn qua cổng.
+- Phiên dịch và cơ chế giải quyết tranh chấp xuyên world.
+
+Thiếu các thỏa thuận này, cổng vẫn hoạt động — nhưng nó trở thành ổ dịch, chợ đen, trại tị nạn hoặc đầu cầu xâm lược. Một cổng có kiểm soát tốt trở thành khu thương mại; cùng một cổng đó bị bỏ mặc trở thành vấn đề an ninh quốc gia.
+
+Đây là điều khiến đa thế giới khác với một bản đồ có cửa dịch chuyển. Xem thêm §12.14 về xung đột thẩm quyền và §9.10 về hệ quả sinh thái.
+
+Tham khảo: [WHO — International Health Regulations](https://www.who.int/publications/i/item/9789241580410).
 
 ## 7. Không gian, chunk và sinh địa hình
 
@@ -397,6 +433,10 @@ Kết quả không phải văn bản viết tay mà là dữ liệu thật: even
 
 Tiền sử là cách rẻ nhất để có một thế giới “đã sống” ngay từ giờ đầu tiên mà không vi phạm §22.17 — mọi thứ trong biên niên sử đều có event thật đằng sau.
 
+**Tiền sử phải tiến qua thời gian thật.** Genesis đặt điều kiện ban đầu tại tick 0, sau đó đồng hồ cục bộ chạy đủ N năm ở mức aggregate. Khi người chơi xuất hiện, tuổi nhân vật, version luật, đời dòng họ, thời điểm event và niên đại tàn tích đều mang timestamp thật, không bị nén hết về tick 0. Không có quy tắc này thì mọi thứ trong world trông như vừa được tạo ra cùng một lúc.
+
+**Lịch sử vĩ mô phải được chốt trước khi mở chunk.** Tàn tích, tuyến thương mại, biên giới và mối thù do tiền sử sinh ra được commit dưới dạng macro-delta ngay khi tiền sử kết thúc. Việc người chơi mở một chunk chỉ **chi tiết hóa** kết quả đã khóa, không bao giờ được quyết định kết quả đó. Nếu không, lịch sử sẽ phụ thuộc vào đường đi của camera — đúng loại lỗi mà §7.2 đã cấm với địa hình nền.
+
 #### 7.6.5. Seed Vault
 
 Nơi quản lý worldseed trong UI, đặt cạnh Multiverse view ở §18.3:
@@ -407,6 +447,21 @@ Nơi quản lý worldseed trong UI, đặt cạnh Multiverse view ở §18.3:
 - Diff hai worldseed ở mức dữ liệu, không phải mức văn bản.
 - Ghi rõ worldseed cần plugin nào và version nào theo §19.7; thiếu thì báo trước khi tạo, không lỗi giữa chừng.
 - Xuất/nhập dưới dạng một thư mục hoặc một file nén, có checksum.
+
+#### 7.6.6. Lockfile
+
+Worldseed ở §21.4 khai báo phụ thuộc bằng khoảng version (`^1.4`), nhưng lại cam kết cùng worldseed cho cùng hash. Hai điều đó mâu thuẫn: `^1.4` hôm nay và `^1.4` sáu tháng sau có thể là hai build khác nhau.
+
+Vì vậy, **trước genesis, worldseed phải được resolve thành một lockfile bất biến** ghi chính xác:
+
+- Engine build.
+- Từng pack: version và content hash.
+- WASM runtime, ABI version và hash của từng module.
+- Tập migration đã áp.
+- Version của generator và của từng law profile.
+- Quy tắc cấp phát ID deterministic.
+
+Worldseed đem đi chia sẻ trỏ tới lockfile này. Khoảng version chỉ dùng lúc **tạo mới**; sau khi khóa, chỉ còn con số cụ thể. Đây cũng là thứ làm cho §22.30 kiểm chứng được thay vì chỉ là mong muốn.
 
 ## 8. Vật chất, vật phẩm và môi trường
 
@@ -613,6 +668,115 @@ Một vật mang `MemoryNamespace` và tag `Sapient` là hợp lệ — linh h�
 *Dwarf Fortress* cho artifact hồi sinh sau khi bị phá hủy. Ta không làm vậy. Vật phẩm bị hủy là bị hủy, có event, có nhân chứng, có hậu quả chính trị.
 
 Nhưng **truyền thuyết sống sót sau vật thể**, vì truyền thuyết là dữ liệu nằm trong văn hóa và ký ức chứ không nằm trong món đồ. Một thanh kiếm bị nung chảy vẫn để lại một khoảng trống có tên trong lịch sử, những kẻ đi tìm nó, và những kẻ tuyên bố đã tìm thấy nó.
+
+### 8.10. Vật phẩm mang hành vi: module, khóa sử dụng và phù phép
+
+Công cụ, sách phép, trượng, bùa, máy móc và di vật không chỉ là vật chất có thuộc tính. Chúng **mang hành vi**: một tác động lên thế giới mà người cầm có thể kích hoạt. Mục này định nghĩa cách gắn hành vi vào vật phẩm, cách kiểm soát ai dùng được, và cách nhân vật trong world tự tạo ra hành vi mới.
+
+#### 8.10.1. Vật phẩm mang tham chiếu module, không mang mã nguồn
+
+Vật phẩm **không chứa code**. Nó chứa một tham chiếu tới law/spell đã đăng ký cộng một bộ tham số đã đóng băng:
+
+```yaml
+behavior:
+  module: "law.rune.frost_lance@3"   # Tier 0 DSL hoặc Tier 1 WASM, §13.9
+  bound_params:
+    power: 4200                       # fixed-point, đóng băng lúc phù phép
+    element: frost
+  charges: { max: 12, current: 7, recharge: "ambient_mana", rate_per_day: 0.5 }
+  fuel_budget: 250000                 # trần thực thi riêng cho vật phẩm này
+```
+
+Hệ quả bắt buộc:
+
+- Kích hoạt vật phẩm đi qua **đúng contract §13.9.3**: hàm thuần, trả `EffectProposal`, không ghi state, có fuel, host function chỉ trả observation của người dùng theo §13.9.4.
+- Module có version. Save ghi version đã dùng, nên một cây trượng cũ không đổi hành vi vì hôm nay Yuu chỉnh cân bằng (§13.9.5).
+- Vật phẩm không mở được cửa sau nào mà spell thường không có. Một cái trượng chỉ là một cách **đóng gói và trao đi** khả năng thi triển, không phải một hệ thống luật song song.
+
+Về ngôn ngữ: Lua vẫn có thể là **bề mặt viết** cho người làm mod, biên dịch xuống Tier 0/Tier 1 theo §13.9.2. Nó không bao giờ là runtime, và nhân vật trong world không bao giờ sinh ra văn bản mã nguồn — xem §8.10.4.
+
+#### 8.10.2. Cổng sử dụng
+
+“Dễ dùng” và “khó dùng” không phải một con số độ khó. Nó là tập cổng mà người dùng phải qua, và mỗi cổng có một đường phá riêng:
+
+| Cổng | Nội dung | Đường vượt qua trong world |
+|---|---|---|
+| `literacy` | Đọc được vật mang chữ (§8.8) | Học ngôn ngữ, thuê người dịch, giải mã |
+| `knowledge` | Biết node ở mức tối thiểu theo §13.2 | Học, được dạy, nghiên cứu, ăn cắp tri thức |
+| `stat` | `focus`, mana, sức, kỹ năng đủ ngưỡng | Luyện tập, thuốc, nghi thức tăng cường |
+| `command_word` | Mật khẩu, câu thần chú, chuỗi cử chỉ, trình tự rune | Được truyền lại, tra khảo chủ cũ, tìm ghi chép, thám mã, thử mò có rủi ro |
+| `attunement` | Ràng buộc theo linh hồn, huyết thống, lời thề, giao ước | Nghi thức chuyển ràng buộc, giết chủ cũ, phá giao ước và chịu hậu quả |
+| `physical` | Ổ khóa, phong ấn, vật chứa cần chìa | Chìa khóa, phá khóa, cưỡng lực, dịch chuyển |
+| `cost` | Mana, tuổi thọ, máu, vật hiến, lần dùng còn lại | Tích tài nguyên, tìm nguồn nạp |
+| `risk` | Không chặn, nhưng dùng sai thì phản đòn | Chấp nhận rủi ro, chuẩn bị phòng hộ |
+
+Nguyên tắc thiết kế: **mọi cổng phải khám phá được và phá được bằng phương tiện có trong world.** Một cổng không có đường vượt là một cái khóa tùy tiện, không phải nội dung chơi được.
+
+Ba điều rơi ra ngay từ bảng này:
+
+- Một cây trượng mạnh mà **mất khẩu quyết** trở thành di vật huyền thoại không ai dùng được. Học giả bỏ cả đời nghiên cứu để khôi phục nó — nối thẳng vào §13.4 và §8.9.
+- Tra khảo chủ nhân để lấy khẩu quyết là hành vi phạm tội theo §12.5, có động cơ rõ ràng và chứng cứ để lại.
+- Thử mò khẩu quyết là hành động hợp lệ với xác suất thấp và `risk` cao. Đó là lý do các phòng thí nghiệm phép thuật hay phát nổ.
+
+Mọi cổng đều là **precondition authoritative** do action registry tự tính theo §10.4 bước 7. Không cổng nào được kiểm bằng lời khẳng định của LLM.
+
+#### 8.10.3. Bí mật không bao giờ đi vào prompt
+
+Đây là cái bẫy kỹ thuật nghiêm trọng nhất của toàn bộ ý tưởng này, và nó cùng loại với lỗ hổng host function ở §13.9.4.
+
+Nếu prompt của một NPC chứa mô tả vật phẩm kèm khẩu quyết của nó, LLM **sẽ dùng khẩu quyết đó** dù nhân vật chưa bao giờ được ai nói cho biết. Toàn bộ §10.2 sụp đổ, và tệ hơn, nó sụp theo cách rất khó phát hiện khi test.
+
+Quy tắc cứng:
+
+- Trường `secret` của vật phẩm — khẩu quyết, chìa, trình tự rune, điều kiện ràng buộc — **không bao giờ được render vào context** trừ khi entity có belief tương ứng, với provenance rõ ràng về việc nó biết bằng cách nào.
+- Prompt builder ở §10.4 bước 4 nhận vật phẩm dưới dạng **view đã lọc theo người quan sát**, giống hệt cách `perceptible_as` lọc effect ở §9.8.2.
+- Một entity biết khẩu quyết thì đó là một mục trong `Knowledge`/`Memory` của nó, có nguồn, có thể sai, có thể quên, và có thể bị người khác moi ra.
+- Auditor ở §15.1 chạy kiểm tra chuyên biệt: quét mọi prompt đã gửi tìm chuỗi bí mật mà entity chưa có quyền biết. Rò một lần là một bug nghiêm trọng, không phải một chi tiết nhỏ.
+
+Cùng nguyên tắc áp cho: bản đồ chưa mở, nội dung sách chưa đọc, điều khoản của một claim chưa được cho xem (§12.8.5).
+
+#### 8.10.4. NPC tự tạo hành vi mới
+
+Có, và đây là một trong những thứ đáng giá nhất của thế giới này — nhưng **NPC không viết ra văn bản mã nguồn.** Chúng ghép các thành phần mà chúng biết, đúng như pipeline sáng tạo spell ở §13.8.3:
+
+```text
+Ý tưởng (LLM đề xuất, CHỈ từ các node mà entity thật sự biết)
+  → candidate behavior graph
+  → law compiler: kiểu, đơn vị, bảo toàn, termination, fuel (§13.9)
+  → thử nghiệm thật, có rủi ro thật, tiêu hao vật liệu thật
+  → thất bại: nổ, thương tích, hỏng vật liệu, chấn thương mana
+  → thành công: node tri thức mới, ghi rõ tác giả
+  → phù phép: ràng node đó vào một vật phẩm, tốn vật liệu, mana và nghi thức
+```
+
+Bốn ràng buộc quyết định chất lượng của hệ thống này:
+
+1. **Không gian sáng tạo bằng đúng những gì entity biết.** Một thợ rèn biết ba rune chỉ ghép được từ ba rune đó. Đây là lý do §13.3 truyền dạy và §13.4 nghiên cứu mới có ý nghĩa: mở rộng vốn primitive là con đường duy nhất để làm ra thứ mạnh hơn.
+2. **Trần độ phức tạp gắn với năng lực.** Skill, `talent` (§13.8.1) và công cụ quyết định số node, độ sâu lồng nhau và `fuel_budget` tối đa mà entity có thể tạo ra. Một học đồ không thể vô tình tạo ra thứ mà cả một học viện chưa làm được.
+3. **Module do NPC tạo đi qua đúng validator như luật do Yuu sinh** (§15.3). Không có đường tắt. `no_direct_state_write`, whitelist hàm, giới hạn fuel áp dụng y hệt.
+4. **Dự án lớn cần nhiều người.** Hành vi phức tạp vượt trần một cá nhân trở thành `Project` ở §13.5, cần đội ngũ, phòng thí nghiệm và thời gian — đúng cách một quốc gia mới tạo ra được vũ khí chiến lược.
+
+#### 8.10.5. Lỗi là tính năng
+
+Chất lượng module do NPC tạo phụ thuộc kỹ năng, và **sản phẩm kém thì có khuyết tật thật**: hao phí mana, tác dụng phụ ngoài ý muốn, điều kiện biên chưa xử lý, hành vi kỳ lạ khi hết charge.
+
+Phần lớn “vật phẩm bị nguyền” trong thế giới này nên là **script viết ẩu bởi một người phù phép quá tham vọng**, chứ không phải một nhãn `cursed: true` dán sẵn. Điều đó khiến việc điều tra một món đồ nguy hiểm trở thành công việc kỹ thuật thật: tìm ra nó sai ở đâu, và sửa được hay không.
+
+Vật phẩm hỏng theo cách này vẫn ghi rõ tác giả trong `craft_marks` (§8.7), nên danh tiếng của người phù phép chịu hậu quả — theo đúng cơ chế danh tiếng ở §9.9.3.
+
+#### 8.10.6. Tháo ngược và tri thức thất truyền
+
+Một vật phẩm mang hành vi là **bằng chứng vật lý rằng hành vi đó khả thi**. Nghiên cứu nó theo §13.4 có thể trả về node tri thức, kể cả node đã thất truyền từ một nền văn minh đã sụp đổ.
+
+Đây là cơ chế chính đưa công nghệ cổ quay lại thế giới: đào được một cỗ máy từ tàn tích do tiền sử sinh ra (§7.6.4), tháo ra, hiểu một phần, tái tạo sai lệch, rồi từ đó phát triển tiếp theo một hướng khác hẳn nguyên bản.
+
+Tháo ngược có rủi ro phá hủy vật, và thường cần nhiều mẫu. Vì thế các quốc gia tranh nhau di vật, và người sở hữu độc quyền có động cơ giữ bí mật thay vì công bố.
+
+#### 8.10.7. Lần dùng, tiêu hao và kinh tế
+
+`charges` và tiêu hao không chỉ là cân bằng chiến đấu. Cuộn giấy dùng một lần, thuốc, đạn dược và vật hiến là **cống vật chất** theo §12.8.4, và là lý do ngành chế tác tiêu hao luôn có cầu.
+
+Vật phẩm nạp lại được thì nguồn nạp trở thành tài nguyên chiến lược: mạch mana, ánh trăng, máu, tín ngưỡng, hoặc một loại quặng hiếm. Kiểm soát nguồn nạp là một `casus belli` hoàn toàn hợp lý mà không ai phải viết ra nó.
 
 ## 9. Sinh vật và thực thể sống
 
@@ -880,6 +1044,16 @@ Dùng lại đúng model, không viết hệ thống riêng:
 
 Một model, bảy phạm vi tác động. Không cần “hệ thống cấm vận” hay “hệ thống dị giáo” riêng.
 
+#### 9.8.7. Effect biểu diễn hậu quả, không phải nguồn sự thật
+
+Ranh giới này cần nói rõ để tránh dùng sai model ở trên.
+
+Bệnh, độc, thương tích, chúc phúc và lời nguyền **thật sự là** effect: chúng tồn tại trong cơ thể hoặc trong vật, có nguồn vật lý hoặc siêu hình, và tồn tại kể cả khi không ai biết tới chúng.
+
+Cấm vận, kiểm duyệt, dị giáo, vạ tuyệt thông thì **không phải**. Chúng là policy, claim hoặc quan hệ do một actor chủ động duy trì và có thể ngừng duy trì bất cứ lúc nào. Nguồn sự thật của chúng nằm ở tổ chức (§12.1), ở `norm_set` (§12.5.1) hoặc ở claim (§12.8), không nằm trong `EffectSet`.
+
+Effect chỉ dùng để biểu diễn **hậu quả dẫn xuất** của chúng: giá hàng tăng ở cảng bị phong tỏa, mất quyền tiếp cận một thư viện, giảm uy tín trong một cộng đồng. Gỡ effect không gỡ lệnh cấm vận; muốn gỡ lệnh cấm vận thì phải có ai đó ra quyết định gỡ.
+
 ### 9.9. Tính cách, giá trị và danh tiếng
 
 Bốn con số tính cách không đủ để sinh ra một kẻ phản bội đáng tin. Tách thành năm lớp có tốc độ thay đổi khác nhau:
@@ -917,6 +1091,22 @@ Hệ quả rơi ra tự nhiên, không cần hệ thống riêng cho từng th�
 - **Vỡ mặt nạ**: một nhân chứng bất ngờ tạo observation mâu thuẫn với reputation; belief của cả cộng đồng cập nhật theo mức tin cậy của nhân chứng đó.
 
 Reputation là dữ liệu theo bộ ba `(người quan sát, người bị quan sát, khía cạnh)`, có confidence và provenance, lưu trong `Relationship` và trong knowledge base của tổ chức. Nó không bao giờ là một con số toàn cục.
+
+### 9.10. Diễn thế sinh thái và loài xâm lấn
+
+§7.3 sinh hệ sinh thái ban đầu và §8.3 mô phỏng quần thể theo LOD. Thiếu phần ở giữa: hệ sinh thái **thay đổi theo thời gian**.
+
+Ngoài quan hệ săn mồi và sức tải, cần thêm thụ phấn, phân hủy, phát tán hạt, hình thành đất và các mảnh môi trường sống. Một khoảng rừng bị đốt sẽ đi qua diễn thế: cỏ, cây bụi, cây tiên phong, rồi rừng trưởng thành — mỗi giai đoạn nuôi một tập loài khác nhau, mất hàng chục tới hàng trăm năm.
+
+Nhờ vậy hành động của nền văn minh có hậu quả sinh thái đọc được: phá rừng làm xói mòn đất, mất thụ phấn làm mất mùa, săn hết thú săn mồi làm bùng nổ loài ăn cỏ.
+
+#### 9.10.1. Trao đổi liên-world
+
+Portal ở §6 mang theo nhiều thứ hơn là người: loài, ký sinh trùng, mầm bệnh, hạt giống, và cả hệ sinh thái mana của world nguồn.
+
+Một loài không có thiên địch ở world đích có thể bùng nổ và làm sụp một chuỗi thức ăn. Một mầm bệnh mà dân bản địa chưa từng có miễn dịch có thể xóa sổ cả một nền văn minh nhanh hơn bất kỳ đội quân nào. Đây là lý do §6.4 tồn tại, và là một trong những hệ quả đáng sợ nhất mà việc mở cổng có thể gây ra — thường là ngoài ý muốn của người mở.
+
+Tham khảo: [IPBES — Invasive Alien Species Assessment](https://ict.ipbes.net/ipbes-ict-guide/data-and-knowledge-management/citations-of-ipbes-assessments/invasive-alien-species-assessment).
 
 ## 10. Nhận thức, hành động và LLM
 
@@ -969,6 +1159,7 @@ LLM chỉ chọn từ action mà engine công bố cho entity, ví dụ:
 - `speak`, `ask`, `teach`, `threaten`, `negotiate`.
 - `take`, `drop`, `craft`, `repair`, `build`, `harvest`.
 - `read`, `write`, `copy`, `appraise`, `authenticate`, `forge_document`.
+- `attune`, `invoke_item`, `speak_command_word`, `enchant`, `inscribe`, `reverse_engineer`.
 - `lend`, `pledge`, `claim_ownership`, `transfer_claim`.
 - `attack`, `defend`, `treat_injury`, `cast_spell`.
 - `trade`, `sign_contract`, `vote`, `issue_order`.
@@ -1009,6 +1200,104 @@ Mỗi action có input schema, precondition, cost, duration, interrupt rule và 
 `evidence_refs` giải thích entity dựa vào đâu; chúng không chứng minh action có thể thực hiện. Engine vẫn tự kiểm tra path, tầm nhìn, capability, tài nguyên và mọi precondition tại lúc bắt đầu/commit action.
 
 Text hội thoại có thể do LLM viết, nhưng effect xã hội do người nghe diễn giải dựa trên ngôn ngữ, quan hệ, bằng chứng và tính cách; câu nói không tự động thành công.
+
+### 10.7. Chrono-turn: lượt sinh ra từ thời gian, không phải từ vòng round
+
+Không tạo một hệ round cố định tách khỏi simulation. Scheduler theo deadline ở §8.4 và trường `duration` của mỗi action ở §10.5 đã đủ để lượt tự xuất hiện.
+
+Mỗi actor mang `ready_at_local_tick`. Nó chỉ được chọn action khi thời gian cục bộ tới mốc đó:
+
+```text
+duration = max(min_duration, ceil(base_work / effective_rate))
+```
+
+Hành động càng tốn công thì lượt kế tiếp càng xa. Người nhanh tự nhiên hành động nhiều lần trong khoảng thời gian người chậm làm một việc, không cần luật riêng cho “extra attack”:
+
+```text
+Speedster: effective_rate = 300 → một nhát mất 4 tick
+Guard:     effective_rate = 100 → một nhát mất 12 tick
+
+t=4   Speedster impact
+t=8   Speedster impact
+t=12  Speedster impact + Guard impact   ← giải quyết đồng thời, §10.9
+```
+
+#### 10.7.1. Bốn loại tốc độ tách biệt
+
+Gộp mọi thứ vào một chỉ số `speed` là sai lầm phổ biến nhất. Tách:
+
+| Tốc độ | Chi phối |
+|---|---|
+| `reaction_speed` | Độ trễ nhận biết và kịp phản ứng |
+| `movement_speed` | Di chuyển, né, đổi vị trí |
+| `casting_speed` | Niệm chú, nghi thức, thao tác vật phẩm |
+| `cognition_rate` | Suy nghĩ, nói, đọc, ra quyết định |
+
+Một speedster chạy nhanh gấp trăm lần không mặc định **nghĩ** hay **niệm chú** nhanh gấp trăm lần. Đây là chỗ giữ cho tốc độ không nuốt trọn mọi build.
+
+### 10.8. Pha hành động, phản ứng và ngắt
+
+#### 10.8.1. Ba pha
+
+Mọi action chạy qua `wind_up → impact → recovery`:
+
+- `wind_up` tạo **telegraph** mà người khác có thể quan sát được — nếu giác quan và kỹ năng của họ đủ (§10.2).
+- `impact` là điểm duy nhất phát ra `EffectProposal`.
+- `recovery` khóa lượt kế tiếp.
+
+Feint, hủy đòn giữa chừng, ngắt phép, vũ khí nặng chậm, đòn nhanh và đòn tích lực đều rơi ra từ ba pha này mà không cần viết trường hợp đặc biệt cho từng thứ.
+
+#### 10.8.2. Reaction timeline
+
+Đỡ, né, phản đòn, ngắt phép, che cho đồng đội và chen lời chạy trên một timeline phản ứng riêng, với ba ràng buộc:
+
+1. Chỉ tạo được sau khi actor **thật sự quan sát** được stimulus. Không có phản ứng với thứ nhân vật không thấy.
+2. Tốn stamina hoặc focus theo §9.7.
+3. Có thể đẩy lùi `ready_at` của lượt chính kế tiếp — phản ứng nhiều thì mất thế chủ động.
+
+### 10.9. Giải quyết đồng thời
+
+Mọi impact rơi vào cùng một tick được gom thành proposal rồi giải theo tầng cố định:
+
+```text
+movement
+  → ward/shield          (§9.8.3)
+  → hit/collision
+  → injury/effect
+  → death/reaction
+```
+
+Ràng buộc quan trọng: **không để thứ tự `EntityId` quyết định ai sống.** Hai kiếm sĩ đâm trúng nhau cùng lúc thì cả hai đều trúng. Sắp xếp trong mỗi tầng dùng khóa ổn định như §9.8.2 để giữ replay hash, nhưng khóa đó **không được** dùng làm ưu tiên sinh tử.
+
+### 10.10. Chiến trường chiến thuật và trần tốc độ
+
+#### 10.10.1. Vị trí phải quan trọng
+
+Thêm facing, tầm với, che chắn, độ cao, mặt nền, đội hình, bắn nhầm đồng đội và vùng kiểm soát. Đứng ở cửa hẹp, trên cao hoặc sau lưng đồng đội phải có giá trị hơn một phép cộng điểm chiến đấu.
+
+#### 10.10.2. Tốc độ có trần vật lý
+
+Speed không được trở thành chỉ số thống trị tuyệt đối. Các trần đến từ mô phỏng chứ không từ một hằng số cân bằng: thời lượng pha tối thiểu, độ trễ tri giác, gia tốc và quán tính, quán tính vũ khí, stamina, sinh nhiệt và thời gian hồi.
+
+Người nhanh vẫn rất mạnh. Người chậm thắng bằng chuẩn bị, bẫy, khiên, địa hình, phong tỏa khu vực và dự đoán — tất cả đều là hành động hợp lệ trong registry, không phải cơ chế chống chỉ số.
+
+### 10.11. Hành động xã hội trên cùng timeline
+
+#### 10.11.1. Nói chuyện cũng là hành động có thời lượng
+
+Giao tiếp dùng chung timeline với chiến đấu. Action xã hội gồm `speak`, `listen`, `consider`, `interrupt`, `present_evidence`, `question`, `verify_claim`, `lie`, `threaten`, `promise`, `offer`, `withdraw`, `invoke_status`, `invoke_law`, `appeal_to_value`.
+
+Kết quả cập nhật belief, trust, fear, obligation và commitment theo §11.2. **Không có thanh “persuasion HP”** — điều này đã được §10.6 quy định và ở đây chỉ được đưa lên cùng một trục thời gian.
+
+#### 10.11.2. Đối thoại không dừng thế giới
+
+Một câu dài tốn thời gian thật. Trong lúc nhân vật đang nói, người nghe có thể bỏ đi, rút kiếm, chen ngang, hoặc một sự kiện ngoài hiện trường vẫn tiếp diễn. Chế độ hóa thân có thể bật `pause-on-ready` để giữ cảm giác theo lượt cho người chơi, nhưng timeline authoritative vẫn là một.
+
+#### 10.11.3. UI timeline tuân theo tri thức cục bộ
+
+Thanh thời gian chỉ hiển thị lượt của avatar và những hành động địch **đã được telegraph** qua observation hợp lệ. Không hiển thị tên spell bí mật, thời điểm impact chính xác hay chỉ số đối phương nếu avatar chưa đủ tri giác và kiến thức. Đây là §22.4 áp cho giao diện.
+
+Phân tầng LLM ở §10.3 không đổi: LLM chọn chiến thuật khi giao tranh bắt đầu hoặc khi kế hoạch gãy; tactical policy chọn từng micro-action mỗi khi `ready_at` tới. Không có controller LLM cho từng đòn đánh.
 
 ## 11. Ký ức và RAG riêng cho từng thực thể
 
@@ -1318,6 +1607,182 @@ Mọi thứ chuyển nhượng được đều giả mạo được: chữ ký, 
 
 Cuộc chạy đua giữa làm giả và chống làm giả là một nhánh nghiên cứu hợp lệ trong §13.4, và là một trong những động lực tự nhiên đẩy một nền văn minh tới hóa học, luyện kim chính xác và phép thuật xác thực.
 
+#### 12.8.7. Bó quyền tài sản
+
+“Sở hữu” hiếm khi là một khối duy nhất. Tách thành các quyền có thể thuộc về những người khác nhau: **sử dụng, loại trừ người khác, hưởng lợi tức, chuyển nhượng, để lại thừa kế**.
+
+Một thửa ruộng có thể đồng thời có: nhà vua là chủ danh nghĩa, tá điền có quyền canh tác, dân làng có quyền lấy củi và chăn thả sau vụ, giáo hội có quyền thu thuế thập phân, và một chủ nợ giữ quyền tịch biên. Không ai trong số đó nói dối khi tự nhận có quyền với mảnh đất.
+
+Đây là nguồn tranh chấp đất đai đáng tin nhất, và cũng là thứ khiến cải cách ruộng đất trở thành một hành động chính trị có kẻ thắng người thua rõ ràng.
+
+#### 12.8.8. Tín dụng, vỡ nợ và phá sản
+
+Một khoản vay có gốc, kỳ hạn, lãi, tài sản thế chấp, người bảo lãnh, thứ tự ưu tiên khi thanh lý và thủ tục xử lý khi vỡ nợ.
+
+Chỉ một primitive này sinh ra: tín dụng thương mại, cho vay nặng lãi, tháo chạy khỏi nhà băng, tịch biên, lao dịch trừ nợ, bán mình làm nô, và **khủng hoảng dây chuyền** khi một con nợ lớn sụp kéo theo chủ nợ của nó. Nối thẳng vào §12.6 khi đường đòi nợ hợp pháp không hiệu quả.
+
+### 12.9. Hộ gia đình, huyết thống và nhân khẩu
+
+Quan hệ gia đình không phải một trường `parent_id`. Tách rõ **cha mẹ sinh học, cha mẹ xã hội, hôn phối, người giám hộ, người thừa kế và thành viên cùng hộ** — năm quan hệ có thể trỏ tới năm người khác nhau.
+
+Hộ có vòng đời riêng: tách, nhập, nhận con nuôi, tan rã, tuyệt tự. Từ đó tranh chấp kế vị, nghĩa vụ phụng dưỡng, hôn nhân chính trị và con ngoài giá thú xuất hiện mà không cần event scripted.
+
+**Kinh tế chăm sóc** là phần thường bị bỏ sót và rất đáng mô phỏng: trẻ nhỏ, người già, người bệnh và người khuyết tật tiêu thụ **thời gian lao động** của người khác. Mô hình cohort tuổi, sinh suất, tử suất và tỉ lệ phụ thuộc cho phép một xã hội rơi vào khủng hoảng chăm sóc dù tổng dân số vẫn cao — chuyện xảy ra sau mọi cuộc chiến và mọi trận dịch ở §9.8.5.
+
+Tham khảo: [UN DESA — Households and Living Arrangements](https://www.un.org/development/desa/pd/data/household-and-living-arrangements).
+
+### 12.10. Địa vị, đẳng cấp và dịch chuyển xã hội
+
+Địa vị **không phải một trait tính cách**. Nó là một bó quyền, nghĩa vụ và quyền tiếp cận gắn với estate, caste hoặc nghề: được vào chỗ nào, được kiện ai, được mặc gì, chịu mức hình phạt nào theo §12.5.1.
+
+Đường đổi địa vị là dữ liệu của văn hóa: sinh ra, hôn nhân, mua chức, thi cử, cải đạo, chiến công, hoặc giàu lên. Khi tầng trên đóng cửa các đường này, xuất hiện tầng lớp mới nổi giàu mà không có quyền — một trong những nguồn áp lực đáng tin cậy nhất cho §12.11.
+
+### 12.11. Hành động tập thể và ngưỡng tham gia
+
+Đình công, nổi dậy, dân quân, quyên góp và phong trào cải cách dùng chung một bộ primitive:
+
+- Ngưỡng tham gia của từng cá nhân.
+- **Kỳ vọng về số người khác sẽ tham gia**, dựa trên belief chứ không trên con số thật.
+- Chi phí và rủi ro ước lượng theo belief về đàn áp.
+- Kẻ ăn theo không chịu chi phí.
+- Cam kết công khai so với cam kết bí mật.
+- Tín hiệu đàn áp hoặc nhượng bộ từ chính quyền.
+
+Một khác biệt nhỏ trong phân bố ngưỡng có thể khiến hai đám đông giống hệt nhau đi tới hai kết cục hoàn toàn khác — một bên giải tán, một bên lật đổ chính quyền. Đây là lý do Yuu Director ở §15.4 không cần và không được phép ép kết quả: chỉ cần đặt áp lực, phần còn lại là động lực học của ngưỡng.
+
+Tham khảo: [Granovetter — Threshold Models of Collective Behavior](https://doi.org/10.1086/226707), [Centola & Macy — Complex Contagions](https://doi.org/10.1086/521848).
+
+### 12.12. Quản trị tài nguyên chung
+
+Rừng, đồng cỏ, hệ thống tưới, ngư trường và mạch mana là tài nguyên chung. Chúng **không mặc định bị khai thác tới cạn** và cũng không bắt buộc phải tư hữu hóa. Kết quả phụ thuộc bảy yếu tố có thể mô hình hóa:
+
+1. Ranh giới tài nguyên và nhóm được quyền dùng.
+2. Hạn mức khai thác phù hợp điều kiện địa phương.
+3. Cơ chế giám sát, và ai giám sát người giám sát.
+4. Chế tài tăng dần thay vì trừng phạt nặng ngay lần đầu.
+5. Cơ chế giải quyết tranh chấp rẻ và nhanh.
+6. Quyền của chính người bị ảnh hưởng được sửa luật.
+7. Các tầng quản trị lồng nhau cho tài nguyên lớn.
+
+Thiếu yếu tố nào thì thất bại theo kiểu tương ứng của yếu tố đó, và người chơi có thể nhìn ra nguyên nhân. Một mạch mana cạn kiệt vì thiếu giám sát khác hẳn một mạch cạn vì hạn mức đặt sai.
+
+Tham khảo: [Ostrom Workshop — Design Principles](https://ostromworkshop.indiana.edu/courses-teaching/teaching-tools/ostrom-design/index.html).
+
+### 12.13. Năng lực nhà nước, chuỗi ủy quyền và chính danh
+
+#### 12.13.1. Chính sách không tự thực hiện
+
+Một quốc gia ra quyết định không có nghĩa là điều đó xảy ra. Quyết định phải đi qua chuỗi:
+
+```text
+chức vụ → mệnh lệnh → ngân sách → quan chức → đơn vị thực thi → kết quả thực tế
+```
+
+Mỗi cạnh có độ trễ, thất thoát, thiếu năng lực, hiểu sai và rủi ro người được ủy quyền theo đuổi lợi ích riêng. Thuế, điều tra dân số, bổ nhiệm và hệ thống báo cáo quyết định **năng lực thật** của nhà nước — và chính nó sinh ra `coverage_by_district` ở §12.5.1 thay vì để con số đó là hằng số viết tay.
+
+#### 12.13.2. Ba lý do người ta tuân lệnh
+
+Tách chính danh thành nguồn: kết quả đạt được, thủ tục công bằng, truyền thống, sức hút cá nhân, tôn giáo, bản sắc cộng đồng.
+
+Và tách động cơ tuân thủ: **tin rằng luật đúng**, **sợ hình phạt**, hoặc **thấy mọi người xung quanh đang tuân**. Ba động cơ cho ra kết quả giống nhau khi nhà nước mạnh, và khác nhau hoàn toàn vào ngày nhà nước yếu đi — đó là lúc một chế độ dựa trên sợ hãi sụp trong một tuần còn chế độ dựa trên niềm tin vẫn đứng.
+
+Tham khảo: [World Development Report 2017 — Governance and the Law](https://www.worldbank.org/en/publication/wdr2017).
+
+### 12.14. Đa tầng pháp luật và xung đột thẩm quyền
+
+Một cá thể có thể đồng thời chịu luật quốc gia, luật phường hội, luật dòng họ, giáo luật và hiệp ước liên-world. `norm_set` ở §12.5.1 vì thế phải chồng lên nhau, và hệ thống cần mô hình hóa:
+
+- Thứ tự ưu tiên giữa các hệ luật, và điều gì xảy ra khi chúng mâu thuẫn.
+- Thẩm quyền và nơi xét xử phù hợp.
+- Dẫn độ và từ chối dẫn độ.
+- Miễn trừ theo chức vụ, theo sứ giả, theo nơi thánh.
+- Cấm xét xử hai lần cho cùng một hành vi.
+- **Version của luật tại thời điểm hành vi xảy ra**, tách khỏi luật thủ tục tại thời điểm xét xử.
+
+Điểm cuối là ràng buộc kỹ thuật thật: event ghi lại version `norm_set` đang hiệu lực lúc đó, đúng tinh thần §13.9.5. Sửa luật không hồi tố lên các vụ đã xử.
+
+Chạy trốn sang một thẩm quyền khác trở thành nước đi hợp lệ, và “nơi trú ẩn an toàn” là một tài sản địa chính trị.
+
+Tham khảo: [Sally Engle Merry — Legal Pluralism](https://doi.org/10.2307/3053638).
+
+### 12.15. Vòng đời thông điệp và sự tiếp nhận
+
+#### 12.15.1. Tin tức là message được sao chép
+
+Mỗi thông điệp có nội dung, nguồn, độ trễ, độ trung thực khi sao chép, mức chú ý mà người nhận dành cho nó, độ tin cậy của nguồn và động cơ sửa nội dung của người truyền. Nhiều phiên bản của cùng một sự kiện lan song song và cạnh tranh nhau.
+
+Tuyên truyền, đính chính, hoảng loạn đạo đức và tin đồn tự chết đều rơi ra từ đây. Yuu không quyết định phiên bản nào thắng.
+
+#### 12.15.2. Nhận được khác với làm theo
+
+Tách hẳn “nghe được thông điệp” khỏi “chấp nhận làm theo”. Xu hướng bắt chước có thể theo: số đông, uy tín người làm, thành công quan sát được, quan hệ ingroup và huyết thống, chuyên môn của người hướng dẫn, hoặc những hành động tốn kém khó giả mạo.
+
+Nhờ vậy thời trang, taboo, kỹ thuật canh tác và tín ngưỡng lan với tốc độ khác nhau **trên cùng một mạng lưới xã hội** — điều mà một hệ số lan truyền duy nhất không thể tạo ra.
+
+Tham khảo: [Cultural Evolution of Conformity and Anticonformity](https://doi.org/10.1073/pnas.2004102117).
+
+#### 12.15.3. Dịch sai là một nguồn xung đột
+
+§12.3 đã có ngôn ngữ, phương ngữ và mức hiểu lẫn nhau. Bổ sung: vay mượn từ, trôi nghĩa theo thời gian, và **phiên dịch sai**. Một hiệp ước, một câu thần chú, một lời tiên tri hay một bài giảng có thể hỏng vì dịch sai mà không ai cố tình nói dối. Với spell, dịch sai một từ trong công thức là một nguồn tai nạn hoàn toàn hợp lý theo §8.10.5.
+
+### 12.16. Tôn giáo như một thể chế
+
+Thần linh ở §14 là thực thể. Tôn giáo là **tổ chức** ở §12.1, và hai thứ đó tách hẳn nhau.
+
+Một tôn giáo cần: đồ thị giáo lý, lịch nghi lễ, thánh địa, hàng giáo sĩ, quyền diễn giải kinh sách, và cơ chế ly giáo khi quyền diễn giải bị tranh chấp.
+
+Điểm thiết kế quan trọng: **belief của tín đồ tách khỏi việc vị thần có thật hay không.** Một giáo hội hoàn toàn có thể hiểu sai chính vị thần mình thờ, thờ một vị thần đã chết, hoặc thờ một thứ chưa bao giờ tồn tại — và vẫn vận hành, vẫn có quyền lực thật theo §12.13.2.
+
+**Nghi lễ tốn kém là bằng chứng, không phải điểm số.** Giảng đạo chỉ tạo ra thông điệp ở §12.15. Hy sinh tài sản, giữ lời thề khó giữ, hành hương hay sống khổ hạnh mới tạo ra bằng chứng về mức cam kết, và chính bằng chứng đó làm người khác tin theo — thay vì cộng một biến `faith_point`.
+
+Tham khảo: [Henrich — Credibility-Enhancing Displays](https://www2.psych.ubc.ca/~henrich/pdfs/evolution%20of%20costly%20displays%20_henrich%202009.pdf).
+
+### 12.17. Lao động, hãng, phường hội và vận chuyển
+
+#### 12.17.1. Hợp đồng lao động
+
+Lao động có tiền công, thời hạn, giờ làm, mức rủi ro, quyền nghỉ và trách nhiệm với công cụ. Hãng và phường hội gom vốn, hợp đồng và tri thức tổ chức — knowledge base của tổ chức ở §12.1 khác với kiến thức của từng thành viên.
+
+Thất nghiệp, bóc lột, đình công (§12.11), đào tạo nghề và tranh giành chuyên gia đều xuất hiện từ đây, và nối thẳng vào nguồn tuyển mộ của tổ chức tội phạm ở §12.6.1.
+
+#### 12.17.2. Hàng hóa không dịch chuyển tức thời
+
+Đây là một lỗ hổng dễ mắc: hàng không được teleport giữa hai kho. Mỗi lô hàng là một thực thể có người vận chuyển, sức chứa, tuyến đường, thời điểm khởi hành, hao hụt và hư hỏng dọc đường, lực lượng áp tải, và **chuỗi bàn giao trách nhiệm**.
+
+Một cây cầu sập hoặc một vụ cướp đường vì thế lan thành thiếu hàng, tăng giá và vi phạm hợp đồng — với cause chain đầy đủ, không phải một sự kiện “giá tăng” xuất hiện từ hư không.
+
+### 12.18. Thửa đất, địa điểm thường nhật và văn hóa vật chất
+
+#### 12.18.1. Đô thị mọc theo thửa đất
+
+Thửa đất có giá thuê, mức tiếp cận, mặt tiền, nguồn nước, mức nguy hiểm và quyền sử dụng theo §12.8.7. Hộ gia đình và cơ sở kinh doanh chọn hoặc chiếm vị trí dựa trên các yếu tố đó. Đường mòn, chợ, khu nhà giàu, khu ổ chuột và vùng ven tự hình thành, không ai vẽ quy hoạch trước.
+
+Tham khảo: [UN-Habitat — Economic Foundations for Sustainable Urbanization](https://unhabitat.org/economic-foundations-for-sustainable-urbanization-a-study-on-three-pronged-approach-planned-city).
+
+#### 12.18.2. Địa điểm thường nhật tạo ra mạng quan hệ
+
+Giếng nước, bếp chung, chợ, quán rượu, nhà tắm, đền, bến xe và chỗ ngủ có hàng đợi và chỗ có hạn thật. Việc **gặp lại nhau nhiều lần** ở những nơi này chính là thứ sinh ra contact graph cho tình bạn, chuyện phiếm, tán tỉnh, xích mích — và cả đường lây bệnh ở §9.8.5.
+
+Đây là cơ chế có tỉ lệ hiệu quả trên công sức cao nhất để NPC trông như đang sống, chứ không phải thêm một tầng LLM.
+
+#### 12.18.3. Thế giới cần cả niềm vui và sự tầm thường
+
+Lịch lễ hội, thi đấu, âm nhạc, món ăn, trang phục và nghệ thuật tiêu thụ tài nguyên thật, tạo việc làm thật, phát tín hiệu địa vị theo §12.10 và lan theo uy tín ở §12.15.2.
+
+Một thế giới chỉ có thảm họa, tội phạm và chiến tranh không phải một thế giới sống động — nó chỉ là một thế giới u ám. Phần lớn thời gian của phần lớn nhân vật phải là chuyện thường ngày.
+
+### 12.19. Di cư, tị nạn và cộng đồng ly tán
+
+Quyết định rời đi dựa trên **belief** về an toàn, tiền công, chi phí đường đi và việc có người quen ở nơi đến — không dựa trên số liệu thật của world.
+
+Di cư thường là quyết định của hộ gia đình hoặc của mạng lưới, không phải của một cá nhân: gửi một người đi trước, những người sau đi theo. Cộng đồng ly tán gửi tiền về, môi giới việc làm, giữ ngôn ngữ và mang **lòng trung thành kép** — một nguồn nghi kỵ chính trị rất thật.
+
+### 12.20. Ứng phó thảm họa và tương trợ
+
+Thiên tai cần cảnh báo, sơ tán, nơi trú, kho dự phòng, lực lượng cứu hộ, mạng lưới tình nguyện và năng lực tái thiết. Tất cả đều là năng lực có thể thiếu.
+
+Vì thế cùng một trận động đất chỉ gây thiệt hại cục bộ ở một xã hội có tổ chức, nhưng làm sụp đổ một nhà nước đã mất chính danh ở §12.13.2 — và đó là hệ quả tính ra được, không phải một quyết định của Director.
+
 ## 13. Tri thức, kỹ năng, công nghệ và ma thuật
 
 ### 13.1. Knowledge graph thống nhất
@@ -1520,6 +1985,33 @@ Quy tắc: **mọi host function trả về observation của chủ thể, khôn
 
 Mỗi law/spell có `def_id` cộng `version`. Event ghi lại version đã dùng tại thời điểm thực thi. Sửa một luật tạo version mới cộng migration hoặc branch theo bước 8 của §15.3; nó không hồi tố lên lịch sử đã ghi. Replay dùng đúng version cũ, nên một save cũ không đổi kết quả chỉ vì hôm nay Yuu chỉnh cân bằng.
 
+Vật phẩm mang hành vi — trượng, sách phép, máy móc, di vật — dùng đúng contract này thông qua một tham chiếu module đã đóng băng; xem §8.10.
+
+#### 13.9.6. Hai loại context, không phải một
+
+§13.9.4 yêu cầu host function đi qua tri giác. Điều đó đúng với module đại diện cho **một chủ thể**, nhưng sai với module giải quyết hiện tượng ở cấp hệ thống: một generator địa hình hay một resolver dịch tễ buộc phải đọc dữ liệu authoritative.
+
+Tách hai contract:
+
+| Context | Thấy được gì | Dùng cho |
+|---|---|---|
+| `AgentModuleContext` | **Chỉ observation của actor** | Spell, tactic, behavior policy, hành vi vật phẩm ở §8.10 |
+| `SystemResolverContext` | Một read-set authoritative **bị giới hạn bằng capability khai báo trước** | Generator địa hình, dịch tễ, khí hậu, resolver kinh tế |
+
+Cả hai đều là hàm thuần, có input/output canonical, có fuel, và mọi kết quả vẫn commit qua Core dưới dạng proposal. Khác biệt duy nhất là phạm vi đọc, và phạm vi đó phải khai báo trong manifest (§19.7.4) chứ không được xin lúc chạy.
+
+Nhầm lẫn giữa hai context là con đường ngắn nhất tạo ra lỗ hổng toàn tri, nên registry phải từ chối nạp một module `AgentModuleContext` có xin capability đọc authoritative.
+
+### 13.10. Giáo dục, thi cử và lưu trữ
+
+§13.3 mô tả việc dạy giữa hai cá nhân. Ở quy mô xã hội, việc truyền tri thức đi qua **thể chế**: trường học, học nghề, thi cử, thư viện và kho lưu trữ.
+
+Mỗi thể chế có tuyển sinh, chương trình, người gác cửa và kinh phí. Ba hệ quả đáng chơi:
+
+- **Gác cửa là quyền lực.** Ai được vào học quyết định ai có thể lên địa vị ở §12.10. Đóng cửa học viện với một tầng lớp là một hành động chính trị có hậu quả kéo dài nhiều thế hệ.
+- **Kho lưu trữ có thể bị kiểm duyệt hoặc cháy.** Kết hợp với quy tắc 4 của §8.8, một trận hỏa hoạn ở thư viện lớn có thể xóa vĩnh viễn một nhánh tri thức khỏi world.
+- **Chép sai sinh ra trường phái mới.** Một bản sao có lỗi được dạy suốt trăm năm tạo ra một truyền thống phép thuật khác hẳn nguyên bản — và cả hai bên đều tin mình mới là chính thống.
+
 ## 14. Thần linh, linh hồn và quyền năng
 
 ### 14.1. Ba loại “thần”
@@ -1676,6 +2168,12 @@ True God có thể:
 1. **Diegetic**: tác động qua avatar, phép, sứ giả hoặc hiện tượng mà cư dân có thể cảm nhận.
 2. **Administrative**: sửa dữ liệu có provenance `yuu_admin`/`true_god`; cư dân chỉ biết nếu có observation tương ứng.
 3. **Hard override**: bỏ qua physical law nhưng không bỏ qua engine invariant. Dùng cho sandbox hoặc sửa save.
+
+Cần phân biệt hai thứ hay bị gộp:
+
+> **True God có toàn quyền bên trong simulation.** Những ràng buộc mà không mức can thiệp nào vượt qua được — §22.26 và §22.27 — không phải một sức mạnh lớn hơn tồn tại trong thế giới, mà là **host safety policy đứng ngoài simulation**. Chúng không phải một thế lực mà nhân vật có thể cầu xin, thương lượng hay lật đổ, và cũng không phải giới hạn quyền năng của True God trong hư cấu.
+
+Nói cách khác: trong thế giới, True God là tuyệt đối. Ngoài thế giới, phần mềm có những thứ nó không dựng.
 
 ### 16.3. Hóa thân và possession
 
@@ -2371,6 +2869,20 @@ condition:
     - { part: hilt, by: "entity:village_carpenter", quality: 0.34, at_event: "event:..." }
 effects:
   - "effect:enchant.frost_edge"    # dùng nguyên hệ §9.8
+behavior:                           # §8.10, chỉ vật phẩm mang hành vi mới có
+  module: "law.rune.frost_lance@3"
+  bound_params: { power: 4200, element: frost }
+  charges: { max: 12, current: 7, recharge: ambient_mana, rate_per_day: 0.5 }
+  fuel_budget: 250000
+  gates:
+    - { kind: knowledge, node: "knowledge:rune_reading", min_level: CONCEPTUAL }
+    - { kind: stat, attr: focus, min: 0.55 }
+    - { kind: command_word, secret_ref: "secret:0a91..." }   # KHÔNG render vào prompt
+    - { kind: attunement, bind: bloodline, value: "lineage:hallan" }
+    - { kind: cost, resource: mana, amount: 900, unit: mMU }
+  risk:
+    on_partial_gate: backfire.frost
+    misfire_chance_from: [gate_shortfall, condition.blade, caster.fatigue]
 provenance:                         # chuỗi thật, là nguồn của mọi truyền thuyết §8.9.2
   - { kind: crafted,  actor: "entity:smith_hallan", event: "event:..." }
   - { kind: gifted,   from: ..., to: ..., event: "event:..." }
@@ -2467,6 +2979,17 @@ economy_profile:
 36. Possession là ground truth vật lý, claim là belief xã hội; không claim nào tự thực thi mà không qua bộ máy §12.5.
 37. Truyền thuyết về vật phẩm phải suy ra từ chuỗi provenance có thật; biến dạng khi truyền lại thì được, bịa sự kiện thì không.
 38. Chế tác bảo toàn vật chất; không có đường sinh vật phẩm từ hư không ngoài genesis và override có provenance.
+39. Vật phẩm mang tham chiếu module đã đăng ký, không mang mã nguồn; kích hoạt đi qua đúng sandbox contract §13.9.3.
+40. Trường bí mật — khẩu quyết, chìa, điều kiện ràng buộc, nội dung chưa đọc — không bao giờ được render vào context của một entity chưa có belief tương ứng.
+41. Module do nhân vật trong world tạo ra đi qua đúng validator, whitelist hàm và giới hạn fuel như luật do Yuu sinh; không có đường tắt.
+42. Mọi tiến trình có thời hạn khai báo clock domain; qua portal thì deadline được rebase theo domain của chính tiến trình, không đổi đồng loạt.
+43. Impact cùng tick giải theo tầng cố định; `EntityId` dùng để sắp thứ tự ổn định nhưng không bao giờ quyết định ai sống ai chết.
+44. Reaction chỉ tồn tại sau khi actor thật sự quan sát được stimulus.
+45. Worldseed đem chia sẻ phải trỏ tới lockfile đã resolve; khoảng version chỉ dùng lúc tạo mới.
+46. Lịch sử vĩ mô do tiền sử sinh ra được commit trước khi người chơi mở chunk; khám phá chỉ chi tiết hóa, không quyết định.
+47. Effect chỉ biểu diễn hậu quả dẫn xuất; policy, claim và quan hệ giữ nguồn sự thật của chính chúng.
+48. Module `AgentModuleContext` không được cấp capability đọc authoritative; registry từ chối nạp nếu manifest xin sai loại context.
+49. Version `norm_set` tại thời điểm hành vi được ghi vào event; sửa luật không hồi tố lên vụ đã xử.
 
 ## 23. Mục tiêu kỹ thuật có thể đo
 
@@ -2492,6 +3015,13 @@ Các con số là mục tiêu baseline để kiểm chứng kiến trúc, có th
 - Truy được toàn bộ chuỗi đổi chủ của một vật phẩm và đặt nó cạnh truyền thuyết đang lưu hành để thấy chỗ lệch.
 - Tắt hao mòn trong một world thử nghiệm phải làm Auditor báo cảnh báo giảm phát trong khoảng thời gian mô phỏng đã định.
 - Đốt hết bản sao của một cuốn sách làm node tri thức đó biến mất khỏi world nếu không ai còn giữ nó trong `Knowledge`.
+- Một NPC ghép được module mới chỉ từ các node nó thật sự biết; ghép node nó không biết bị validator từ chối.
+- Không prompt nào từng chứa khẩu quyết hoặc bí mật mà entity chưa có quyền biết; Auditor quét toàn bộ prompt đã gửi.
+- Hai kiếm sĩ có `ready_at` bằng nhau và cùng chí mạng thì cả hai cùng chết; đảo `EntityId` không đổi kết quả.
+- Một nhân vật có tốc độ gấp 50 lần vẫn không thắng tự động trước chuẩn bị, bẫy và địa hình.
+- Người đang ủ bệnh đi qua portal sang world nhanh gấp 10 lần không khỏi hoặc chết tức thì.
+- Cùng một lockfile cho cùng hash thế giới khởi đầu, kể cả sau khi engine đã lên version mới.
+- Mở chunk theo hai đường camera khác nhau cho cùng tàn tích, cùng biên giới và cùng mối thù.
 
 Không đặt cam kết số lượng “một triệu NPC real-time” trước khi có benchmark. Quy mô thật phải được đo riêng cho entity active, scheduled, dormant và aggregate.
 
@@ -2521,6 +3051,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Body, homeostasis §9.7 với tích phân đóng, inventory, movement, perception và action registry.
 - Effect pipeline §9.8 ở mức cơ bản: đói, lạnh, thương tích, độc, một bệnh truyền nhiễm.
 - Vật phẩm cơ bản: instance/stack, chất lượng, hao mòn, chế tác và sửa chữa theo §8.5–§8.7.
+- Chrono-turn timeline, ba pha hành động, reaction và giải quyết đồng thời theo §10.7–§10.9.
+- Hộ gia đình, huyết thống và địa điểm thường nhật §12.9, §12.18.2 — đòn bẩy lớn nhất để NPC trông như đang sống.
 - Khoảng vài chục entity, nhà, nghề, resource, crafting và lịch trình.
 - Utility AI, event log, relationship cơ bản.
 - Active/near/far LOD đầu tiên.
@@ -2542,6 +3074,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - LLM gateway, typed plan, validator, timeout/fallback.
 - Đối thoại và reflection cho nhân vật quan trọng.
 - Tính cách năm lớp §9.9 và reputation tách khỏi trait thật.
+- Hành động xã hội trên cùng timeline §10.11 và vòng đời thông điệp §12.15.
 
 **Điều kiện hoàn thành**:
 
@@ -2561,6 +3094,9 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - `norm_set`, pipeline tội phạm §12.5, tổ chức tội phạm và tệ nạn §12.6.
 - Sở hữu, claim, tiền tệ và economy profile có vòi/cống theo §12.8.
 - Vật phẩm mang thông tin: sách, bản đồ, sao chép có lỗi theo §8.8.
+- Năng lực nhà nước, chuỗi ủy quyền, chính danh và đa tầng pháp luật §12.13–§12.14.
+- Hành động tập thể §12.11, quản trị tài nguyên chung §12.12, tôn giáo như thể chế §12.16.
+- Tín dụng, bó quyền tài sản, lao động và vận chuyển §12.8.7–§12.8.8, §12.17.
 
 **Điều kiện hoàn thành**:
 
@@ -2577,6 +3113,9 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Mana/law DSL Tier 0, sandbox WASM Tier 1 §13.9, spell action và counterplay.
 - Thiên phú, khải thị và tổng hợp spell §13.8.
 - Vật phẩm huyền thoại, phù phép, di sản và vật phẩm có tri giác §8.9.
+- Vật phẩm mang hành vi §8.10: module gắn vật phẩm, cổng sử dụng, NPC tự tạo module, tháo ngược.
+- Clock domain và rebase deadline §4.5; chế độ tiếp xúc và kiểm dịch cổng §6.4.
+- Diễn thế sinh thái và trao đổi liên-world §9.10.
 - World 1, World 2, World 3 và Super Ultra World.
 - Portal state machine, transactional transfer và access control.
 - Soul, summon, ascension và domain authority.
@@ -2596,7 +3135,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Species Foundry, Law Forge, Auditor và Historian.
 - Cognitive scheduler, batching, model routing và policy compilation.
 - Profiling, compact storage, đa luồng deterministic.
-- Worldseed, Seed Vault §7.6 và tiền sử chạy ở mức aggregate.
+- Worldseed, Seed Vault §7.6, lockfile §7.6.6 và tiền sử chạy ở mức aggregate.
+- Tăng trưởng đô thị theo thửa đất §12.18.1, di cư §12.19 và ứng phó thảm họa §12.20.
 - Hệ plugin §19.7: manifest, capability, thứ tự load, WASM host và CI kiểm thử pack.
 
 **Điều kiện hoàn thành**:
@@ -2632,6 +3172,12 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 | Vật phẩm sinh sôi không kiểm soát | Nổ số lượng entity, save phình | Instance/stack/aggregate, điều kiện thăng-giáng là dữ liệu |
 | Kinh tế trôi vào lạm phát hoặc giảm phát | Giá vô nghĩa, thương mại chết | Khai báo vòi/cống, hao mòn là cống chính, Auditor báo nguyên nhân |
 | Truyền thuyết mâu thuẫn lịch sử | Mất niềm tin vào cause chain | Legend là biến dạng của provenance thật, hiển thị hai lớp cạnh nhau |
+| Bí mật rò qua prompt | NPC dùng khẩu quyết nó chưa từng biết, phá tri thức cục bộ | View lọc theo người quan sát, Auditor quét prompt, coi rò một lần là bug nghiêm trọng |
+| Tốc độ thành chỉ số thống trị | Mọi build đều dồn vào speed | Bốn loại tốc độ tách biệt, trần pha, quán tính, stamina, area denial |
+| `EntityId` quyết định ai sống | Kết quả chiến đấu tùy tiện | Giải quyết đồng thời theo tầng, khóa ổn định chỉ để sắp xếp |
+| Deadline không rebase khi qua portal | Bệnh khỏi hoặc nợ đáo hạn tức thì | Clock domain bắt buộc, rebase trong transaction transfer |
+| Version range trong worldseed | Cùng seed ra hai thế giới khác nhau | Resolve thành lockfile bất biến trước genesis |
+| Lịch sử phụ thuộc đường đi camera | Thế giới không có quá khứ ổn định | Macro-delta commit trước khi mở chunk |
 
 ## 26. Một kịch bản emergent hoàn chỉnh
 
