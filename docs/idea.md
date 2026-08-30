@@ -55,6 +55,8 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Khóa phiên bản | Worldseed chia sẻ trỏ tới lockfile đã resolve, không phải khoảng version |
 | Kết quả xã hội | Volition tính bằng quy tắc trên social state; LLM chọn ý định, engine tính kết quả |
 | Event seed | Storylet có precondition và salience, chỉ đặt điều kiện, không bao giờ đặt kết quả |
+| Tuổi thọ | Là đường cong tử vong, không phải một con số; loài sống lâu dùng mô hình lão hóa không đáng kể |
+| Lai giống | Tương hợp là ma trận theo cặp và có thể bất đối xứng, không phải một chỉ số thuần chủng |
 
 ### 2.1. Những điều cố ý không làm
 
@@ -75,6 +77,9 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 - Không lưu một con số “giá trị” bên trong vật phẩm.
 - Không gán sẵn nghề nghiệp cho dân cư; chuyên môn hóa phải nảy sinh từ việc họ quan sát được nhau.
 - Không để văn bản LLM ghi thẳng belief, kể cả khi nó rất tự tin.
+- Không lưu bộ gen đầy đủ cho từng sinh vật; genome suy ra từ cha mẹ, seed tái tổ hợp và danh sách đột biến.
+- Không dùng một con số “tuổi thọ tối đa” làm nguồn sự thật cho cái chết.
+- Không cho phép thuật vượt rào cản sinh sản mà không khai báo giá phải trả.
 
 ## 3. Trải nghiệm và vòng lặp gameplay
 
@@ -865,7 +870,7 @@ Luyện tập chỉ tăng khi hành động thật sự sử dụng năng lực,
 
 ### 9.5. Sinh sản, trưởng thành và tử vong
 
-- Species template định nghĩa anatomy, tuổi trưởng thành, cách sinh sản và điều kiện sống.
+- Species template định nghĩa anatomy, tuổi trưởng thành, phương thức sinh sản (§9.5.3), đường cong tử vong (§9.5.6) và điều kiện sống.
 - Cá thể con nhận genotype từ cơ chế của loài, cộng mutation deterministic có policy của Yuu.
 - Phenotype còn chịu dinh dưỡng, bệnh, mana, khí hậu và quá trình trưởng thành.
 - Tử vong tách body, identity và soul theo luật world.
@@ -893,6 +898,95 @@ Ba tham số quyết định cảm giác chơi:
 Hệ quả rơi ra mà không cần viết riêng: một dòng họ quý tộc khép kín để giữ huyết thống sẽ tự suy yếu qua vài thế hệ và tự tạo ra khủng hoảng kế vị ở §12.9; một quần thể rồng bị săn xuống dưới ngưỡng sẽ mắc kẹt trong nút thắt di truyền; và **chọn giống có định hướng trở thành một `Project` nhiều thế hệ ở §13.5** — đúng loại việc mà một quốc gia làm để có ngựa chiến tốt hơn hoặc một giáo phái làm để tạo ra người có ái lực mana.
 
 Yuu ở §15.2 điều khiển phân phối ban đầu; sau đó chính chọn lọc, môi trường và quyết định của nhân vật mới là thứ dịch chuyển quần thể.
+
+#### 9.5.2. Kiến trúc bộ gen
+
+§9.5.1 mô tả trait ở mức thống kê. Dưới nó cần một cấu trúc cụ thể để lai giống, đột biến và hình thành loài có chỗ bám.
+
+- **Locus và allele**: mỗi locus có một tập allele; đóng góp của allele gồm phần **cộng gộp** và phần **trội/lặn**. Bệnh di truyền lặn tự nhiên xuất hiện từ đây, và cũng tự nhiên bộc lộ khi cận huyết làm tăng đồng hợp tử.
+- **Nhóm liên kết**: locus nằm trên cùng nhiễm sắc thể di truyền cùng nhau theo tỉ lệ tái tổ hợp. Nhờ vậy có những đặc điểm “đi kèm” nhau qua nhiều đời rồi tách ra — nguồn của những dòng dõi có dấu hiệu nhận biết.
+- **Bội thể và cơ chế xác định giới**: lưỡng bội, đơn bội, đa bội; XY, ZW, đơn-lưỡng bội, xác định theo nhiệt độ, hoặc không có giới. Đây không phải chi tiết trang trí — nó quyết định hình dạng của rào cản lai giống ở §9.5.4 và cấu trúc xã hội của loài ở §9.11.4.
+- **Đột biến**: tỉ lệ theo locus, lấy từ named RNG stream ở §19.6. Mana anomaly, phóng xạ hoặc độc có thể nâng tỉ lệ này cục bộ.
+- **Locus phép thuật**: cơ quan mana, ái lực domain và `talent` ở §13.8.1 dùng đúng bộ máy này. Vì thế `heritability` trong schema talent là một con số có ý nghĩa cơ học, không phải nhãn.
+
+**Lưu trữ**: không giữ một bộ gen đầy đủ cho mỗi sinh vật. Genome được **suy ra** từ genome cha mẹ cộng seed tái tổ hợp và danh sách đột biến — cùng nguyên tắc tiết kiệm với instance/stack ở §8.5.2 và tích phân đóng ở §9.7.2. Một đàn cá 40.000 con lưu vài trăm byte, không phải 40.000 bộ gen.
+
+#### 9.5.3. Phương thức sinh sản
+
+`reproduction.mode: egg` ở §21.2 là quá hẹp. Species template chọn từ một tập rộng hơn, vì phương thức sinh sản quyết định gần như mọi thứ khác về loài đó:
+
+| Phương thức | Hệ quả kéo theo |
+|---|---|
+| `sexual_diploid` | Tái tổ hợp, đa dạng cao, cần tìm bạn đời — sinh ra toàn bộ §12.7 |
+| `asexual_clonal` | Nảy chồi, phân đôi; sinh sôi nhanh, đa dạng thấp, cực kỳ dễ tổn thương trước một dịch bệnh |
+| `parthenogenesis` | Có điều kiện, thường kích hoạt khi vắng con đực; là van cứu quần thể sắp tuyệt chủng |
+| `haplodiploid` | Chúa, con đực đơn bội, thợ vô sinh. **Đổi toàn bộ vật lý xã hội**: xem §9.11.5 |
+| `spore` / `broadcast` | Rất nhiều hậu duệ, không chăm sóc, tỉ lệ sống cực thấp |
+| `oviparous` / `viviparous` | Trứng hay đẻ con quyết định gánh nặng chăm sóc ở §12.9 và mức rủi ro của người mẹ |
+| `mana_condensation` | Không có bộ gen; hình thành từ điều kiện trường mana. Elemental, linh thể |
+| `constructed` | Chế tác theo §8.7 cộng module hành vi §8.10; “thế hệ mới” là một bản thiết kế mới |
+| `raised` | Xác chết được nghi thức hóa; tính liên tục danh tính theo luật soul ở §11.4 |
+| `divine_fiat` | Thần hoặc True God tạo trực tiếp, luôn có provenance theo §9.6 |
+
+Cắt ngang bảng trên là trục **nhiều con đầu tư ít** đối lại **ít con đầu tư nhiều**. Trục này quyết định gánh nặng của kinh tế chăm sóc ở §12.9, mức chịu đựng tổn thất dân số sau chiến tranh, và cả thái độ văn hóa với cái chết của trẻ nhỏ — một xã hội mất nửa số con trước tuổi trưởng thành sẽ có tang lễ, tên gọi và tình cảm gia đình khác hẳn.
+
+#### 9.5.4. Lai giống và rào cản sinh sản
+
+Đây là chỗ “lai tạo thế hệ mới” thật sự sống hay chết. Biến chủ đạo là **khoảng cách di truyền** giữa hai quần thể, và rào cản xếp theo thứ tự chúng chặn:
+
+**Trước hợp tử** — không tạo ra hợp tử:
+tập tính tán tỉnh không khớp, mùa sinh sản lệch nhau, không tương thích cơ học, giao tử không nhận nhau.
+
+**Sau hợp tử** — có hợp tử nhưng hỏng:
+hợp tử không sống được, con lai vô sinh, hoặc thế hệ F2 sụp đổ.
+
+Cơ chế nền là **bất tương hợp Bateson–Dobzhansky–Muller**: hai dòng tách ra tích lũy các allele mà **mỗi allele đều vô hại trong nền di truyền của chính nó**, nhưng gây hại khi gặp nhau trong cùng một cơ thể. Ba hệ quả thiết kế rất đắt:
+
+1. **Tương hợp là ma trận theo cặp, không phải một con số “độ thuần chủng”.** Loài A có thể lai được với B, B lai được với C, mà A không lai được với C. Thế giới trở thành một phổ liên tục thay vì các hộp rời rạc.
+2. **Ma trận có thể bất đối xứng.** A♀×B♂ ra con khỏe, B♀×A♂ ra con chết non. Đây là chi tiết khiến hôn nhân liên loài thành vấn đề chính trị có chiều.
+3. **Quy tắc Haldane**: con lai thuộc giới dị giao tử chịu thiệt nặng hơn. Với hệ XY, con trai lai chịu ảnh hưởng nặng hơn con gái lai. Trong world, đây là một quy luật **quan sát được** mà các học giả có thể phát hiện qua nhiều đời: “con gái lai người-tiên sinh con được, con trai thì không”.
+
+**Ưu thế lai**: F1 có thể mạnh hơn cả hai bố mẹ trong khi vẫn vô sinh. Con la là ví dụ thật, và nó là khuôn mẫu hoàn hảo cho fantasy: một sinh vật lai cực mạnh nhưng **không tự nhân giống được**, nên mỗi cá thể phải được tạo ra lại từ đầu. Điều đó biến chúng thành tài nguyên chiến lược có chi phí liên tục, chứ không phải một quân bài mở khóa một lần.
+
+**Sụp đổ ở F2** giải thích vì sao dòng lai không nuốt trọn thế giới: đời cháu tổ hợp lại các allele bất tương hợp và mất sức sống.
+
+**Phép thuật vượt rào cản** là hợp lệ, nhưng phải có giá thật, không được là một công tắc:
+
+- Nghi thức ép tương hợp, chế tác chimera, can thiệp thần linh.
+- Giá phải trả nằm ở một trong các dạng: tuổi thọ rút ngắn, vô sinh, bất ổn định cần một effect duy trì theo §9.8 và tan rã khi người thi triển chết, đau đớn mãn tính, hoặc mất trí.
+- Mọi cá thể lai tạo bằng phép vẫn phải qua **kiểm tra viability** của §9.6. Yuu không được phép tạo ra một sinh vật không thở được rồi để nó chết ngay.
+
+#### 9.5.5. Hình thành loài mới
+
+Loài mới không chỉ đến từ Yuu. Có bốn con đường trong world:
+
+1. **Cách ly rồi phân kỳ**: một quần thể bị tách bởi núi, biển, hoặc **bởi một portal đóng lại**. Sau đủ nhiều đời, đột biến và chọn lọc độc lập tích lũy đủ bất tương hợp BDM.
+2. **Trôi dạt trong quần thể nhỏ**: nút thắt cổ chai làm allele hiếm cố định ngẫu nhiên.
+3. **Áp lực chọn lọc mới**: khí hậu đổi, con mồi biến mất, một trường mana mới xuất hiện.
+4. **Tác nhân gây đột biến**: dị thường mana, chất độc, bức xạ từ một thí nghiệm thất bại ở §13.4.
+
+Portal là **cỗ máy tạo loài tốt nhất** của thế giới này. Một nhóm di cư sang world khác sống dưới trọng lực, khí quyển và mật độ mana khác; vài trăm năm sau cổng mở lại, hai bên gặp nhau ở một **vùng tiếp xúc thứ cấp** — vẫn nhận ra nhau là họ hàng, nhưng con lai đã bắt đầu vô sinh. Toàn bộ bi kịch chính trị và tôn giáo của tình huống đó là thứ tự nó viết ra.
+
+#### 9.5.6. Lão hóa và đường cong tử vong
+
+**Tuổi thọ không phải một con số.** Nó là một đường cong tử vong, và các loài khác nhau ở *hình dạng* của đường cong chứ không chỉ ở độ dài.
+
+- **Lão hóa kiểu Gompertz**: xác suất chết tăng theo hàm mũ với tuổi. Đây là kiểu của gần như mọi động vật đa bào thật; loài khác nhau ở tham số tốc độ.
+- **Lão hóa không đáng kể**: xác suất chết **không tăng** theo tuổi. Có thật ở chuột chũi trụi lông, vài loài rùa, cá rockfish mắt thô, và ngao đại dương sống tới khoảng 400 năm.
+
+Phân biệt này quan trọng hơn nó thoạt nhìn. Một elf sống 3000 năm nên được mô hình hóa là **lão hóa không đáng kể**, không phải Gompertz chậm. Hệ quả: elf **không chết già** — họ chết vì tai nạn, bạo lực, bệnh tật hoặc tuyệt vọng. Nghĩa là:
+
+> Phân bố tuổi thật của một loài sống lâu là một chỉ báo đọc được về mức nguy hiểm của lịch sử họ đã trải qua.
+
+Một cộng đồng elf trong rừng yên bình có các cụ ba nghìn tuổi. Cùng loài đó ở vùng biên chiến tranh thì hiếm ai qua nổi hai trăm. Không cần viết thêm lore; con số tự kể chuyện.
+
+Lão hóa tác động qua **effect** ở §9.8 chứ không qua một chỉ số phẳng: giảm dần `potential` ở §9.3, tăng nhạy cảm với bệnh, giảm hồi phục, và ở loài có trí tuệ thì thay đổi cả `focus` lẫn tốc độ học ở §13.3.
+
+**Tuổi thọ là một loại tài nguyên.** §13.6 đã liệt kê tuổi thọ như một chi phí hợp lệ của phép thuật. Với mô hình này, “đốt tuổi thọ” có nghĩa cụ thể: dịch đường cong tử vong của chính mình. Một pháp sư đổi ba mươi năm lấy một lần thi triển là một quyết định có thể tính ra hậu quả, không phải một câu thoại.
+
+Kéo dài tuổi thọ vì thế là một `Project` ở §13.5 mà mọi nền văn minh đủ mạnh đều sẽ thử — và hậu quả xã hội của việc thành công nằm ở §9.11.4.
+
+Tham khảo: [100 years of Haldane's rule](https://academic.oup.com/jeb/article/36/2/337/7326090), [Dobzhansky–Muller incompatibilities](https://www.nature.com/articles/hdy2008129), [An explanation for negligible senescence in animals](https://onlinelibrary.wiley.com/doi/full/10.1002/ece3.8970).
 
 ### 9.6. Tạo loài bởi Yuu
 
@@ -1150,6 +1244,52 @@ Portal ở §6 mang theo nhiều thứ hơn là người: loài, ký sinh trùng
 Một loài không có thiên địch ở world đích có thể bùng nổ và làm sụp một chuỗi thức ăn. Một mầm bệnh mà dân bản địa chưa từng có miễn dịch có thể xóa sổ cả một nền văn minh nhanh hơn bất kỳ đội quân nào. Đây là lý do §6.4 tồn tại, và là một trong những hệ quả đáng sợ nhất mà việc mở cổng có thể gây ra — thường là ngoài ý muốn của người mở.
 
 Tham khảo: [IPBES — Invasive Alien Species Assessment](https://ict.ipbes.net/ipbes-ict-guide/data-and-knowledge-management/citations-of-ipbes-assessments/invasive-alien-species-assessment).
+
+### 9.11. Cách biệt giữa các loài
+
+“Nhiều chủng tộc cùng sống” là phần dễ. Phần khó, và phần làm nên chiều sâu, là các **rào cản** giữa họ. Có năm loại, độc lập với nhau, và một cặp loài có thể vượt được rào này mà không vượt được rào kia.
+
+#### 9.11.1. Rào cản sinh sản
+
+§9.5.4. Quyết định ai có con chung được với ai, con đó có sống và có sinh sản tiếp được không. Đây là rào cản duy nhất có thể đo bằng thí nghiệm, nên nó cũng là rào cản mà một nền văn minh đủ tò mò sẽ lập bản đồ được — và bản đồ đó lập tức trở thành tài liệu chính trị.
+
+#### 9.11.2. Rào cản sinh lý và môi trường
+
+Loài khác nhau cần khí quyển, nhiệt độ, thức ăn, ánh sáng và mật độ mana khác nhau theo `needs_profile` ở §9.7.5. Hệ quả:
+
+- Có những vùng đất mà một loài không thể định cư dù không ai cấm.
+- Có những cặp loài **không bao giờ tranh chấp lãnh thổ** vì không sống chung được, và có những cặp tranh chấp gay gắt vì cần đúng một dải điều kiện.
+- Đi thăm quê hương của nhau có thể cần trang bị, thuốc, hoặc phép duy trì — biến một chuyến thăm ngoại giao thành một hoạt động có chi phí và có rủi ro.
+- Ở quy mô liên-world, đây chính là lý do §6.4 tồn tại.
+
+#### 9.11.3. Rào cản tri giác
+
+Đây là rào cản bị bỏ quên nhiều nhất và thú vị nhất. Các loài có bộ giác quan khác nhau thì **sống trong những thế giới cảm nhận khác nhau**, không chỉ nói ngôn ngữ khác nhau.
+
+Một loài cảm nhận được gradient mana có những khái niệm mà loài không có cơ quan đó không thể hình thành trực tiếp. Dịch ngôn ngữ không đủ, vì có những từ **không có vật quy chiếu** ở phía bên kia. Theo cơ chế truyền dạy ở §13.3, một số node tri thức đơn giản là **không dạy được** qua rào cản này nếu không xây được một khái niệm cầu nối — bằng ẩn dụ, bằng dụng cụ đo, hoặc bằng một phép thuật chia sẻ giác quan.
+
+Điều này khiến hợp tác liên loài trong các `Project` lớn ở §13.5 trở thành một bài toán thật: đội ngũ hỗn hợp mạnh hơn vì nhìn được nhiều mặt của hiện tượng, nhưng trả giá bằng chi phí phối hợp và hiểu lầm — nối thẳng vào §12.15.3.
+
+#### 9.11.4. Rào cản thời gian
+
+Chênh lệch tuổi thọ tạo ra khoảng cách sâu hơn bất kỳ khác biệt văn hóa nào. Sáu hệ quả đều tính ra được từ §9.5.6:
+
+1. **Đổi mới đối lại tích lũy.** Loài sống ngắn thay thế hệ nhanh nên biến đổi văn hóa và di truyền nhanh hơn. Loài sống lâu tích lũy được sự tinh thông cá nhân mà loài kia không bao giờ đạt tới, nhưng xơ cứng. Con người vượt lên không phải vì thông minh hơn elf, mà vì họ **thay thế hệ**.
+2. **Cá nhân là kho lưu trữ.** Một elf ba nghìn tuổi giữ được tri thức mà không thiết chế nào của loài người giữ nổi qua ngần ấy thời gian — và một vụ ám sát có thể xóa sạch một thư viện. Đây là §13.10 nhìn từ phía ngược lại.
+3. **Hợp đồng và hiệp ước lệch nghĩa.** “Hòa ước một trăm năm” là một đời người và là một giấc ngủ ngắn. Nợ, báo thù, kiên nhẫn và cả khái niệm “sớm” đều lệch.
+4. **Chính trị lão trị và tắc nghẽn dịch chuyển.** Nếu người đứng đầu không chết, các đường thăng tiến ở §12.10 đóng lại. Đây là một nguồn xung đột có cấu trúc, và là lý do các xã hội sống lâu thường phải phát minh ra cơ chế thoái vị, lưu đày hoặc ngủ đông.
+5. **Quan hệ liên loài là bi kịch có sẵn.** Một bên nhìn bạn đời già đi và chết trong khi mình vẫn còn trẻ. Không cần viết cốt truyện cho việc này; nó là số học.
+6. **Kéo dài tuổi thọ là chính trị.** Khi một nền văn minh làm được, câu hỏi lập tức thành: ai được dùng. §12.10 và §12.11 xử lý phần còn lại.
+
+Lưu ý phân biệt với §4.5: đây là **tốc độ lão hóa khác nhau trên cùng một đồng hồ**, không phải hai world chạy hai tốc độ thời gian. Hai cơ chế có thể chồng lên nhau, và khi chồng lên thì phải rebase đúng theo clock domain của từng tiến trình.
+
+#### 9.11.5. Rào cản xã hội của loài có cấu trúc khác
+
+Một loài đơn-lưỡng bội có chúa và thợ vô sinh **không vận hành theo cùng vật lý xã hội** với loài lưỡng bội. Lợi ích tiến hóa của một con thợ nằm ở việc bảo vệ bộ gen chung của tổ, không ở việc sinh sản của chính nó.
+
+Hệ quả cho các hệ thống đã có: mô hình hộ gia đình ở §12.9 không áp được; động cơ phạm tội ở §12.5.2 khác hẳn vì chi phí đạo đức được tính trên tổ chứ không trên cá nhân; và `norm_set` của loài khác gần như chắc chắn xếp sai loại hành vi của họ.
+
+Đây cũng là lý do §12.7.3 dùng trục `sapience_level` thay vì một danh sách loài: rào cản đạo đức và pháp lý giữa các loài phải là **dữ liệu của từng nền văn hóa**, không phải một phán quyết cứng của engine.
 
 ## 10. Nhận thức, hành động và LLM
 
@@ -2788,9 +2928,25 @@ senses:
   - vision
   - hearing
   - mana_gradient
+genome:
+  ploidy: 2
+  sex_determination: ZW
+  linkage_groups: 14
+  mutation_rate_per_locus: 2.1e-8
+  magical_loci: [mana_organ, affinity.thermal]
 reproduction:
-  mode: egg
+  mode: oviparous_sexual
+  clutch_size: { distribution: poisson, lambda: 2.4 }
+  offspring_investment: high        # trục nhiều-con-ít-đầu-tư ↔ ít-con-nhiều-đầu-tư
   maturity_years: [18, 25]
+  parental_care_years: 6
+senescence:
+  model: gompertz                   # gompertz | negligible
+  rate: 0.031
+  expected_lifespan_years: 320      # giá trị suy ra, không phải nguồn sự thật
+hybridization:
+  compatibility_matrix: "hybrid:draconic_clade_v2"
+  heterogametic_sex: female         # quy tắc Haldane áp lên giới này
 variation_policy: "variation:sky_drake_v1"
 capability_rules:
   - "flight.sky_drake"
@@ -3164,6 +3320,11 @@ economy_profile:
 52. Kết quả của một trao đổi xã hội do quy tắc volition trên social state quyết định; văn bản do LLM viết chỉ là lớp trình bày.
 53. Storylet chỉ đặt điều kiện thế giới, không bao giờ đặt kết quả; trường `outcomes` luôn rỗng.
 54. Storylet chỉ kích hoạt khi precondition trên state thật được thỏa; không có sự kiện nào không có nguyên nhân sẵn có trong world.
+55. Genome được suy ra deterministic từ genome cha mẹ, seed tái tổ hợp và danh sách đột biến lấy từ named RNG stream; không lưu bộ gen đầy đủ cho từng cá thể.
+56. Khả năng lai và khả năng sinh sản của con lai là thuộc tính của **cặp**, tra từ ma trận tương hợp; ma trận được phép bất đối xứng.
+57. Mọi lần phép thuật vượt rào cản sinh sản đều tạo event có provenance và một giá phải trả đã khai báo; cá thể tạo ra vẫn qua kiểm tra viability §9.6.
+58. Cái chết do tuổi tác đến từ đường cong tử vong, không từ một hằng số tuổi thọ; lão hóa tác động qua effect chứ không ghi thẳng stat.
+59. Rào cản giữa các loài — sinh sản, sinh lý, tri giác, thời gian, cấu trúc xã hội — là năm trục độc lập; không được gộp thành một chỉ số “quan hệ chủng tộc”.
 
 ## 23. Mục tiêu kỹ thuật có thể đo
 
@@ -3201,6 +3362,11 @@ Các con số là mục tiêu baseline để kiểm chứng kiến trúc, có th
 - Một khu định cư bị chặn tri giác xã hội có cơ cấu nghề nghèo hơn khu có chợ, với cùng tài nguyên.
 - Chạy 200 giờ mô phỏng không làm nhân vật lệch khỏi `traits` mà không có event giải thích.
 - Audit view chỉ ra đúng storylet nào đã kích hoạt, vì precondition nào, salience bao nhiêu.
+- Một quần thể 40.000 cá thể lưu genome mà không phình save theo số cá thể.
+- Con lai của hai loài đủ xa nhau thể hiện đúng quy tắc Haldane, và các học giả trong world có thể phát hiện quy luật đó qua nhiều đời.
+- Một quần thể bị tách qua portal trong nhiều thế kỷ, khi gặp lại, cho con lai giảm khả năng sinh sản đo được.
+- Phân bố tuổi của một cộng đồng sống lâu phản ánh đúng mức nguy hiểm trong lịch sử của họ.
+- Đốt tuổi thọ để thi triển phép dịch đúng đường cong tử vong của người thi triển, không trừ một con số.
 
 Không đặt cam kết số lượng “một triệu NPC real-time” trước khi có benchmark. Quy mô thật phải được đo riêng cho entity active, scheduled, dormant và aggregate.
 
@@ -3230,6 +3396,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Body, homeostasis §9.7 với tích phân đóng, inventory, movement, perception và action registry.
 - Effect pipeline §9.8 ở mức cơ bản: đói, lạnh, thương tích, độc, một bệnh truyền nhiễm.
 - Vật phẩm cơ bản: instance/stack, chất lượng, hao mòn, chế tác và sửa chữa theo §8.5–§8.7.
+- Bộ gen nén, phương thức sinh sản và đường cong tử vong theo §9.5.2, §9.5.3, §9.5.6.
 - Chrono-turn timeline, ba pha hành động, reaction và giải quyết đồng thời theo §10.7–§10.9.
 - Hộ gia đình, huyết thống và địa điểm thường nhật §12.9, §12.18.2 — đòn bẩy lớn nhất để NPC trông như đang sống.
 - Khoảng vài chục entity, nhà, nghề, resource, crafting và lịch trình.
@@ -3277,7 +3444,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Năng lực nhà nước, chuỗi ủy quyền, chính danh và đa tầng pháp luật §12.13–§12.14.
 - Hành động tập thể §12.11, quản trị tài nguyên chung §12.12, tôn giáo như thể chế §12.16.
 - Storylet pool và Director chọn theo salience §15.6.
-- Di truyền định lượng §9.5.1 và trật tự chuẩn mực danh tiếng §9.9.4.
+- Di truyền định lượng §9.5.1, lai giống §9.5.4 và trật tự chuẩn mực danh tiếng §9.9.4.
+- Rào cản liên loài §9.11, đặc biệt rào cản tri giác và rào cản thời gian.
 - Tín dụng, bó quyền tài sản, lao động và vận chuyển §12.8.7–§12.8.8, §12.17.
 
 **Điều kiện hoàn thành**:
@@ -3298,6 +3466,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Vật phẩm mang hành vi §8.10: module gắn vật phẩm, cổng sử dụng, NPC tự tạo module, tháo ngược.
 - Clock domain và rebase deadline §4.5; chế độ tiếp xúc và kiểm dịch cổng §6.4.
 - Diễn thế sinh thái và trao đổi liên-world §9.10.
+- Hình thành loài qua cách ly portal và vùng tiếp xúc thứ cấp §9.5.5.
 - World 1, World 2, World 3 và Super Ultra World.
 - Portal state machine, transactional transfer và access control.
 - Soul, summon, ascension và domain authority.
@@ -3363,6 +3532,9 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 | Trôi persona sau nhiều giờ chạy | Nhân vật mất tính nhất quán, mất niềm tin | State là mỏ neo, kế hoạch có chân trời, Auditor báo lệch không có nguyên nhân |
 | NPC hùa theo lời khẳng định tự tin | Cả thành phố tin một điều sai vì một câu nói | Belief chỉ cập nhật qua diễn giải có nguồn và bằng chứng |
 | Director tự nghĩ ra sự kiện mỗi lần | Không audit được, lặp, phi lý | Storylet pool có precondition, salience, ngân sách và cooldown |
+| Lưu genome đầy đủ mỗi cá thể | Save phình theo dân số | Suy ra từ cha mẹ + seed tái tổ hợp + danh sách đột biến |
+| Lai giống quá dễ thành công | Mọi loài trộn lẫn, mất bản sắc | Ma trận tương hợp theo cặp, sụp đổ F2, phép vượt rào phải trả giá |
+| Loài sống lâu thành bất tử tuyệt đối | Mất kịch tính, tắc dịch chuyển xã hội | Lão hóa không đáng kể vẫn chết vì tai nạn, bạo lực, bệnh |
 
 ## 26. Một kịch bản emergent hoàn chỉnh
 
@@ -3399,4 +3571,5 @@ My Open World đạt đúng tầm nhìn khi:
 - Hai người chơi trao đổi worldseed và nhận được cùng một thế giới khởi đầu, kiểm chứng bằng hash.
 - Một thanh kiếm kể được lịch sử của chính nó: ai rèn, qua tay ai, giết ai, ai vá lại — và điều người ta tin về nó lệch ở đâu so với điều đã thật sự xảy ra.
 - Một nhân vật chạy suốt hàng trăm giờ vẫn là chính nó, và mọi lần nó thay đổi đều có một sự kiện đứng đằng sau.
+- Hai chủng tộc sống cạnh nhau vẫn xa lạ theo những cách tính ra được: không sinh con chung được, không sống nổi ở quê nhau, không diễn đạt nổi một khái niệm, và không cùng cảm nhận một trăm năm là dài hay ngắn.
 - True God có toàn quyền nhưng luôn có công cụ preview, giải thích, snapshot và hoàn tác để tự do thử nghiệm.
