@@ -1,2 +1,0 @@
-dòng 1 với `backtick` và "quote"
-dòng 2 → mũi tên §9.7

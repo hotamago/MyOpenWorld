@@ -41,6 +41,12 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Dữ liệu định nghĩa | YAML dành cho authoring, kiểm tra và chỉnh sửa; runtime dùng schema đã biên dịch/ECS |
 | Giao diện | Vue cho UI; PixiJS/WebGL hoặc WebGPU cho bản đồ; không dùng DOM cho từng ô |
 | Kiến trúc đích | Tauri + Vue/PixiJS ở frontend, simulation core chạy ngoài UI thread; Rust là lựa chọn đích cho engine nặng |
+| Số học authoritative | Số nguyên hoặc fixed-point; float chỉ tồn tại ở renderer và số liệu không commit |
+| Phân tầng sinh vật | `Animate` cho mọi sinh vật; `Sapient` mới có cognition contract và ngân sách LLM |
+| Runtime luật | DSL khai báo cho phần lớn; WASM deterministic có fuel cho luật phức tạp; không Lua, không `eval` |
+| Khởi tạo thế giới | Worldseed = seed + generation profile + scenario, biên dịch thành genesis command |
+| Mở rộng | Content pack dữ liệu, behavior module WASM và UI plugin; id có namespace, save ghi pack set |
+| Nội dung nhạy cảm | Mô phỏng đầy đủ ở tầng cơ chế và hậu quả; trình bày ở mức biên niên sử |
 
 ### 2.1. Những điều cố ý không làm
 
@@ -51,6 +57,11 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 - Không biến “điểm công nghệ” thành tiền mua phát minh mà bỏ qua kiến thức, vật liệu, thử nghiệm và hạ tầng.
 - Không tạo sự kiện xã hội bằng cách ép một nhân vật phải phản bội, yêu, ghét hoặc gây chiến. Yuu tạo điều kiện; nhân vật vẫn tự quyết định.
 - Không hứa mô phỏng vật lý cấp phân tử. Độ trung thực được chọn theo tác động gameplay và ngân sách tính toán.
+- Không tick nhu cầu của mọi sinh vật ở mọi tick; giá trị được suy ra bằng tích phân đóng khi cần.
+- Không dùng một thanh “hạnh phúc” hay “đạo đức” duy nhất thay cho tính cách, giá trị và hoàn cảnh.
+- Không đánh dấu một entity là “tội phạm” bằng một cờ toàn tri; tội chỉ tồn tại qua chuẩn mực, phát hiện và chứng cứ.
+- Không sinh nội dung tình dục tường minh. Hệ thống mô phỏng nguyên nhân và hậu quả, không mô tả cảnh.
+- Không cho plugin cộng đồng ghi state authoritative hoặc nới bất biến engine.
 
 ## 3. Trải nghiệm và vòng lặp gameplay
 
@@ -335,6 +346,62 @@ World có bounds dùng checked arithmetic và policy biên khai báo trong profi
 - Migration có thể giữ generator cũ, bake vùng quan trọng hoặc tạo branch/world với profile mới.
 - Mọi stream RNG được đặt tên; thêm một loại cây không được làm thay toàn bộ vị trí quặng.
 
+### 7.6. Worldseed và kịch bản khởi tạo
+
+Một thế giới không chỉ cần địa hình. Nó cần biết bắt đầu với quốc gia nào, thế lực nào, dân số bao nhiêu, loài nào ở đâu, đã biết những gì và ghét nhau vì chuyện gì. Mục này định nghĩa nơi quản lý toàn bộ điều kiện ban đầu đó.
+
+#### 7.6.1. Ba lớp phải tách bạch
+
+| Lớp | Trả lời câu hỏi | Ví dụ |
+|---|---|---|
+| `seed` | Nhiễu ngẫu nhiên nào | `"9f5c..."` |
+| `generation_profile` | Vật lý và địa hình ra sao | `gaia-earthlike`, topology, mực biển, cường độ mana |
+| `scenario` | Văn minh khởi đầu thế nào | Quốc gia, thế lực, dân số, trình độ công nghệ, thù hằn có sẵn |
+
+**Worldseed** là gói đóng cả ba lại cùng metadata, và là **đơn vị chia sẻ được**. Người chơi trao đổi worldseed giống như trao đổi map: cùng một worldseed cộng cùng version engine và cùng bộ plugin thì cho ra cùng thế giới khởi đầu, kiểm chứng bằng hash.
+
+Tách ba lớp cho phép ghép chéo: cùng một địa hình Gaia có thể chạy kịch bản “bình minh của nông nghiệp” hoặc “tàn tích sau đại chiến pháp thuật”, và cùng một kịch bản chính trị có thể thả lên nhiều địa hình khác nhau.
+
+#### 7.6.2. Genesis là một chuỗi command, không phải một khối state
+
+Đây là ràng buộc quyết định tính đúng đắn của cả hệ thống. Scenario **không được ghi thẳng state vào save**. Nó được biên dịch thành một chuỗi transaction commit tại `divine_tick = 0` với `provenance.kind = genesis`, đi qua đúng validator, đúng action registry và đúng law như mọi thay đổi khác.
+
+Ba hệ quả:
+
+- Invariant §22.1 và §22.9 giữ nguyên. Khởi tạo thế giới replay được như mọi đoạn lịch sử khác.
+- Một scenario không thể tạo ra thứ mà luật của world cấm. Nếu nó thử, lỗi lộ ra ngay lúc biên dịch chứ không phải sau 200 giờ chơi.
+- Timeline ở §18.3 hiển thị được cả phần khởi tạo. Người chơi truy ngược được “vì sao hai nước này thù nhau” tới tận event gốc, kể cả khi event gốc là do scenario đặt.
+
+#### 7.6.3. Trình độ công nghệ không phải một con số
+
+“Bắt đầu ở thời trung cổ” không được cài bằng `tech_level: 3`. Nó phải được diễn giải thành trạng thái nhất quán trên bốn mặt:
+
+1. **Tri thức**: node nào trong knowledge graph §13.1, ai biết, ở mức nào theo thang §13.2, và ai giữ bí mật.
+2. **Hạ tầng**: lò rèn, cối xay, cảng, thư viện, mạng đường, tháp mana đã tồn tại trên bản đồ.
+3. **Vật chất**: kho, công cụ, giống cây trồng, gia súc, quặng đã khai thác.
+4. **Con người**: có bao nhiêu thợ, bao nhiêu học giả, bao nhiêu người biết đọc.
+
+Validator coherence phải bắt các tổ hợp vô lý trước khi commit: cấp node “luyện thép” cho một quốc gia không có mỏ sắt, không có lò và không có thợ thì nền văn minh đó sụp trong vài mùa. Đây là kiểm tra cùng loại với viability check của loài ở §9.6, và Yuu phải báo rủi ro trước khi True God duyệt.
+
+#### 7.6.4. Tiền sử tùy chọn
+
+Scenario có thể khai báo một giai đoạn **tiền sử** chạy trước khi người chơi vào: N năm mô phỏng ở mức aggregate của §8.3, không gọi LLM.
+
+Kết quả không phải văn bản viết tay mà là dữ liệu thật: event log tổng hợp, biên giới đã dịch chuyển, chiến tranh đã xảy ra, dòng họ đã phân nhánh, tàn tích ở đúng nơi từng có thành phố, thù hằn có nguyên nhân truy ngược được, và huyền thoại đã sai lệch so với sự kiện gốc theo cơ chế truyền miệng ở §12.3.
+
+Tiền sử là cách rẻ nhất để có một thế giới “đã sống” ngay từ giờ đầu tiên mà không vi phạm §22.17 — mọi thứ trong biên niên sử đều có event thật đằng sau.
+
+#### 7.6.5. Seed Vault
+
+Nơi quản lý worldseed trong UI, đặt cạnh Multiverse view ở §18.3:
+
+- Duyệt, tìm và gắn thẻ worldseed đã có, kể cả worldseed do cộng đồng chia sẻ.
+- Preview trước khi tạo: bản đồ thu nhỏ, danh sách thế lực, cây quan hệ ngoại giao, phân bố loài, báo cáo rủi ro của Yuu.
+- Fork một worldseed để sửa rồi lưu thành bản mới, giữ nguyên quan hệ cha–con.
+- Diff hai worldseed ở mức dữ liệu, không phải mức văn bản.
+- Ghi rõ worldseed cần plugin nào và version nào theo §19.7; thiếu thì báo trước khi tạo, không lỗi giữa chừng.
+- Xuất/nhập dưới dạng một thư mục hoặc một file nén, có checksum.
+
 ## 8. Vật chất, vật lý và môi trường
 
 ### 8.1. Dữ liệu cell
@@ -373,6 +440,8 @@ Mỗi vật liệu có các thuộc tính có đơn vị hoặc giá trị chu�
 | Thời tiết | Trường cục bộ | Region model | Climate trend |
 | Sinh thái | Cá thể quan trọng | Quần thể theo loài | Carrying-capacity model |
 | Chiến đấu | Hit/body part/effect | Encounter resolution | Campaign/casualty model |
+| Dịch bệnh | Cá thể: ủ bệnh, tải mầm, lây theo tiếp xúc | Ngăn S/E/I/R theo khu định cư | Tỉ lệ mắc/tử vong và dòng di cư |
+| Tội phạm và thực thi | Hành vi, nhân chứng, chứng cứ theo cá thể | Tỉ lệ phát hiện và xử án theo khu vực | Chỉ số trật tự, quyền lực ngầm, thiệt hại kinh tế |
 
 Mọi chuyển cấp độ phải giữ các đại lượng quan trọng: dân số, tài nguyên, thương vong, công trình, quan hệ, tri thức và event lịch sử.
 
@@ -389,25 +458,46 @@ Mọi chuyển cấp độ phải giữ các đại lượng quan trọng: dân 
 
 ### 9.1. Mô hình component
 
-Mọi entity mang tag `Intelligent` bắt buộc phải resolve được một **cognition contract** hoàn chỉnh:
+Sinh vật được phân theo hai tag chồng nhau, không phải một mức duy nhất:
+
+- **`Animate`**: có cơ thể, nhu cầu, tri giác và behavior controller. Côn trùng, cá, sói, gia súc và phần lớn quái vật dừng ở đây. Chúng đói thật, bệnh thật, chết thật và tham gia sinh thái thật, nhưng không có persona, không có memory namespace và không bao giờ chiếm ngân sách LLM.
+- **`Sapient`**: là `Animate` cộng thêm **cognition contract** hoàn chỉnh. Chỉ tag này mới nhập vai bằng LLM, mới chịu trách nhiệm trước pháp luật ở §12.5 và mới được coi là một bên có thể ưng thuận ở §12.7.2.
+
+Tách hai tầng này là quyết định hiệu năng lẫn quyết định thiết kế. Gộp làm một nghĩa là mỗi con chuột cũng cần persona version, RAG namespace và fallback policy — chi phí nổ tung mà không đổi lại điều gì.
+
+`sapience_level` là thuộc tính của species template chứ không phải công tắc bật/tắt tùy tiện:
+
+```text
+nonsentient → sentient → sapient → transcendent
+```
+
+Nó quyết định chi phí nhận thức, tư cách pháp lý và ranh giới taboo giữa các loài. Nâng mức này cho một cá thể là một sự kiện có provenance, không phải một field chỉnh tay.
+
+Component của mọi `Animate`:
 
 - `Identity`: tên, tuổi, đại từ, culture, entity/soul lineage.
 - `Transform`: world, vị trí, hướng, footprint.
 - `Body`: anatomy, body parts, vật liệu mô, khối lượng, thương tích.
 - `Genotype` và `Phenotype`: di truyền, biến dị và biểu hiện do môi trường.
-- `Needs`: oxy, nhiệt, đói, khát, ngủ, an toàn, gắn kết, địa vị tùy loài.
+- `Homeostasis`: toàn bộ nhu cầu sinh lý và tâm lý theo §9.7; thay cho `Needs` dạng danh sách phẳng.
+- `Perception`: giác quan, tầm, ngưỡng và trạng thái suy giảm; là nguồn duy nhất của observation ở §10.2.
 - `Capability`: đi, bơi, bay, cầm nắm, nói, nhìn trong tối, cast spell; phần lớn là thuộc tính suy ra.
-- `Mind`: tính cách, cảm xúc, mục tiêu, attention, risk tolerance.
-- `Skill`: mức thành thạo có domain và decay rule.
+- `Skill`: mức thành thạo có domain và decay rule theo §9.3.
+- `EffectSet`: mọi effect đang tác động theo §9.8; thay cho `StatusEffect`.
+- `Relationship`: cảm xúc, niềm tin, nghĩa vụ, nợ, huyết thống; loài không sapient dùng dạng rút gọn cho bầy đàn.
+- `Inventory`, `Equipment` nếu loài có khả năng cầm nắm hoặc mang vác.
+- `BehaviorController`.
+
+Component chỉ `Sapient` mới có:
+
+- `Personality`: năm lớp trait/values/affective/clinical/self-narrative theo §9.9.
 - `Knowledge`: khái niệm, công thức, spell, ngôn ngữ và mức tin cậy.
-- `Relationship`: cảm xúc, niềm tin, nghĩa vụ, nợ, huyết thống.
 - `Affiliation`: gia đình, guild, tôn giáo, quốc gia.
-- `Inventory`, `Equipment`, `StatusEffect`.
-- `BehaviorController` và `CognitionSchedule`.
+- `CognitionSchedule`.
 - `CognitionProfile`: persona/prompt version, LLM eligibility/routing, fallback policy và danh sách field LLM được phép đề xuất thay đổi.
 - `MemoryNamespace`: namespace RAG riêng, branch scope, ACL và retrieval profile.
 
-Khi một cá thể thông minh sinh ra, engine materialize state đã validate và luôn có thể export/inspect thành YAML. Runtime giữ dữ liệu trong schema đã biên dịch/ECS, không parse một file YAML riêng ở mỗi tick. Thiếu bất kỳ phần bắt buộc nào làm creation/migration thất bại; engine không âm thầm biến entity thành “thông minh nhưng không có trí nhớ”. `Intelligent` mặc định bắt buộc có `llm.eligible: true`; scheduler có thể hoãn request nhưng không xóa khả năng nhập vai. Chỉ một override được True God ghi log mới có thể tắt eligibility.
+Khi một cá thể `Sapient` sinh ra, engine materialize state đã validate và luôn có thể export/inspect thành YAML. Runtime giữ dữ liệu trong schema đã biên dịch/ECS, không parse một file YAML riêng ở mỗi tick. Thiếu bất kỳ phần bắt buộc nào làm creation/migration thất bại; engine không âm thầm biến entity thành “thông minh nhưng không có trí nhớ”. `Sapient` mặc định bắt buộc có `llm.eligible: true`; scheduler có thể hoãn request nhưng không xóa khả năng nhập vai. Chỉ một override được True God ghi log mới có thể tắt eligibility.
 
 LLM nhập vai qua cognition cycle của chính entity. Nó chỉ được đề xuất sửa field trong `mutable_by_cognition`, chẳng hạn ưu tiên mục tiêu, self-narrative hoặc thói quen đã học. Mọi thay đổi vẫn qua validator và event; health, anatomy, skill, inventory và capability chỉ đổi qua hành động/law tương ứng.
 
@@ -464,6 +554,209 @@ Quy trình bắt buộc:
 5. Yuu báo rủi ro: tuyệt chủng, bùng nổ dân số, không đủ thức ăn, quá mạnh hoặc phá cân bằng mana.
 6. True God duyệt và chọn vị trí/điều kiện đưa vào world.
 7. Mọi cá thể nhận variation theo distribution và constraint; không random độc lập khiến cơ thể vô lý.
+
+### 9.7. Nhu cầu sinh tồn và homeostasis
+
+Nhu cầu không phải một danh sách thanh trạng thái để trang trí UI. Nó là nguồn động cơ đầu tiên của mọi hành vi, kể cả hành vi phạm pháp ở §12.5.
+
+#### 9.7.1. Hai lớp biến
+
+**Lớp sinh lý** — tích lũy hoặc cạn theo thời gian, có đơn vị vật lý:
+
+| Biến | Đơn vị | Ghi chú |
+|---|---|---|
+| `energy` | kcal | Cạn theo hoạt động, lạnh, mang thai, thương tích |
+| `hydration` | mL | Cạn nhanh hơn khi nóng, sốt, mất máu |
+| `oxygen` | % bão hòa | Phụ thuộc khí quyển tại ô đang đứng và anatomy |
+| `core_temp` | mK | Không phải “ấm/lạnh”; là kết quả trao đổi nhiệt với môi trường |
+| `sleep_pressure` | chuẩn hóa | Tăng khi thức, giảm khi ngủ; ảnh hưởng `focus` và tai nạn lao động |
+| `bladder`, `bowel` | mL | Tùy loài; ảnh hưởng vệ sinh và chuẩn mực xã hội |
+| `hygiene_load` | đơn vị bẩn | Tăng theo lao động, máu, xác, nước thải; đầu vào của bệnh truyền nhiễm |
+| `blood_volume` | mL | Mất máu là biến độc lập, không phải một phần của “HP” |
+| `pain` | chuẩn hóa | Tổng hợp từ thương tích body part; giảm bởi thuốc hoặc phép |
+| `toxin_load` | mg theo loại | Rượu, chất gây nghiện, nọc độc, kim loại nặng |
+| `nutrient_vector` | vector | Đạm, béo, vi chất; thiếu dài hạn gây bệnh thiếu chất, khác với đói |
+| `mana_reserve` | mMU | Chỉ tồn tại nếu species và magic profile của world cho phép |
+
+**Lớp tâm lý** — không có đơn vị vật lý nhưng có động học rõ ràng:
+
+`stress`, `mood(valence, arousal)`, `sanity` (minh mẫn, mạch lạc nhận thức), `morale`, `focus`, `trauma_load`, `craving`, `belonging`, `esteem`, `boredom`, `meaning`.
+
+Không tồn tại một thanh “hạnh phúc” tổng. UI có thể hiển thị một chỉ số tổng hợp, nhưng nó là giá trị suy ra giống `vitality` ở §9.4, không phải nguồn sự thật.
+
+#### 9.7.2. Không tick nhu cầu theo từng entity
+
+Đây là quyết định hiệu năng quyết định quy mô của toàn dự án. Mỗi need lưu:
+
+```text
+(value_at_tick, last_update_tick, rate_terms)
+```
+
+Giá trị hiện tại được suy ra bằng **tích phân đóng** khi có ai đọc, và scheduler chỉ đặt wake-up tại thời điểm chạm ngưỡng kế tiếp, đúng mô hình event/deadline ở §8.4. Một đàn 40.000 con cá không tốn 40.000 phép cộng mỗi tick; chúng chỉ thức dậy khi đói tới ngưỡng, khi bị săn hoặc khi môi trường đổi.
+
+Khi `rate_terms` đổi — trời trở lạnh, entity bắt đầu chạy, bị thương — engine chốt giá trị tại tick đó rồi mở một đoạn tích phân mới. Mọi phép tính dùng số nguyên hoặc fixed-point theo §19.6.
+
+#### 9.7.3. Nhu cầu sinh động cơ, không sinh hành vi
+
+```text
+need value → drive (đường cong phi tuyến) → trọng số utility AI → lựa chọn hành động
+```
+
+Đường cong phi tuyến là điểm mấu chốt. Đói 40% gần như không ảnh hưởng quyết định; đói 90% lấn át gần hết mục tiêu khác, hạ ngưỡng chấp nhận rủi ro và **mở khóa những hành vi vốn bị chuẩn mực chặn lại**: trộm bánh mì, cướp kho, ăn thịt đồng loại, bán con. Đây chính là đầu vào “động cơ” của pipeline tội phạm ở §12.5. Không cần một hệ thống riêng để sinh ra tội phạm vì đói; nó rơi ra từ đây.
+
+Với `Sapient`, drive không quyết định trực tiếp mà đi vào prompt như một áp lực có thật; LLM vẫn phải chọn hành động trong action registry ở §10.5.
+
+#### 9.7.4. Định nghĩa một need
+
+```yaml
+schema: need/v1
+id: need.hunger
+unit: kcal
+capacity: 2400
+drain:
+  base_per_hour: 95
+  modifiers: [activity_level, ambient_cold, pregnancy, injury, disease.metabolic]
+stages:
+  - { below: 0.60, effect: null }
+  - { below: 0.35, effect: effect.hungry }        # -focus, +craving, +drive
+  - { below: 0.15, effect: effect.starving }      # -stamina_max, -immunity, teo cơ
+  - { below: 0.02, effect: effect.organ_failure } # tử vong có tiến trình, không tức thì
+drive_curve: { type: power, exponent: 3.2 }
+restored_by: [action.eat, effect.nutrient_infusion]
+species_override: species/*/metabolism
+```
+
+Mọi ngưỡng tham chiếu tới một effect ở §9.8 thay vì viết thẳng vào stat. Nhờ vậy “đói kéo dài làm suy giảm miễn dịch làm dễ mắc bệnh” là một chuỗi nhân quả thật, có thể truy ngược, chứ không phải một hằng số nhét trong hàm tính bệnh.
+
+#### 9.7.5. Nhu cầu là thuộc tính của loài
+
+Species template quyết định need nào tồn tại và với tham số nào. Undead không có `energy`/`hydration` nhưng có `decay_rate`. Elemental không có `oxygen`. Sky Drake ở §21.2 lấy năng lượng từ cả thức ăn lẫn mana nên có cả `energy` lẫn `mana_reserve` cùng ràng buộc chuyển đổi giữa hai nguồn.
+
+Validator viability ở §9.6 phải kiểm tra thêm một điều kiện: mọi need đều có ít nhất một nguồn hồi phục khả thi trong môi trường dự kiến. Không có nó, loài mới tuyệt chủng ngay thế hệ đầu và Yuu phải báo lỗi trước khi True God duyệt.
+
+### 9.8. Hệ thống Effect thống nhất
+
+Bệnh tật, phép thuật, lá chắn, chúc phúc, nguyền rủa, độc, nghiện, sang chấn, thời tiết cực đoan, cấm vận kinh tế đều dùng **một model duy nhất**. Chỉ khi có model chung mới bảo đảm được tính đối xứng của counterplay: thứ gì áp được thì phải có đường gỡ, đường kháng và đường phát hiện.
+
+#### 9.8.1. Dữ liệu một effect
+
+```yaml
+schema: effect/v1
+id: effect.disease.grey_lung
+category: disease
+# entity | body_part | cell | region | item | organization | knowledge_node
+target_kind: body_part
+magnitude: { value: 340, unit: milli }
+duration:
+  model: progressive
+  stages:
+    - { after_hours: 0,   name: incubation,  contagious: false, perceptible: false }
+    - { after_hours: 60,  name: symptomatic, contagious: true }
+    - { after_hours: 300, name: resolution,  outcome: [recover_with_immunity, chronic, death] }
+stacking: { policy: refresh_max, dedup_key: [source_kind, def_id] }
+modifies:
+  - { attr: derived.stamina_max,        layer: mult, value: -0.25 }
+  - { attr: derived.sanity_drain,       layer: add,  value: +12 }
+  - { attr: derived.contagion_emission, layer: add,  value: +0.40 }
+resist_by: [body.constitution, immunity_memory.grey_lung, effect.ward.purity]
+dispel:
+  class: [medicine.tier2, magic.cleanse]
+  difficulty: 0.7
+perceptible_as:
+  - { sense: sight,     cue: "ho ra máu", requires_knowledge: null }
+  - { sense: diagnosis, cue: "grey_lung", requires_knowledge: knowledge.medicine.lung }
+provenance: { kind: pathogen, source_entity: ..., source_event: ... }
+```
+
+#### 9.8.2. Bốn quy tắc bắt buộc
+
+1. **Effect chỉ đẩy modifier, không bao giờ ghi base stat.** Nó tham gia vào pipeline tính thuộc tính suy ra ở §9.2. Nhờ vậy gỡ effect luôn trả về đúng trạng thái cũ, và không có stat nào trôi dần sau vài trăm lần buff/debuff.
+2. **Thứ tự áp dụng phải ổn định.** Sắp theo `(layer, source_kind, def_id, effect_id)` rồi mới cộng, nhân, clamp. Thứ tự phụ thuộc thời điểm áp sẽ phá state hash ở §22.
+3. **Bảo vệ là interceptor, không phải effect cộng máu.** Xem §9.8.3.
+4. **`perceptible_as` là bắt buộc.** Thiếu nó thì mọi nhân vật tự động biết mình bị nguyền và mọi thầy lang chẩn đúng bệnh, phá thẳng nguyên tắc tri thức cục bộ ở §10.2. Có nó thì chẩn sai, lang băm, dịch lan vì không ai nhận ra kịp, và “thầy tu phát hiện lời nguyền mà dân thường không thấy” đều là kết quả tự nhiên.
+
+#### 9.8.3. Đường giải quyết một đề xuất effect
+
+```text
+EffectProposal
+  → ward/shield chain     (có thể hủy hẳn đề xuất, tiêu hao ward, để lại dấu vết)
+  → vật liệu/giáp/anatomy (giảm, đổi vị trí, đổi loại thương tích)
+  → kháng nội tại         (constitution, miễn dịch, kháng phép, domain đối kháng)
+  → Effect đã áp
+  → reaction              (đau, ngã, hoảng loạn, phản đòn, kêu cứu)
+```
+
+Ward chặn ở bước đầu tiên, nên “chặn hoàn toàn” là kết quả có thật chứ không phải trừ về 0 sát thương. Mỗi bước ghi lại dấu vết để §13.6 có thứ để điều tra: ward loại nào đã kích hoạt, domain nào áp đảo domain nào, ai đứng ở đâu khi nó xảy ra.
+
+#### 9.8.4. Chính sách chồng effect
+
+| Policy | Hành vi | Ví dụ |
+|---|---|---|
+| `replace` | Nguồn mới thay nguồn cũ cùng `dedup_key` | Lá chắn cùng loại |
+| `refresh_max` | Giữ magnitude lớn nhất, làm mới thời hạn | Bệnh, chúc phúc |
+| `stack_count` | Cộng số lớp, có trần | Độc, chảy máu |
+| `independent` | Mỗi nguồn là một effect riêng | Thương tích ở các body part khác nhau |
+| `exclusive_group` | Chỉ một effect trong nhóm tồn tại | Trạng thái thân nhiệt |
+
+#### 9.8.5. Bệnh và dịch
+
+Bệnh là effect cộng thêm một tầng dịch tễ. Mầm bệnh có `transmission` (tiếp xúc, giọt bắn, nước, vector côn trùng, mana), `incubation`, `contagious_window`, `mutation_rate`; entity sống sót lưu `immunity_memory`.
+
+Ở vùng active mô phỏng theo cá thể; vùng gần dùng ngăn S/E/I/R theo khu định cư; vùng xa chỉ giữ tỉ lệ mắc, tỉ lệ tử vong và dòng di cư, đúng bảng LOD ở §8.3.
+
+`hygiene_load` ở §9.7 và mật độ dân cư là đầu vào thật của xác suất lây. Nhờ vậy chuỗi “thành phố đông đúc → chiến tranh → nạn đói → dịch bệnh” là quan hệ nhân quả có thể truy ngược, không phải một event ngẫu nhiên được rắc vào.
+
+#### 9.8.6. Nghiện, sang chấn và effect ngoài entity
+
+Dùng lại đúng model, không viết hệ thống riêng:
+
+- **Nghiện**: `tolerance` giảm magnitude theo liều tích lũy, `dependence` tạo effect nền âm khi thiếu, `withdrawal` là effect có tiến trình, `craving` đẩy thẳng vào drive ở §9.7.3.
+- **Sang chấn**: effect dài hạn có trigger theo bối cảnh, ảnh hưởng `sanity`, `focus` và ngưỡng phản ứng; giảm dần theo thời gian, hỗ trợ xã hội và trị liệu, không tự biến mất sau một đêm.
+- **`cell`**: đang cháy, đất nhiễm độc, đất bị nguyền, dấu ấn nghi thức.
+- **`region`**: mất mùa, hạn mana, khí hậu bất thường, ổ dịch.
+- **`organization`**: cấm vận, hoảng loạn tài chính, mất chính danh, bị vạ tuyệt thông.
+- **`item`**: hao mòn, phù phép, bị đánh dấu để truy vết.
+- **`knowledge_node`**: bị coi là dị giáo, bị cấm dạy, bị kiểm duyệt.
+
+Một model, bảy phạm vi tác động. Không cần “hệ thống cấm vận” hay “hệ thống dị giáo” riêng.
+
+### 9.9. Tính cách, giá trị và danh tiếng
+
+Bốn con số tính cách không đủ để sinh ra một kẻ phản bội đáng tin. Tách thành năm lớp có tốc độ thay đổi khác nhau:
+
+| Lớp | Nội dung | Tốc độ đổi | Cái gì đổi được nó |
+|---|---|---|---|
+| `traits` | ~16 facet mở rộng từ Big Five, cộng trục tối: `callousness`, `impulsivity`, `grandiosity`, `sadism`, `honesty_humility` | Gần như cố định | Sự kiện cực đoan, biến đổi cơ thể hoặc linh hồn |
+| `values` | Ưu tiên sống: an toàn, quyền lực, truyền thống, nhân từ, tự chủ, khoái lạc | Chậm | Văn hóa, giáo dục, sang chấn, cải đạo |
+| `affective` | mood, cảm xúc hiện tại, stress | Nhanh | Sự kiện và need |
+| `clinical` | trauma, nghiện, rối loạn, tổn thương thần kinh | Theo sự kiện | Effect ở §9.8 |
+| `self_narrative` | Cách cá thể tự hiểu chính mình | Hiếm | LLM qua reflection, nằm trong `mutable_by_cognition` |
+
+#### 9.9.1. Lấy mẫu có tương quan
+
+Trait không được random độc lập. Yuu dùng ma trận tương quan theo loài và văn hóa (§15.2), cộng ảnh hưởng của hoàn cảnh gia đình và cơ hội giáo dục. `impulsivity` cao đi cùng `conscientiousness` thấp ở người trẻ là một tổ hợp có thật; `sadism` cao ở 30% dân số thì không, và distribution phải phản ánh điều đó.
+
+#### 9.9.2. Trait phải có tác dụng cơ học
+
+Trait tác động qua đúng hai đường, không có đường thứ ba:
+
+1. **Trọng số utility AI**: `risk_tolerance` đổi ngưỡng chấp nhận nguy hiểm; `empathy` và `honesty_humility` đổi chi phí đạo đức của hành vi gây hại ở §12.5.
+2. **Prompt của cognition cycle**: trait và values vào context như ràng buộc nhập vai.
+
+Trait không tự cộng vào sát thương và không tự đổi kết quả thuyết phục. Một kẻ `charisma` cao vẫn phải nói ra câu thuyết phục, và người nghe vẫn diễn giải theo ngôn ngữ, quan hệ và bằng chứng như §10.6 đã quy định.
+
+#### 9.9.3. Danh tiếng khác tính cách thật
+
+Đây là cơ chế đáng giá nhất của mục này. Không entity nào đọc được `traits` của entity khác. Mỗi cá thể chỉ giữ một **belief** về tính cách người khác, suy ra từ hành vi đã quan sát, từ tin đồn và từ định kiến văn hóa.
+
+Hệ quả rơi ra tự nhiên, không cần hệ thống riêng cho từng thứ:
+
+- **Đạo đức giả**: `callousness` cao nhưng reputation tốt, vì mọi hành vi gây hại đều xảy ra ngoài tầm quan sát của người khác.
+- **Án oan xã hội**: reputation xấu hình thành từ một sự kiện bị diễn giải sai và không ai có động cơ kiểm chứng lại.
+- **Thao túng**: chủ động tạo ra hành vi quan sát được nhằm định hình belief của người khác về mình.
+- **Vỡ mặt nạ**: một nhân chứng bất ngờ tạo observation mâu thuẫn với reputation; belief của cả cộng đồng cập nhật theo mức tin cậy của nhân chứng đó.
+
+Reputation là dữ liệu theo bộ ba `(người quan sát, người bị quan sát, khía cạnh)`, có confidence và provenance, lưu trong `Relationship` và trong knowledge base của tổ chức. Nó không bao giờ là một con số toàn cục.
 
 ## 10. Nhận thức, hành động và LLM
 
@@ -644,6 +937,154 @@ Cá thể có mức đồng thuận riêng với culture; không phải mọi el
 - Tin tức lan theo người đưa tin, thư tín, mạng phép hoặc công nghệ. Quyết định có thể dựa trên tin cũ/sai.
 - Hòa bình có treaty thực thi được, con tin, thương mại, giám sát hoặc bảo chứng; một biến `at_war=false` là chưa đủ.
 
+### 12.5. Chuẩn mực, tội phạm, chứng cứ và thực thi
+
+§4.2 đặt social law thành một tầng riêng và §12.4 nói đúng rằng tham nhũng phải phát sinh chứ không phải cộng điểm. Mục này bổ sung bộ máy còn thiếu để điều đó chạy được.
+
+#### 12.5.1. Không có cờ “tội phạm” toàn tri
+
+Tội không phải thuộc tính của hành động. Nó là **quan hệ giữa một hành động và một bộ chuẩn mực đang có hiệu lực tại nơi hành động xảy ra**. Cùng một việc có thể hợp pháp ở nước này và tử hình ở nước bên cạnh.
+
+```yaml
+schema: norm_set/v1
+id: nation.veskar.criminal_code.v3
+scope:
+  jurisdiction: organization:nation.veskar
+  applies_to: [sapient]
+  territorial: true          # hay theo thành viên, theo huyết thống, theo tôn giáo
+rules:
+  - act: theft
+    context: { value_above: 50, victim_class: any }
+    sanction: { type: corporal, severity: 0.4 }
+    proof_required: [witness_count >= 2, physical_evidence, truth_spell]
+    proof_mode: any_of
+  - act: unlicensed_magic
+    sanction: { type: capital }            # nước láng giềng không có điều luật này
+  - act: usury
+    sanction: { type: fine, multiplier: 3 }
+    enforced_against: [commoner]           # luật áp dụng không đều là chuyện thường
+enforcement:
+  agency: organization:veskar.city_watch
+  coverage_by_district: { core: 0.8, docks: 0.25, outskirts: 0.05 }
+  corruption_pressure: derived
+```
+
+`coverage_by_district` và `enforced_against` là nơi bất công sinh ra một cách có cấu trúc: cùng một tội, ở bến cảng gần như không bị phát hiện, và người thường bị xử nặng hơn quý tộc.
+
+#### 12.5.2. Đường đi của một tội
+
+```text
+Nhu cầu/dục vọng thiếu hụt (§9.7.3)
+  + cơ hội          (tri giác của người khác: ai đang nhìn, trời có tối không)
+  + năng lực        (skill, sức mạnh, công cụ, phép)
+  + rủi ro ước lượng theo BELIEF về lực lượng cưỡng chế, không theo con số thật
+  + chi phí đạo đức (traits × values × mức gắn bó với nạn nhân, §9.9.2)
+→ ý định → hành động → nhân chứng cảm nhận (có thể không thấy, có thể thấy sai)
+→ chứng cứ → nghi ngờ → điều tra → buộc tội → xét xử → phán quyết
+→ hình phạt → hệ quả (kỳ thị, lưu đày, tù, thù truyền đời, tái phạm)
+```
+
+Vì bước phát hiện đi qua đúng hệ tri giác ở §10.2, những thứ sau **rơi ra miễn phí** thay vì phải viết riêng: ngoại phạm, vu khống, án oan, phi tang, mua chuộc nhân chứng, tội phạm hoàn hảo, và cả trường hợp cả làng đều biết nhưng không ai dám làm chứng.
+
+Điểm quan trọng nhất: kẻ phạm tội ước lượng rủi ro bằng **belief về mức giám sát**, không bằng `coverage_by_district` thật. Một chính quyền chỉ cần *làm cho người ta tin* rằng mình giám sát chặt là đã giảm được tội phạm, và ngược lại, một đợt tuyên truyền sai có thể tạo ra làn sóng phạm tội mà chính quyền không hiểu vì sao.
+
+#### 12.5.3. Chứng cứ và xét xử
+
+Chứng cứ là dữ liệu thật trong world, có thời hạn tồn tại và có thể bị phá hủy:
+
+- **Vật chứng**: vật phẩm, dấu vết trên `cell`, thương tích trên body part, dấu vết phép ở §9.8.3.
+- **Nhân chứng**: là belief của một entity, kèm confidence và động cơ khai báo. Có thể sai thật lòng, có thể nói dối.
+- **Văn bản**: sổ sách, hợp đồng, thư từ; có thể giả mạo nếu ai đó đủ skill.
+- **Phép truy vấn sự thật**: là một spell trong knowledge graph, nên nó có điều kiện, chi phí, tỉ lệ thất bại và **có counter**. Nền văn minh nào phát triển được nó thì tư pháp đổi hẳn bản chất, và giới quyền lực sẽ nghiên cứu cách chống lại nó.
+
+Thủ tục xét xử là dữ liệu của tổ chức, không hard-code: xử theo bằng chứng, theo lời thề, theo đấu thần thánh, theo tra tấn, theo bói toán hay theo hội đồng trưởng lão. Thủ tục nào thì cũng chỉ ra một phán quyết, và phán quyết có thể sai so với ground truth. Sự lệch giữa hai thứ đó chính là chất liệu cho lịch sử.
+
+#### 12.5.4. Hình phạt và hệ quả
+
+Hình phạt sinh ra effect ở §9.8 chứ không phải một dòng chữ trên hồ sơ: thương tật vĩnh viễn, effect `stigma` trên quan hệ xã hội, mất quyền thừa kế, mất tư cách thành viên tổ chức, nợ, lưu đày (đổi `Affiliation` và mất mạng lưới quan hệ), lao dịch, tử hình.
+
+Tái phạm là kết quả tự nhiên chứ không phải tham số: người bị kỳ thị mất cơ hội việc làm hợp pháp, `energy` cạn, `belonging` cạn, và pipeline ở §12.5.2 lại chạy tiếp với chi phí đạo đức đã thấp hơn. Thù truyền đời hình thành khi thân nhân nạn nhân giữ `grievance` trong `Relationship` và truyền nó qua thế hệ bằng cơ chế dạy và kể ở §13.3.
+
+### 12.6. Tổ chức tội phạm, tệ nạn và nghiện
+
+#### 12.6.1. Băng đảng chỉ là organization với charter bất hợp pháp
+
+Không cần loại entity mới. Dùng `organization` ở §12.1, thêm vài trường:
+
+- Lãnh thổ kiểm soát và tranh chấp ranh giới với băng khác.
+- Nguồn thu: bảo kê, buôn lậu, trộm cắp có tổ chức, cho vay nặng lãi, buôn người, đánh bạc.
+- Tuyển mộ từ nhóm dân cư có `belonging` thấp và cơ hội hợp pháp thấp — tức là tuyển từ chính hệ quả của §12.5.4.
+- Luật nội bộ và cưỡng chế: im lặng, trừng phạt kẻ chỉ điểm, nghi thức gia nhập.
+- **Cạnh hối lộ nối sang tổ chức hợp pháp**: một quan chức có quyền quyết định tùy nghi cộng với giám sát yếu là điều kiện đủ, đúng như §12.4 đã mô tả.
+- Rửa tiền: chuyển claim bất hợp pháp thành tài sản có nguồn gốc giải trình được.
+
+Chợ đen không cần hệ thống riêng. Nó là thị trường ở §12.2 cộng thêm phần bù rủi ro, xác suất bị bắt giữ hàng và giá phụ thuộc mức truy quét.
+
+#### 12.6.2. Chất gây nghiện và cờ bạc
+
+`substance` là item có dược lý, ánh xạ thẳng vào §9.8.6: liều, thời gian tác dụng, `tolerance`, `dependence`, `withdrawal`, độc tính tích lũy vào `toxin_load`. Cờ bạc dùng cùng khung: phần thưởng biến thiên tạo `craving` mà không cần chất.
+
+#### 12.6.3. Vòng phản hồi tự đóng
+
+```text
+stress / tuyệt vọng / buồn chán / đau mãn tính
+  → cầu chất gây nghiện và cờ bạc
+  → cấm đoán → chợ đen → lợi nhuận lớn
+  → nuôi tổ chức tội phạm
+  → tổ chức mua chuộc quan chức → coverage thực tế giảm
+  → tham nhũng tăng, tư pháp mất chính danh
+  → bất mãn → di cư, bạo loạn hoặc một phong trào cải cách
+```
+
+Không bước nào được hard-code. Yuu Director ở §15.4 **không được phép spawn thẳng một băng đảng**; nó chỉ được khuếch đại các áp lực đã tồn tại, đúng nguyên tắc “khuếch đại nguyên nhân đã có” của chính nó. Nếu thế giới chưa có nghèo đói, chưa có cấm đoán và chưa có quan chức tham lam, thì băng đảng không xuất hiện — và đó là hành vi đúng.
+
+### 12.7. Quan hệ thân mật, ưng thuận và ranh giới trình bày
+
+Thế giới này mô phỏng cả mặt tối của xã hội. Nguyên tắc xuyên suốt: **mô phỏng đầy đủ ở tầng cơ chế và hậu quả, trừu tượng ở tầng trình bày.**
+
+#### 12.7.1. Cái gì được mô phỏng
+
+Hấp dẫn, tán tỉnh, gắn kết, hôn nhân theo nhiều mô hình văn hóa, ngoại tình, ghen tuông, huyết thống và thừa kế, mại dâm như một nghề trong kinh tế §12.2, bạo lực tình dục như một loại tội trong §12.5, cùng toàn bộ hậu quả: sang chấn ở §9.8.6, kỳ thị, thù truyền đời, tranh chấp con cái, luật khác nhau giữa các quốc gia.
+
+Tất cả chạy qua đúng những hệ thống đã có. Không có subsystem riêng, không có bảng số riêng.
+
+#### 12.7.2. Mô hình ưng thuận
+
+Ưng thuận có hai thành phần tách biệt, và thiếu một trong hai là cưỡng ép:
+
+- **Capacity**: là `Sapient` (§9.1), đã qua `maturity_years` của loài, và không đang chịu effect làm mất tự chủ — say, mê man, `mind_control`.
+- **Voluntariness**: không có cưỡng ép đang tác động. Nguồn cưỡng ép được liệt kê rõ để engine kiểm tra được: bạo lực và đe dọa, quyền lực trực tiếp (chủ–nô, chỉ huy–lính, giám ngục–tù nhân), lệ thuộc kinh tế, nợ, và **effect nhóm charm/domination**.
+
+Kết quả: mọi tương tác thiếu ưng thuận tự động được phân loại là hành vi cưỡng ép, đi vào pipeline §12.5.2 và bị `norm_set` của jurisdiction đó xử lý theo luật riêng của nó. Có nền văn minh trừng phạt nặng, có nền văn minh không coi là tội với một số nhóm người — và chính sự khác biệt đó là thứ tạo ra xung đột văn hóa, phong trào cải cách và chiến tranh chính nghĩa.
+
+#### 12.7.3. `sapience_level` giải quyết ranh giới giữa các loài
+
+Trục `sapience_level` ở §9.1 làm cho vấn đề “người thú và thú” trở thành bài toán chuẩn mực xã hội thay vì một trường hợp đặc biệt phải xử lý riêng:
+
+- Người thú, elf, orc là `sapient` — quan hệ giữa họ là quan hệ bình thường, và cái đáng chơi là **định kiến văn hóa giữa các loài** mà §12.3 đã có sẵn trường dữ liệu.
+- Sinh vật `nonsentient` không có capacity ưng thuận. `norm_set` của mỗi văn hóa tự phân loại tương tác đó là taboo, là tội, hay là điều không được nhắc tới. Engine chỉ cung cấp trục dữ liệu; nội dung chuẩn mực là do văn hóa trong world định nghĩa.
+
+#### 12.7.4. Sinh vật quyến rũ và mê hoặc
+
+Succubus, incubus, siren và các loài “ăn” cảm xúc được thiết kế như mọi loài khác: metabolism lấy năng lượng từ mana hoặc từ cảm xúc, cộng capability `influence` sinh ra effect nhóm `mind_control` với `resist_by` rõ ràng.
+
+Điểm thiết kế quan trọng: **charm là cưỡng ép theo §12.7.2**, nên mọi thứ diễn ra sau đó tự động rơi vào hệ tội phạm. Nhờ vậy loài này có counterplay thật thay vì chỉ là chủ đề: ward chống mê hoặc, phép phát hiện, giáo hội chuyên trách, dấu vết điều tra ở §9.8.3, và một xã hội có thể tổ chức phòng vệ trước chúng. Đó là gameplay, không phải nội dung.
+
+#### 12.7.5. Ràng buộc cứng ở tầng engine
+
+Những điều sau là **engine invariant** ở §4.2 tầng 1, không phải tùy chọn và không phải cảnh báo:
+
+- Mọi mechanic thân mật chỉ hợp lệ giữa các bên `Sapient` đã qua `maturity_years` của loài. Validator từ chối tại thời điểm tạo action, không cho qua rồi ghi log.
+- Không có đường nào — kể cả plugin ở §19.7, kể cả Hard override của True God ở §16.2 — cấp được ngoại lệ cho ràng buộc trên.
+
+#### 12.7.6. Ranh giới trình bày
+
+Sự kiện bạo lực tình dục được ghi như mọi event khác ở §17.1: actor, target, cause chain, effect đã áp, ai quan sát được. Nó **được render ở mức biên niên sử** — một dòng ghi chuyện đã xảy ra và hậu quả của nó — chứ không có đường sinh văn bản mô tả cảnh.
+
+Đây vừa là ranh giới nội dung vừa là quyết định kỹ thuật. LLM nhập vai NPC cần một narration policy cố định, nếu không thì tone trôi theo từng model, audit log mất giá trị, và §22.17 (“narration không được thêm sự kiện không có trong event log”) không còn kiểm chứng được.
+
+`world.content_profile` cho phép True God chỉnh mức tối của từng world — Gaia và Umbral Abyss không cần giống nhau — nhưng nó chỉ điều chỉnh tần suất và mức độ của **sự kiện được mô phỏng**, không mở khóa tầng trình bày.
+
 ## 13. Tri thức, kỹ năng, công nghệ và ma thuật
 
 ### 13.1. Knowledge graph thống nhất
@@ -741,6 +1182,111 @@ Spell là một graph hành động đã kiểm tra, không phải chuỗi văn 
 
 Phép triệu hồi thần hoặc thực thể hỗn mang dùng cùng nền tảng nhưng cần identity binding, contract/resistance, containment và giá phải trả. Triệu hồi không mặc định đồng nghĩa điều khiển.
 
+### 13.8. Thiên phú, khải thị và tổng hợp spell
+
+#### 13.8.1. Ba khái niệm phải tách riêng
+
+Trực giác “ngẫu nhiên ban phát kiến thức phép thuật cho các cá thể” đúng về mặt cảm giác nhưng nếu cài thẳng thì thế giới biến thành xổ số và hai hệ thống mạnh nhất của tài liệu này — truyền dạy §13.3 và nghiên cứu §13.4 — mất hết ý nghĩa. Tách làm ba:
+
+| Khái niệm | Bản chất | Lưu ở đâu | Truyền được không |
+|---|---|---|---|
+| **Talent (thiên phú)** | Affinity theo domain, tốc độ học, trần `potential`, số spell giữ được đồng thời, khả năng cảm nhận mana | `Genotype`, bẩm sinh | Không, chỉ di truyền |
+| **Knowledge** | Node trong knowledge graph, có trạng thái `UNKNOWN → MASTERED` (§13.2) | Component `Knowledge` | Có: dạy, viết sách, gián điệp, đánh cắp |
+| **Revelation (khải thị)** | Sự kiện ban thẳng một node cho một cá thể | Event có provenance | Bản thân sự kiện thì không, nhưng người nhận dạy lại được |
+
+Thiên phú quyết định **ai học nhanh và ai có thể học tới đâu**, không quyết định ai biết cái gì. Đó là điều giữ cho tri thức vẫn phải lan truyền qua xã hội.
+
+```yaml
+schema: talent/v1
+id: talent.pyromancy_affinity
+domain: magic.fire
+effects:
+  - { attr: derived.learn_rate[magic.fire], layer: mult, value: +0.6 }
+  - { attr: derived.potential_cap[magic.fire], layer: add, value: +0.25 }
+  - { attr: derived.mana_sense_range, layer: add, value: +8 }
+rarity: { base: 0.004, heritability: 0.35 }
+prerequisites: { species_allows: [human, elf, drake], mana_organ: required }
+visible_as:
+  - { sense: sight, cue: "mắt ánh đỏ khi xúc động", requires_knowledge: null }
+  - { sense: diagnosis, cue: "fire_affinity", requires_knowledge: knowledge.mana_reading }
+```
+
+`visible_as` làm cho thiên phú trở thành thứ **xã hội có thể phát hiện và tranh giành**: học viện đi tìm, giáo hội đi kiểm tra, quý tộc đi mua, kẻ buôn người đi bắt.
+
+#### 13.8.2. Khải thị là plot device có dấu vết
+
+Ban thẳng một knowledge node vẫn được phép — thần ban, rift dạy, cổ thư tự mở, True God can thiệp — nhưng luôn tạo event với `provenance.kind ∈ {divine_grant, anomaly, god_override}` và **để lại dấu vết điều tra được**.
+
+Hệ quả kể chuyện rơi ra ngay: giáo hội phát hiện một đứa trẻ biết spell mà không ai dạy nó. Tùy văn hóa và `norm_set` ở §12.5, nó thành tiên tri được tôn thờ, thành dị giáo bị săn, hay thành tài sản bị giam giữ để khai thác. Không cần viết cốt truyện cho tình huống này; nó là hệ quả của việc ghi provenance tử tế.
+
+Tần suất khải thị là tham số của world profile. Đặt cao thì thế giới thần bí và hỗn loạn, đặt bằng 0 thì mọi tri thức đều phải đi qua lao động và truyền dạy.
+
+#### 13.8.3. Mạnh vì thông thái, theo nghĩa cơ học
+
+Để “cá thể mạnh là cá thể thông thái” đúng chứ không chỉ là khẩu hiệu, sức mạnh phải đến từ **tổ hợp tri thức**, không từ một cấp độ:
+
+- Số node đã `MASTERED` quyết định vốn liếng.
+- Chất lượng **tổ hợp** giữa các node quyết định trần sức mạnh: biết ba node đúng và ghép được chúng mạnh hơn biết mười node rời rạc.
+- Thiên phú chỉ quyết định tốc độ tới đó và trần cuối cùng.
+
+```text
+Ý tưởng (LLM đề xuất, chỉ trong phạm vi node entity đã biết)
+  → candidate spell graph
+  → law compiler kiểm tra kiểu, đơn vị, bảo toàn và termination (§13.9)
+  → thử nghiệm trong world thật, có rủi ro thật
+  → thất bại: backfire, thương tích, tiêu tan vật liệu, chấn thương mana
+  → thành công: node mới, có tác giả, có thể giữ bí mật hoặc công bố
+```
+
+Đây là chỗ Tier 1 ở §13.9 thật sự cần thiết. Một spell tổng hợp có vòng lặp, nhiều pha và điều kiện dừng thì DSL khai báo không diễn đạt nổi.
+
+Spell mới do nhân vật trong world sáng tạo phải đi qua **đúng đường kiểm tra như luật do Yuu sinh**. Không có cửa sau nào cho phép một entity tạo ra hiệu ứng mà law compiler chưa duyệt.
+
+### 13.9. Runtime thực thi luật: DSL, WASM và sandbox contract
+
+§15.3 quy định quy trình an toàn để Yuu sinh luật và cấm `eval`. Mục này chốt luôn **luật chạy bằng cái gì**.
+
+#### 13.9.1. Ba tầng
+
+| Tầng | Dùng cho | Tính chất |
+|---|---|---|
+| **Tier 0 — Law DSL** | Khoảng 90% luật, spell và effect. Ví dụ `magic.firebolt.v1` ở §15.3 | Dữ liệu khai báo, không Turing-complete, **đảm bảo dừng**, verify tĩnh được, diff được, LLM sinh dễ và người đọc hiểu ngay |
+| **Tier 1 — WASM deterministic** | Luật có vòng lặp, máy trạng thái nhiều pha, nghi thức nhiều bước, spell tổng hợp ở §13.8.3 | Có fuel metering, giới hạn bộ nhớ cứng, import khai báo tường minh |
+| **Tier 2 — không bao giờ** | Không có | LLM sinh code chạy trực tiếp, `eval`, script truy cập filesystem hoặc database |
+
+#### 13.9.2. Vì sao không dùng Lua
+
+Lua tiện và phổ biến, nhưng vi phạm trực tiếp §22.9:
+
+- `pairs()` duyệt bảng theo thứ tự **không xác định**. Cùng seed, khác thứ tự duyệt, khác kết quả, khác state hash. Replay hỏng.
+- Mọi số là double. Không có ranh giới sạch giữa số học authoritative và số học hiển thị mà §19.6 yêu cầu.
+- LuaJIT còn phụ thuộc trạng thái JIT và GC, nên hành vi có thể khác giữa hai lần chạy cùng input.
+
+Nếu vẫn muốn Lua vì lý do công cụ, nó chỉ được dùng như **ngôn ngữ authoring biên dịch xuống Tier 0/Tier 1**, không bao giờ là runtime.
+
+#### 13.9.3. Contract của sandbox
+
+Script là **hàm thuần**:
+
+```text
+fn evaluate(ctx: LawContext) -> Vec<EffectProposal>
+```
+
+- Script không ghi state. Nó trả về danh sách đề xuất, engine mới là bên áp dụng qua pipeline §9.8.3. Đây chính là `no_direct_state_write` trong invariant của §15.3, giờ được thực thi bằng kiểu dữ liệu chứ không bằng lời hứa.
+- Không có I/O, không thread, không SIMD, không đồng hồ hệ thống, không nguồn ngẫu nhiên riêng. Cần ngẫu nhiên thì xin qua named RNG stream ở §19.6.
+- **Fuel và bộ nhớ có trần cứng.** Hết fuel là lỗi xác định `law_execution_exhausted`, không phải treo. Một spell tính vô hạn phải thất bại theo cách mà world quan sát được, ví dụ backfire.
+- Số học chỉ dùng số nguyên và fixed-point theo §19.6. Float không tồn tại trong đường commit.
+
+#### 13.9.4. Host function phải đi qua tri giác
+
+Đây là chỗ dễ mở lỗ hổng nhất và cần nói thẳng: nếu sandbox cung cấp `find_nearest_enemy()` truy vấn world truth, thì mọi spell trở thành một kênh toàn tri và §10.2 sụp đổ — nhân vật sẽ hành động dựa trên thứ nó không thể biết.
+
+Quy tắc: **mọi host function trả về observation của chủ thể, không trả về world truth.** `query_visible_entities(ctx)` chỉ thấy thứ caster thấy được, chịu ánh sáng, vật cản, thời tiết và trạng thái giác quan. Muốn spell dò được kẻ địch sau tường thì phải có một node tri thức cấp cho khả năng đó, với chi phí và dấu vết của nó.
+
+#### 13.9.5. Version và replay
+
+Mỗi law/spell có `def_id` cộng `version`. Event ghi lại version đã dùng tại thời điểm thực thi. Sửa một luật tạo version mới cộng migration hoặc branch theo bước 8 của §15.3; nó không hồi tố lên lịch sử đã ghi. Replay dùng đúng version cũ, nên một save cũ không đổi kết quả chỉ vì hôm nay Yuu chỉnh cân bằng.
+
 ## 14. Thần linh, linh hồn và quyền năng
 
 ### 14.1. Ba loại “thần”
@@ -828,23 +1374,27 @@ trigger: action.cast_spell
 requires:
   knowledge: spell.firebolt
   resources:
-    mana: { amount: ">= 12", unit: MU }
+    mana: { amount: ">= 12000", unit: mMU }
   conditions:
     - line_of_sight
 compute:
-  projectile_energy: "clamp(caster.focus * 180 J, 500 J, 6000 J)"
-  accuracy: "skill.pyromancy * visibility * (1 - fatigue)"
+  # mọi biểu thức chạy trên fixed-point Q16.16; không có float trong đường commit
+  projectile_energy: { expr: "clamp(mul(caster.focus, 180), 500, 6000)", unit: J }
+  accuracy:          { expr: "mul(mul(skill.pyromancy, visibility), sub(ONE, fatigue))", unit: ratio }
 effects:
   - spawn_projectile: fire
-  - consume_resource: { resource: mana, amount: 12, unit: MU }
+  - consume_resource: { resource: mana, amount: 12000, unit: mMU }
   - add_thermal_energy_to_caster: { amount: 8, unit: kJ }
 invariants:
   - finite_values_only
+  - no_float_in_commit_path
   - no_direct_state_write
   - effect_within_world
 ```
 
-Biểu thức chỉ dùng hàm whitelist, có type/đơn vị và giới hạn thực thi. `J`/`kJ` là năng lượng vật lý; `MU` là dimension mana được magic profile của world khai báo, không phải con số vô danh mà handler tự diễn giải.
+Biểu thức chỉ dùng hàm whitelist, có type/đơn vị và giới hạn thực thi. `J`/`kJ` là năng lượng vật lý; `mMU` là milli-mana-unit, dimension mana do magic profile của world khai báo dưới dạng số nguyên, không phải con số vô danh mà handler tự diễn giải. `caster.focus`, `skill.pyromancy`, `visibility` và `fatigue` là tỉ lệ Q16.16 trong khoảng `[0, ONE]`; `mul`/`sub`/`clamp` là hàm fixed-point có ngữ nghĩa làm tròn xác định theo §19.6. Không có toán tử float nào trong đường commit, vì float sẽ phá state hash ở §22.9.
+
+Luật cần vòng lặp hoặc máy trạng thái nhiều pha vượt quá khả năng diễn đạt của DSL này; chúng chuyển sang Tier 1 ở §13.9.
 
 ### 15.4. Yuu Director
 
@@ -939,6 +1489,8 @@ Mọi thay đổi quan trọng có event:
 - Công nghệ: thí nghiệm, phát minh, tai nạn, phổ biến kiến thức.
 - Quân sự: tuyên chiến, trận đánh, đầu hàng, hiệp ước.
 - Siêu hình: thăng thần, domain conflict, triệu hồi, portal, rift.
+- Tư pháp: phạm tội bị phát hiện, buộc tội, xét xử, phán quyết, hình phạt, ân xá, án oan được lật lại.
+- Y tế: bùng phát dịch, cách ly, khỏi bệnh, miễn dịch cộng đồng, thất bại điều trị.
 - Divine/admin: mọi can thiệp của Yuu hoặc True God.
 
 ### 17.3. Event không phải cốt truyện cưỡng ép
@@ -968,6 +1520,8 @@ Sau đó nhà vua có thể thương lượng, xâm lược, đầu tư nghiên 
 - Pathfinding, tầm nhìn và âm thanh.
 - Biome, tài nguyên, ownership, biên giới và trade route.
 - Population, dịch bệnh, bất mãn và chiến tranh.
+- Trật tự, tỉ lệ phát hiện tội phạm và vùng ảnh hưởng của quyền lực ngầm.
+- Ổ dịch, vùng kiểm dịch và `hygiene_load`.
 - Portal graph và event heatmap.
 
 Màu có pattern/icon phụ để không phụ thuộc hoàn toàn vào khả năng phân biệt màu.
@@ -1037,6 +1591,8 @@ Một prototype thuần web có thể dùng Web Worker + IndexedDB, nhưng basel
 - `memory`: event-to-memory, retrieval, summarization, forgetting.
 - `yuu`: proposal, policy/law generation, director, audit.
 - `persistence`: snapshot, delta, event log, migration, branch.
+- `scenario`: worldseed, genesis command, tiền sử và coherence validation.
+- `plugin`: registry, manifest, thứ tự load, capability và WASM host.
 - `frontend`: renderer và UI, không chứa luật authoritative.
 
 ### 19.3. Command/query boundary
@@ -1085,6 +1641,70 @@ Save ghi rõ:
 - Mọi state authoritative ảnh hưởng replay dùng integer/fixed-point với overflow, rounding và saturation được định nghĩa. Float chỉ dùng cho render hoặc số liệu dẫn xuất không commit; phép tính/reduction float không được quyết định event order hay state hash.
 - Output LLM luôn được lưu thành event có `branch_id`. Replay dùng output đã ghi, không gọi model lại.
 - State hash là canonical hash của state authoritative trong một branch/checkpoint và kèm các version đầu vào. Mục tiêu replay: cùng branch ancestry + seed + command + output LLM đã ghi → cùng hash.
+
+### 19.7. Kiến trúc module và plugin
+
+Mục tiêu: mọi hệ thống trong tài liệu này phải mở rộng được bằng nội dung bên ngoài, để dự án nhận được đóng góp của cộng đồng khi public mà không đánh đổi tính nhất quán, determinism hay an toàn của save.
+
+#### 19.7.1. Bốn lớp mở rộng, quyền hạn khác nhau
+
+| Lớp | Nội dung | Chạy bằng | Quyền |
+|---|---|---|---|
+| **Core** | Bất biến engine, ECS, event commit, transaction, coordinate math | Rust | Không mod được. Đây là tầng 1 của §4.2 |
+| **Content pack** | Material, species, need, effect, action, knowledge node, culture, `norm_set`, talent, scenario, biome, sprite, bản địa hóa | Dữ liệu khai báo | Chỉ thêm định nghĩa vào registry |
+| **Behavior module** | Luật/spell Tier 1, generator địa hình, behavior policy, model kinh tế thay thế | WASM theo contract §13.9.3 | Hàm thuần, trả đề xuất, có fuel |
+| **UI plugin** | Panel, overlay, biểu đồ, công cụ phân tích | Vue + read model | Chỉ đọc read model và gửi command đã có schema |
+
+Ranh giới quan trọng nhất: **không lớp nào ngoài Core được ghi state trực tiếp.** Content pack thêm định nghĩa; behavior module trả đề xuất; UI plugin gửi command. Một plugin sai hoặc độc hại có thể làm thế giới mất cân bằng, nhưng không thể phá cấu trúc save hay vượt ACL.
+
+#### 19.7.2. Định danh có namespace
+
+Mọi id do plugin đăng ký bắt buộc mang tiền tố pack: `mypack:species.frost_wyrm`, `mypack:effect.frostbite`. Id không có tiền tố thuộc về core và pack không được ghi đè.
+
+Ghi đè định nghĩa của pack khác phải khai báo tường minh trong manifest (`overrides:`), và engine báo xung đột khi hai pack cùng ghi đè một id. Không có ghi đè ngầm theo thứ tự load — đó là nguồn gốc của mọi cơn ác mộng modding.
+
+#### 19.7.3. Thứ tự load phải deterministic
+
+Sắp topo theo `depends`, phá hòa bằng `pack_id` theo thứ tự từ điển. Thứ tự cuối cùng được **ghi vào save** cùng version và content hash của từng pack.
+
+Khi mở lại save:
+
+- Thiếu pack hoặc lệch content hash: từ chối load và nói rõ thiếu cái gì, thay vì load một phần rồi hỏng dần.
+- Pack nâng version có migration: chạy migration theo bước 8 của §15.3, tạo event và cho phép branch.
+- Pack nâng version không có migration: chỉ cho phép ở world mới.
+
+#### 19.7.4. Quyền theo capability
+
+Manifest khai báo pack cần gì, engine cấp đúng phần đó và không hơn:
+
+```text
+registry.define.species    registry.define.effect     registry.define.norm_set
+sim.read.observation       sim.propose.effect         sim.subscribe.event
+ui.panel                   ui.overlay                 llm.persona_template
+```
+
+Ba giới hạn cứng, không có ngoại lệ cho bất kỳ pack nào:
+
+- Không pack nào xin được quyền ghi state authoritative.
+- Không pack nào nới được engine invariant ở §22, bao gồm ràng buộc ở §12.7.5.
+- Không pack nào đọc được memory namespace của entity mà nó không sở hữu (§11.1).
+
+#### 19.7.5. Prompt trong pack là dữ liệu không tin cậy
+
+Pack được phép cung cấp persona template và prompt cho loài hay văn hóa của mình. Những chuỗi đó đi vào vùng dữ liệu không tin cậy theo §22.18, giống hệt nội dung sách và hội thoại trong world. Chúng không được nâng quyền, không được sửa system prompt, và không được mở rộng action registry — action phải được đăng ký qua registry với schema và precondition đàng hoàng.
+
+#### 19.7.6. Kiểm thử và mức tin cậy
+
+- Mỗi pack kèm scenario test chạy headless: tạo world nhỏ, chạy N ngày, kiểm tra invariant và một số khẳng định của chính pack.
+- Determinism test: cùng seed cộng cùng pack set phải ra cùng hash, chạy hai lần.
+- Ba mức tin cậy hiển thị rõ trong Seed Vault và trình quản lý pack: `official`, `verified` (đã qua CI và review), `community`.
+- Pack `community` mặc định bị giới hạn ở content pack và UI plugin. Muốn nạp behavior module WASM thì người chơi phải bật thủ công, với cảnh báo rõ về hệ quả cân bằng và hiệu năng.
+
+#### 19.7.7. Đường đóng góp
+
+Ranh giới module ở §19.2 chính là ranh giới đóng góp. Một người muốn thêm hệ thống bệnh chi tiết hơn thì viết content pack định nghĩa mầm bệnh và một behavior module cho mô hình lây, không phải fork engine. Một người muốn thêm nền văn minh thì viết scenario và `norm_set`, không cần biết Rust.
+
+Đây là lý do tài liệu này định nghĩa need, effect, norm và knowledge bằng schema dữ liệu ngay từ đầu thay vì bằng code: mỗi schema là một điểm đóng góp mở sẵn.
 
 ## 20. Tối ưu request LLM
 
@@ -1234,6 +1854,9 @@ laws:
   physics_profile: "earthlike-1"
   metaphysics_profile: "mana-soul-1"
   magic_profile: "gaia-magic-1"
+content_profile: "grim-but-not-explicit"   # §12.7.6: chỉnh tần suất sự kiện, không mở tầng trình bày
+packs:                                     # §19.7.3: ghi kèm version và content hash
+  - { id: "core", version: "1.4.2", hash: "sha256:..." }
 access:
   default: allow_if_portal_allows
 narrative_role: "primary_living_world"
@@ -1248,6 +1871,7 @@ simulation:
 schema: species/v1
 id: "species:sky_drake"
 name: "Sky Drake"
+sapience_level: sentient
 anatomy: "anatomy:quadruped_two_wings"
 body:
   adult_mass_kg: { distribution: lognormal, median: 420, sigma: 0.18 }
@@ -1266,6 +1890,10 @@ variation_policy: "variation:sky_drake_v1"
 capability_rules:
   - "flight.sky_drake"
   - "breath.thermal_if_mana_sufficient"
+needs_profile:
+  enabled: [energy, hydration, oxygen, core_temp, sleep_pressure, pain, mana_reserve]
+  disabled: [bladder]
+  conversion: { mana_to_energy: { rate_kcal_per_mMU: 0.004, max_share: 0.35 } }
 ecological_constraints:
   habitat: [mountain, highland]
   prey_mass_per_day: [18, 35]
@@ -1277,7 +1905,7 @@ ecological_constraints:
 schema: entity/v1
 id: "entity:generated"
 species: "species:human"
-tags: [Intelligent]
+tags: [Animate, Sapient]
 identity:
   name: "Aren"
   age_years: 24
@@ -1285,19 +1913,29 @@ body:
   genotype_seed: "..."
   phenotype_overrides: {}
 mind:
-  personality:
+  traits:            # §9.9, lấy mẫu có tương quan chứ không random độc lập
     curiosity: 0.81
     conscientiousness: 0.62
     empathy: 0.74
     risk_tolerance: 0.38
+    impulsivity: 0.29
+    callousness: 0.11
+    honesty_humility: 0.66
   long_term_goals:
     - "Tìm nguyên nhân mùa đông bất thường"
   values:
     - family
     - truth
+homeostasis:
+  profile: "needs:human-standard/1"
+  overrides: { sleep_pressure.tolerance: 0.9 }
 skills:
-  medicine: 0.43
-  natural_philosophy: 0.58
+  medicine:
+    { baseline: 0.30, potential: 0.71, current: 0.43, adaptation: +0.02, decay: slow }
+  natural_philosophy:
+    { baseline: 0.41, potential: 0.88, current: 0.58, adaptation: +0.05, decay: none }
+talents:
+  - "talent.pattern_recognition"
 knowledge_refs:
   - "knowledge:basic_weather"
 affiliations:
@@ -1321,13 +1959,132 @@ cognition:
     acl: owner_private
 ```
 
+Giá trị thập phân trong view authoring được chuyển sang fixed-point Q16.16 khi materialize; runtime không giữ float. Effect đang tác động không xuất hiện ở đây vì chúng thuộc `EffectSet` và có vòng đời riêng theo §9.8.
+
 Các field sức khỏe, vị trí, capability và stat suy ra không được LLM sửa trong YAML. LLM chỉ gửi cognitive mutation proposal cho allowlist; admin edit đi qua schema/transaction và tạo event provenance.
+
+### 21.4. Worldseed và scenario
+
+```yaml
+schema: worldseed/v1
+id: "worldseed:gaia-iron-dawn"
+name: "Gaia — Bình minh của sắt"
+authors: ["true_god"]
+requires:
+  engine_api: "^1.4"
+  packs:
+    - { id: "core", version: "1.4.2" }
+    - { id: "gaia_flora", version: "^0.9" }
+world:
+  seed: "9f5c..."
+  generation:
+    profile_id: "generation:gaia-earthlike"
+    generator_version: "terrain-gaia-1"
+  laws:
+    physics_profile: "earthlike-1"
+    magic_profile: "gaia-magic-1"
+  content_profile: "grim-but-not-explicit"
+
+scenario:
+  prehistory:
+    years: 400
+    fidelity: aggregate          # không gọi LLM, chỉ mô hình tổng hợp §8.3
+    produce: [ruins, bloodlines, grievances, myths, trade_routes]
+
+  species_placement:
+    - { species: "species:human", regions: [river_basin, coast], population: 24000 }
+    - { species: "species:elf",   regions: [old_forest],         population: 3100 }
+    - { species: "species:sky_drake", regions: [highland], population: 40, wild: true }
+
+  powers:
+    - id: "organization:nation.veskar"
+      kind: nation
+      capital_hint: { region: river_basin, prefer: river_confluence }
+      population_share: 0.55
+      government: council_of_houses
+      norm_set: "nation.veskar.criminal_code.v3"
+      tech:
+        knowledge:
+          - { node: "knowledge:iron_smelting", level: PROFICIENT, holders: smiths }
+          - { node: "knowledge:crop_rotation", level: PRACTICED,  holders: farmers }
+          - { node: "spell:firebolt", level: CONCEPTUAL, holders: temple, secret: true }
+        infrastructure: [forge x6, mill x11, road_network.basic, library x1]
+        stock: { iron_ingot: 4200, grain_days: 90 }
+        workforce: { smith: 60, scholar: 9, literate_ratio: 0.04 }
+    - id: "organization:clan.orrok"
+      kind: tribal_confederation
+      population_share: 0.20
+      norm_set: "clan.orrok.custom.v1"
+
+  relations:
+    - { a: "organization:nation.veskar", b: "organization:clan.orrok",
+        stance: hostile, cause: "grievance:border_massacre", generated_by: prehistory }
+
+  seeded_pressures:                 # điều kiện, không phải cốt truyện
+    - { kind: resource_scarcity, resource: iron_ore, region: highland, severity: 0.4 }
+    - { kind: mana_anomaly, region: old_forest, severity: 0.2 }
+
+validation:
+  require_coherent_tech: true       # §7.6.3
+  require_species_viability: true   # §9.6
+  fail_on_orphan_knowledge: true    # biết luyện thép nhưng không có mỏ, lò, thợ
+```
+
+Toàn bộ khối `scenario` được biên dịch thành chuỗi transaction tại `divine_tick = 0` với `provenance.kind = genesis` theo §7.6.2. Không có trường nào ở đây ghi thẳng vào save.
+
+### 21.5. Plugin manifest
+
+```yaml
+schema: pack/v1
+id: "frostlands"
+version: "0.3.1"
+display_name: "Frostlands"
+authors: ["community:someone"]
+license: "MIT"
+engine_api: "^1.4"
+depends:
+  - { id: "core", version: "^1.4" }
+  - { id: "gaia_flora", version: "^0.9", optional: true }
+overrides: []                      # ghi đè id của pack khác phải khai báo ở đây
+
+provides:
+  species:      ["frostlands:species.frost_wyrm"]
+  effects:      ["frostlands:effect.frostbite", "frostlands:effect.ward.warmth"]
+  needs:        ["frostlands:need.cold_tolerance"]
+  materials:    ["frostlands:material.rime_ice"]
+  knowledge:    ["frostlands:knowledge.rime_forging"]
+  norm_sets:    ["frostlands:norm.frost_clans"]
+  scenarios:    ["frostlands:worldseed.long_winter"]
+
+capabilities:
+  - registry.define.species
+  - registry.define.effect
+  - registry.define.norm_set
+  - sim.read.observation
+  - sim.propose.effect
+  - ui.overlay
+
+modules:                           # WASM Tier 1, tùy chọn
+  - id: "frostlands:law.rime_spread"
+    entry: "modules/rime_spread.wasm"
+    hash: "sha256:..."
+    fuel_limit: 2_000_000
+    memory_limit_mb: 16
+
+tests:
+  - { scenario: "frostlands:test.cold_survival", days: 120, assert: [no_invariant_violation, population_stable] }
+  - { kind: determinism, runs: 2, assert: same_state_hash }
+
+trust: community
+```
+
+`hash`, `fuel_limit` và `tests` là bắt buộc với mọi module WASM. Pack không có test hợp lệ vẫn nạp được ở chế độ thủ công nhưng không bao giờ được gắn nhãn `verified`.
 
 ## 22. Bất biến phải giữ
 
 1. Một state change authoritative chỉ được commit qua simulation/transaction handler.
 2. LLM chỉ đề xuất intent/cognitive mutation; không trực tiếp ghi health, knowledge, inventory, law hoặc vị trí.
-3. Mọi entity có tag `Intelligent` phải có cognition contract, persona/prompt version, LLM eligibility, fallback, memory namespace, RAG profile, ACL và branch scope hợp lệ.
+3. Mọi entity có tag `Sapient` phải có cognition contract, persona/prompt version, LLM eligibility, fallback, memory namespace, RAG profile, ACL và branch scope hợp lệ. Entity chỉ có `Animate` không được cấp memory namespace và không chiếm ngân sách nhận thức.
 4. Entity chỉ ra quyết định từ observation/belief hợp lệ; reference ngoài cognition context không có hiệu lực.
 5. Action registry tự kiểm tra precondition authoritative; assertion do LLM/YAML không thay thế state check.
 6. Social law không thay engine invariant hoặc physics.
@@ -1344,6 +2101,18 @@ Các field sức khỏe, vị trí, capability và stat suy ra không được L
 17. Summary/narration không được thêm sự kiện không có trong event log.
 18. Nội dung hội thoại, sách và memory là dữ liệu không tin cậy đối với prompt hệ thống.
 19. Policy/law do LLM sinh phải dùng DSL whitelist, validate và sandbox trước khi kích hoạt.
+20. Effect chỉ tác động qua modifier pipeline và không bao giờ ghi base stat; thứ tự áp dụng sắp theo khóa ổn định.
+21. Mọi đề xuất effect phải đi qua chuỗi giảm thiểu ward → vật liệu → kháng trước khi trở thành effect đã áp.
+22. Effect nào cũng phải khai báo `perceptible_as`; không có effect vô hình mặc định với mọi giác quan.
+23. Script trong sandbox là hàm thuần trả về đề xuất; host function chỉ trả observation của chủ thể, không trả world truth.
+24. Nhu cầu không được tick theo từng entity; giá trị suy ra bằng tích phân đóng từ `last_update_tick`.
+25. Không tồn tại cờ “có tội” toàn tri. Tội chỉ có hiệu lực qua chuẩn mực của một jurisdiction, phát hiện, chứng cứ và thủ tục.
+26. Mechanic thân mật chỉ hợp lệ giữa các bên `Sapient` đã qua `maturity_years` và có capacity ưng thuận; validator từ chối tại thời điểm tạo action. Không plugin, không override nào cấp được ngoại lệ.
+27. Sự kiện bạo lực tình dục được ghi ở dạng event record có cấu trúc và chỉ render ở mức biên niên sử; không tồn tại đường sinh văn bản tường minh.
+28. Scenario khởi tạo được biên dịch thành genesis command tại tick 0; không có đường ghi thẳng state vào save.
+29. Mọi id do plugin đăng ký phải có namespace; ghi đè phải khai báo tường minh và xung đột là lỗi, không phải thắng theo thứ tự load.
+30. Save ghi pack set, version và content hash; thiếu hoặc lệch thì từ chối load thay vì load một phần.
+31. Không plugin nào được cấp quyền ghi state authoritative, nới bất biến engine hoặc đọc memory namespace mà nó không sở hữu.
 
 ## 23. Mục tiêu kỹ thuật có thể đo
 
@@ -1359,6 +2128,12 @@ Các con số là mục tiêu baseline để kiểm chứng kiến trúc, có th
 - Replay từ snapshot + event đạt cùng state hash.
 - Có thể theo cause chain từ một biến cố lớn về action, actor, resource và law liên quan.
 - Không có memory retrieval chéo entity nếu không có quyền chia sẻ.
+- 10.000 entity `Animate` chạy đủ nhu cầu mà không có vòng lặp per-tick per-entity.
+- Áp rồi gỡ 1.000 effect theo thứ tự ngẫu nhiên vẫn trả về đúng base stat ban đầu.
+- Cùng tập effect nhưng áp ở các thời điểm khác nhau vẫn cho cùng derived stat.
+- Một bản án truy được ngược về hành vi, nhân chứng, chứng cứ và điều luật đã áp dụng.
+- Cùng worldseed cộng cùng pack set cho cùng hash thế giới khởi đầu trên hai lần chạy.
+- Một content pack bên thứ ba nạp được, chạy test scenario và không làm đổi hash của world không dùng nó.
 
 Không đặt cam kết số lượng “một triệu NPC real-time” trước khi có benchmark. Quy mô thật phải được đo riêng cho entity active, scheduled, dormant và aggregate.
 
@@ -1373,6 +2148,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Vue + PixiJS hiển thị lát `z`, pan/zoom và floating origin.
 - Simulation ngoài UI thread.
 - Save seed + chunk delta.
+- Worldseed tối thiểu: seed + generation profile, genesis dưới dạng command tại tick 0.
 
 **Điều kiện hoàn thành**:
 
@@ -1384,7 +2160,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 
 **Phạm vi**:
 
-- Body, need, inventory, movement, perception và action registry.
+- Body, homeostasis §9.7 với tích phân đóng, inventory, movement, perception và action registry.
+- Effect pipeline §9.8 ở mức cơ bản: đói, lạnh, thương tích, độc, một bệnh truyền nhiễm.
 - Khoảng vài chục entity, nhà, nghề, resource, crafting và lịch trình.
 - Utility AI, event log, relationship cơ bản.
 - Active/near/far LOD đầu tiên.
@@ -1394,6 +2171,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Cư dân tự ăn, ngủ, làm việc và phản ứng với cháy/thiếu thức ăn.
 - Kinh tế nhỏ có nguồn và nơi tiêu thụ thật.
 - Tua thời gian xa rồi quay lại không làm mất dân/tài nguyên.
+- Áp rồi gỡ hàng nghìn effect trả về đúng base stat ban đầu.
 
 ### Giai đoạn C — Nhận thức LLM và ký ức
 
@@ -1403,6 +2181,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Memory namespace, structured retrieval, episodic summary.
 - LLM gateway, typed plan, validator, timeout/fallback.
 - Đối thoại và reflection cho nhân vật quan trọng.
+- Tính cách năm lớp §9.9 và reputation tách khỏi trait thật.
 
 **Điều kiện hoàn thành**:
 
@@ -1419,18 +2198,21 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Teaching, knowledge graph, project và invention.
 - Thị trường/logistics cấp khu vực.
 - Yuu Director tạo pressure/event seed.
+- `norm_set`, pipeline tội phạm §12.5, tổ chức tội phạm và tệ nạn §12.6.
 
 **Điều kiện hoàn thành**:
 
 - Một công nghệ mới cần người, tài nguyên, thí nghiệm và truyền bá.
 - Xung đột xã hội có cause chain, không phải random label.
 - Yuu tạo tình huống nhưng không ép quyết định nhân vật.
+- Một bản án truy được từ hình phạt ngược về hành vi, nhân chứng và chứng cứ.
 
 ### Giai đoạn E — Ma thuật và đa thế giới
 
 **Phạm vi**:
 
-- Mana/law DSL, spell action và counterplay.
+- Mana/law DSL Tier 0, sandbox WASM Tier 1 §13.9, spell action và counterplay.
+- Thiên phú, khải thị và tổng hợp spell §13.8.
 - World 1, World 2, World 3 và Super Ultra World.
 - Portal state machine, transactional transfer và access control.
 - Soul, summon, ascension và domain authority.
@@ -1450,6 +2232,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Species Foundry, Law Forge, Auditor và Historian.
 - Cognitive scheduler, batching, model routing và policy compilation.
 - Profiling, compact storage, đa luồng deterministic.
+- Worldseed, Seed Vault §7.6 và tiền sử chạy ở mức aggregate.
+- Hệ plugin §19.7: manifest, capability, thứ tự load, WASM host và CI kiểm thử pack.
 
 **Điều kiện hoàn thành**:
 
@@ -1457,6 +2241,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Rewind tạo branch an toàn.
 - LLM budget đo được theo entity/model/token.
 - Biên niên sử chỉ dùng event có thật.
+- Một content pack bên thứ ba nạp được, chạy test và không phá determinism.
 
 ## 25. Rủi ro chính và cách kiểm soát
 
@@ -1474,6 +2259,12 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 | Quá nhiều hệ thống cùng lúc | Không có lát cắt chơi được | Lộ trình tăng dần, mỗi giai đoạn có behavior hoàn chỉnh |
 | True God sửa nhầm | Mất save | Preview, transaction, autosnapshot, undo/branch |
 | “Siêu thực tế” thành khó hiểu | Người chơi không biết vì sao | Inspector, cause chain, overlays, Yuu giải thích từ dữ liệu |
+| Effect ghi thẳng base stat | Stat trôi dần sau vài trăm lần buff/debuff | Modifier pipeline, không ghi base, test áp/gỡ 1.000 effect |
+| Tick nhu cầu cho mọi sinh vật | Không chạy nổi ở quy mô lớn | Tích phân đóng, wake-up theo ngưỡng |
+| Tội phạm thành nhãn ngẫu nhiên | Xã hội giả tạo, mất cause chain | Động cơ + cơ hội + rủi ro theo belief + chứng cứ |
+| Nội dung tối trở thành văn bản tường minh | Lệch tone, audit log mất giá trị | Event record có cấu trúc, narration policy, render mức biên niên sử |
+| Plugin cộng đồng phá determinism hoặc save | Không replay được, hỏng save | Namespace, capability, fuel, content hash, determinism test bắt buộc |
+| Scenario ghi thẳng state | Thế giới khởi đầu không replay được | Biên dịch thành genesis command tại tick 0 |
 
 ## 26. Một kịch bản emergent hoàn chỉnh
 
@@ -1505,4 +2296,7 @@ My Open World đạt đúng tầm nhìn khi:
 - Super Ultra World thực sự là nơi an toàn và sandbox của owner, được bảo vệ bằng quyền engine-level.
 - LLM làm nhân vật sâu sắc hơn mà không trở thành bottleneck, engine vật lý hoặc nguồn sự thật.
 - Quy mô lớn đến từ lazy generation, scheduler và LOD chứ không từ việc bỏ qua tính nhất quán.
+- Mặt tối của xã hội — tội phạm, tệ nạn, áp bức — tồn tại như hệ quả có nguyên nhân và có đường chống lại, không phải như nhãn dán.
+- Một người ngoài dự án thêm được loài, bệnh, luật hoặc cả một nền văn minh bằng content pack mà không cần sửa engine.
+- Hai người chơi trao đổi worldseed và nhận được cùng một thế giới khởi đầu, kiểm chứng bằng hash.
 - True God có toàn quyền nhưng luôn có công cụ preview, giải thích, snapshot và hoàn tác để tự do thử nghiệm.
