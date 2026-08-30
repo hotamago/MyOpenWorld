@@ -47,6 +47,9 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 | Khởi tạo thế giới | Worldseed = seed + generation profile + scenario, biên dịch thành genesis command |
 | Mở rộng | Content pack dữ liệu, behavior module WASM và UI plugin; id có namespace, save ghi pack set |
 | Nội dung nhạy cảm | Mô phỏng đầy đủ ở tầng cơ chế và hậu quả; trình bày ở mức biên niên sử |
+| Vật phẩm | Là entity có component, không có engine riêng; instance/stack/aggregate theo LOD |
+| Giá trị | Không lưu trong vật phẩm; giá hình thành ở thị trường và trong belief người đánh giá |
+| Sở hữu | Possession là ground truth vật lý, claim là belief xã hội; hai thứ tách hẳn |
 
 ### 2.1. Những điều cố ý không làm
 
@@ -62,6 +65,9 @@ Người chơi là **True God** — chủ sở hữu tối cao của toàn bộ 
 - Không đánh dấu một entity là “tội phạm” bằng một cờ toàn tri; tội chỉ tồn tại qua chuẩn mực, phát hiện và chứng cứ.
 - Không sinh nội dung tình dục tường minh. Hệ thống mô phỏng nguyên nhân và hậu quả, không mô tả cảnh.
 - Không cho plugin cộng đồng ghi state authoritative hoặc nới bất biến engine.
+- Không có “tỉ lệ rơi đồ huyền thoại”. Vật phẩm phi thường đến từ tay nghề, lịch sử, phép thuật hoặc nguồn gốc dị thường.
+- Không cho vật phẩm bất tử; hao mòn là cống chính của nền kinh tế.
+- Không lưu một con số “giá trị” bên trong vật phẩm.
 
 ## 3. Trải nghiệm và vòng lặp gameplay
 
@@ -402,7 +408,7 @@ Nơi quản lý worldseed trong UI, đặt cạnh Multiverse view ở §18.3:
 - Ghi rõ worldseed cần plugin nào và version nào theo §19.7; thiếu thì báo trước khi tạo, không lỗi giữa chừng.
 - Xuất/nhập dưới dạng một thư mục hoặc một file nén, có checksum.
 
-## 8. Vật chất, vật lý và môi trường
+## 8. Vật chất, vật phẩm và môi trường
 
 ### 8.1. Dữ liệu cell
 
@@ -442,6 +448,7 @@ Mỗi vật liệu có các thuộc tính có đơn vị hoặc giá trị chu�
 | Chiến đấu | Hit/body part/effect | Encounter resolution | Campaign/casualty model |
 | Dịch bệnh | Cá thể: ủ bệnh, tải mầm, lây theo tiếp xúc | Ngăn S/E/I/R theo khu định cư | Tỉ lệ mắc/tử vong và dòng di cư |
 | Tội phạm và thực thi | Hành vi, nhân chứng, chứng cứ theo cá thể | Tỉ lệ phát hiện và xử án theo khu vực | Chỉ số trật tự, quyền lực ngầm, thiệt hại kinh tế |
+| Vật phẩm | Instance đầy đủ có provenance | Stack theo kho, tách khi cần | Tồn kho tổng hợp theo khu vực |
 
 Mọi chuyển cấp độ phải giữ các đại lượng quan trọng: dân số, tài nguyên, thương vong, công trình, quan hệ, tri thức và event lịch sử.
 
@@ -453,6 +460,159 @@ Mọi chuyển cấp độ phải giữ các đại lượng quan trọng: dân 
 - Không quét toàn bộ entity. Scheduler dùng event/deadline: entity chỉ thức dậy khi tới lịch hoặc có stimulus.
 - Tập vùng active được suy ra deterministic từ avatar/entity hoạt động, nguy hiểm đang diễn ra và `SimulationFocus` do người chơi pin. Di chuyển camera chỉ tải dữ liệu để render; nếu muốn nâng fidelity của một vùng, UI phải commit focus command có tick và ghi event.
 - Khi máy không theo kịp, engine giảm tốc độ tiến simulation so với wall-clock hoặc bỏ frame render, không tự đổi mô hình authoritative theo tải CPU. Mọi thay đổi simulation budget/LOD policy phải là command được ghi event; replay dùng lại đúng quyết định đó và không bỏ event đã lên lịch.
+
+### 8.5. Vật phẩm là entity, không phải một bảng riêng
+
+Tài liệu này đã tham chiếu tới `item` ở mười mấy chỗ — vật chứng ở §12.5.3, effect target ở §9.8.6, `substance` ở §12.6.2, `Inventory` ở §9.1 — mà chưa định nghĩa nó. Mục này định nghĩa.
+
+Nguyên tắc đầu tiên, đúng theo §19.4: **không tạo engine thứ hai cho vật phẩm.** Một đồ vật là một entity mang tổ hợp component, giống hệt sinh vật, chỉ khác tập component.
+
+- `Form`: hình dạng, khối lượng, thể tích, footprint khi đặt xuống.
+- `MaterialComposition`: **theo bộ phận**, không phải một vật liệu duy nhất. Lưỡi thép, chuôi gỗ sồi, khảm bạc. Nhờ vậy lưỡi cùn, chuôi mục và khảm bị bóc là ba chuyện khác nhau.
+- `CraftQuality`: chất lượng lúc làm ra, bất biến (§8.6).
+- `Condition`: hao mòn hiện tại, thay đổi liên tục (§8.6).
+- `Provenance`: ai làm, khi nào, ở đâu, bằng phương pháp gì, và toàn bộ chuỗi đổi chủ về sau (§8.9).
+- `Function`: các affordance mà vật thể cho phép.
+- `EffectSet`: phù phép, lời nguyền, đánh dấu truy vết — dùng lại nguyên §9.8.
+- `Contents`: nếu là vật chứa.
+- `Legibility`: nếu mang thông tin (§8.8).
+- `Identity`: chỉ vật phẩm có tên riêng mới có, phần lớn đồ vật không có.
+
+Quyền sở hữu **không** nằm trong danh sách này. Nó là claim xã hội, thuộc §12.8.
+
+#### 8.5.1. Chức năng là affordance, không phải phân loại
+
+Không hard-code `type: weapon`. Một cái xà beng nạy được cửa, đập được đầu, bẩy được tảng đá, và cả ba khả năng đó đều **suy ra** từ vật liệu cộng hình dạng theo đúng tinh thần §9.2:
+
+```text
+Function.pry     ← độ cứng, chiều dài đòn bẩy, độ bền uốn
+Function.strike  ← khối lượng, phân bố khối lượng, độ cứng bề mặt
+Function.cut     ← độ sắc hiện tại (chịu Condition), góc lưỡi, độ cứng
+Function.contain ← thể tích rỗng, độ kín, tính thấm của vật liệu
+```
+
+Nhờ vậy một nhân vật đói có thể dùng lưỡi cày làm vũ khí, và một nồi đồng có thể trở thành mũ giáp tạm — những chuyện xảy ra trong lịch sử thật và không cần ai viết luật riêng cho chúng.
+
+#### 8.5.2. Instance và stack: LOD cho vật phẩm
+
+4200 thỏi sắt trong kho ở §21.4 không được là 4200 entity. Áp dụng đúng nguyên tắc nhiều độ chi tiết của §8.3 cho đồ vật:
+
+| Mức | Biểu diễn | Khi nào |
+|---|---|---|
+| **Instance** | Entity đầy đủ, có id riêng | Có trạng thái cá biệt hóa: tên riêng, provenance đáng kể, chất lượng vượt ngưỡng, effect đang mang, hư hỏng riêng, đang bị tranh chấp, đang là vật chứng |
+| **Stack** | `(item_def, count, material, quality_bucket, condition_bucket)` | Hàng hóa đồng nhất trong kho, trên xe, trong túi |
+| **Aggregate** | Tồn kho theo khu vực | Vùng xa theo §8.3 |
+
+Chuyển giữa ba mức là **deterministic và ghi event**. Một thỏi sắt được rèn thành thanh kiếm mà người thợ đặt tên thì được thăng lên instance; một thanh kiếm tầm thường nằm trong kho hai mươi năm không ai nhớ thì rút xuống stack. Điều kiện thăng/giáng là dữ liệu, không phải cảm tính, để §22.9 vẫn giữ.
+
+Đây là biện pháp chống nổ số lượng entity, tương đương với việc cấm tick nhu cầu theo từng cá thể ở §9.7.2.
+
+#### 8.5.3. Một vật ở đúng một nơi
+
+Vật phẩm nằm trong `cell`, trong `Contents` của vật khác, hoặc trong inventory của một entity — **đúng một trong ba**, không bao giờ hai. Mọi di chuyển là transaction, cùng loại bảo đảm với portal transfer ở §22.8: không nhân đôi, không bốc hơi khi commit nửa chừng.
+
+Vật chất được bảo toàn. Chế tác tiêu thụ nguyên liệu thật, phá hủy trả lại mảnh vụn hoặc vật liệu tái chế được, và không có đường nào sinh vật phẩm từ hư không ngoài genesis (§7.6.2) và can thiệp của True God có provenance (§16.2).
+
+### 8.6. Vật liệu, chất lượng và tình trạng
+
+#### 8.6.1. Chất lượng và tình trạng là hai thứ khác nhau
+
+Nhiều game gộp hai khái niệm này và tạo ra nghịch lý “kiếm huyền thoại bị sứt mẻ thì thành kiếm thường”. Tách hẳn:
+
+- **`CraftQuality`** — đóng dấu tại thời điểm chế tác, **không bao giờ đổi**. Nó là hàm của kỹ năng người làm, chất lượng công cụ, độ tinh khiết vật liệu, thời gian bỏ ra, `focus` và `fatigue` lúc làm (§9.7), cộng khả năng có một lần thăng hoa hiếm gặp.
+- **`Condition`** — thay đổi liên tục theo sử dụng, môi trường và bảo dưỡng. Gỉ, mục, mốc, cùn, nứt, giãn.
+
+Sửa chữa phục hồi `Condition`, **không bao giờ phục hồi `CraftQuality`**. Và một chi tiết đắt giá: nếu người sửa kém hơn người làm, phần được sửa mang chất lượng của người sửa. Một thanh kiếm bậc thầy bị thợ làng vá lại là một thanh kiếm có lịch sử, và người sành sỏi nhìn ra được.
+
+#### 8.6.2. Liên tục bên trong, phân bậc khi hiển thị
+
+Lưu `CraftQuality` dưới dạng fixed-point liên tục để mô phỏng đúng phân phối kỹ năng; hiển thị theo bậc rời rạc vì đó là cách con người thật sự nói về đồ vật. Bậc hiển thị là dữ liệu của văn hóa (§12.3), không phải hằng số toàn cục — mỗi nền văn minh có thang đánh giá và ngưỡng riêng.
+
+#### 8.6.3. Hao mòn là sink của nền kinh tế
+
+Đây là ràng buộc kinh tế, không chỉ là chi tiết mô phỏng. Nếu đồ vật không hỏng, tổng của cải chỉ tăng, và mọi cơ chế rút tiền ra khỏi lưu thông đều dẫn tới giảm phát. Hao mòn vật chất là **sink chính**, và §12.8.4 quy định phần còn lại.
+
+Hao mòn đến từ nguồn có thật: sử dụng, va chạm, nhiệt, ẩm, muối biển, axit, nấm mốc, côn trùng, và mana ăn mòn ở world có luật đó. Bảo dưỡng là lao động có chi phí, nên “giữ được đồ” là một chỉ dấu của trật tự xã hội — kho vũ khí của một quốc gia đang tan rã sẽ tự nói lên điều đó mà không cần biến `stability`.
+
+#### 8.6.4. Giá trị không phải một con số lưu trong vật phẩm
+
+Vật phẩm lưu **thuộc tính khách quan** — vật liệu, chất lượng, tình trạng, công sức, provenance. Giá là kết quả của thị trường ở §12.2 và của **belief người đánh giá**, đúng logic danh tiếng ở §9.9.3.
+
+Hệ quả: một kiệt tác vô giá ở kinh đô có thể đổi được vài cân lúa ở một ngôi làng không ai nhận ra nó. Thẩm định là một kỹ năng có thật, và chênh lệch thông tin giữa người bán và người mua là chỗ sinh ra thương nhân, kẻ lừa đảo và nhà sưu tầm.
+
+### 8.7. Chế tác và dấu ấn người làm
+
+Công thức là node trong knowledge graph §13.1, không phải một bảng riêng. Chế tác tiêu thụ nguyên liệu, công cụ, thời gian, năng lượng và không gian làm việc; nó tạo ra vật phẩm cộng một event provenance.
+
+Kết quả **không đồng nhất**. Cùng một người thợ, cùng một công thức, cho ra một phân phối chất lượng phụ thuộc kỹ năng hiện tại, công cụ, vật liệu, mệt mỏi và tập trung. Đuôi trên của phân phối, cộng với `talent` hiếm ở §13.8.1, là nơi kiệt tác xuất hiện — không phải một lượt tung xúc xắc “rơi đồ hiếm”.
+
+**Dấu ấn người làm** là dữ liệu bắt buộc với vật phẩm chất lượng cao: chữ ký, dấu lò, phong cách trường phái, thói quen kỹ thuật. Nó mở ra bốn thứ cùng lúc mà không cần hệ thống nào khác: thẩm định, giả mạo, lịch sử nghệ thuật, và tranh chấp quy kết tác giả.
+
+Phong cách hình thức đến từ culture ở §12.3, nên một món đồ đào được từ tàn tích của tiền sử (§7.6.4) có thể được xác định niên đại và nguồn gốc bằng suy luận, chứ không bằng một nhãn dán sẵn. Khảo cổ học trở thành một hoạt động có thật trong world.
+
+Chế tác thất bại theo cách có thật: hỏng vật liệu, thương tích, bán thành phẩm, hoặc một món đồ trông ổn nhưng có khuyết tật ẩn chỉ lộ ra khi chịu tải.
+
+### 8.8. Vật phẩm mang thông tin
+
+Sách, cuộn giấy, bản đồ, thư, bia khắc, bảng đất sét đều là vật phẩm có `Legibility`:
+
+```yaml
+legibility:
+  language: "language:old_veskaran"
+  script: "script:runic"
+  medium: vellum
+  encoding: { cipher: "cipher:temple_substitution", key_required: true }
+  payload:
+    - { kind: knowledge_ref, node: "knowledge:iron_smelting", fidelity: 0.72 }
+    - { kind: event_claim,   event: "event:...", as_believed_by: "entity:..." }
+    - { kind: belief,        statement: "...", confidence: 0.9 }
+  copied_from: "item:..."         # chuỗi bản sao, có thể dài
+  transcription_errors: 3
+```
+
+Bốn quy tắc:
+
+1. **Đọc là một lần truyền dạy có hao hụt**, dùng đúng cơ chế §13.3. Người đọc cần ngôn ngữ, chữ viết, khả năng đọc và kiến thức tiền đề. Một cuốn sách phép cao cấp trong tay người thiếu nền tảng chỉ cho ra trạng thái `HEARD_OF`, không phải `PRACTICED`.
+2. **Nội dung là dữ liệu không tin cậy**, đúng §22.18. Sách ghi lại *điều tác giả tin*, kèm provenance. Nó có thể sai, có thể là tuyên truyền, có thể là ngụy tạo.
+3. **Sao chép sinh lỗi.** Mỗi thế hệ bản sao tích lũy sai lệch, y hệt cơ chế trôi dạt truyền miệng ở §12.3. Từ đó có phê bình văn bản, bản gốc thất lạc, và những dị giáo sinh ra từ một lỗi dịch.
+4. **Tri thức có thể mất thật.** Nếu mọi bản sao bị hủy và không ai còn node đó trong `Knowledge`, tri thức biến mất khỏi world cho tới khi có người khám phá lại. Đốt sách vì thế là một hành động có hậu quả đo được, không phải một sự kiện trang trí — và nó nối thẳng vào effect `bị cấm dạy` trên `knowledge_node` ở §9.8.6.
+
+Bản đồ là một vật chứa **belief về địa lý**, nên nó sai được, và làm sai lệch được. Bán bản đồ giả cho một đoàn thám hiểm là một hành vi có thể dẫn tới cái chết của họ, và có thể bị truy tố theo §12.5.
+
+### 8.9. Vật phẩm huyền thoại và di sản
+
+#### 8.9.1. Bốn con đường thành huyền thoại
+
+Không có “tỉ lệ rơi đồ huyền thoại”. Một món đồ trở nên phi thường qua ít nhất một trong bốn đường:
+
+1. **Tay nghề tuyệt đỉnh** — đuôi trên của phân phối ở §8.7, thường gắn với một khoảnh khắc thăng hoa của người thợ.
+2. **Lịch sử tích lũy** — thanh kiếm tầm thường đã có mặt ở ba trận đánh quyết định và giết một vị vua. Giá trị nằm ở provenance, không ở vật liệu.
+3. **Ràng buộc phép thuật** — nghi thức, domain, hoặc một linh hồn bị neo vào vật, theo luật ma thuật §13.6.
+4. **Nguồn gốc thần thánh hoặc dị thường** — khải thị ở §13.8.2, mảnh vỡ từ rift, di vật của một world khác.
+
+#### 8.9.2. Truyền thuyết không phải lịch sử
+
+Đây là một quyết định thiết kế cần nói rõ, vì nó ngược với cách một số game làm.
+
+*Caves of Qud* sinh lịch sử bằng cách tạo sự kiện trước rồi hợp lý hóa sau — hiệu quả cho việc tạo huyền thoại, nhưng vi phạm trực tiếp §22.17 của tài liệu này. Ta làm ngược lại: **sự kiện có thật trước, truyền thuyết là ảnh biến dạng của nó.**
+
+Chuỗi provenance là dữ liệu thật, ghi từng lần đổi chủ, từng lần được dùng, từng lần bị sửa. Truyền thuyết là *belief* về chuỗi đó, lan qua kể lại và chịu trôi dạt theo §12.3. Kết quả là Legends view ở §18.3 hiển thị được **hai lớp cạnh nhau**: điều đã xảy ra, và điều người ta tin là đã xảy ra. Khoảng cách giữa hai lớp chính là nội dung chơi được — một học giả có thể dành cả đời để chứng minh thanh kiếm quốc bảo thực ra được rèn sau ngày lập quốc một trăm năm.
+
+#### 8.9.3. Vật phẩm là đối tượng xã hội
+
+Vương miện, ấn tín, thánh tích và bảo kiếm gia truyền có sức mạnh **một phần đến từ niềm tin**. Quyền uy của một chiếc vương trượng chỉ thật đúng bằng mức người ta tin vào nó, nên nó nối thẳng vào tính chính danh ở §12.5 và tín ngưỡng ở §14.2.
+
+Từ đó rơi ra một loạt hệ quả không cần viết riêng: tranh chấp thừa kế, chiến tranh đòi lại bảo vật gia tộc, cướp thánh tích để hạ uy tín đối phương, làm bản sao để trưng bày và giấu bản thật, và cả trường hợp một bản sao được tin là thật suốt hai trăm năm.
+
+#### 8.9.4. Vật phẩm có tri giác
+
+Một vật mang `MemoryNamespace` và tag `Sapient` là hợp lệ — linh hồn bị ràng vào thanh kiếm, một cuốn sách biết nói. Nó không phải trường hợp đặc biệt: nó tuân thủ toàn bộ §9.1, chiếm ngân sách nhận thức như mọi `Sapient` khác, và chịu mọi ràng buộc ở §22.
+
+#### 8.9.5. Hủy diệt là thật
+
+*Dwarf Fortress* cho artifact hồi sinh sau khi bị phá hủy. Ta không làm vậy. Vật phẩm bị hủy là bị hủy, có event, có nhân chứng, có hậu quả chính trị.
+
+Nhưng **truyền thuyết sống sót sau vật thể**, vì truyền thuyết là dữ liệu nằm trong văn hóa và ký ức chứ không nằm trong món đồ. Một thanh kiếm bị nung chảy vẫn để lại một khoảng trống có tên trong lịch sử, những kẻ đi tìm nó, và những kẻ tuyên bố đã tìm thấy nó.
 
 ## 9. Sinh vật và thực thể sống
 
@@ -485,7 +645,7 @@ Component của mọi `Animate`:
 - `Skill`: mức thành thạo có domain và decay rule theo §9.3.
 - `EffectSet`: mọi effect đang tác động theo §9.8; thay cho `StatusEffect`.
 - `Relationship`: cảm xúc, niềm tin, nghĩa vụ, nợ, huyết thống; loài không sapient dùng dạng rút gọn cho bầy đàn.
-- `Inventory`, `Equipment` nếu loài có khả năng cầm nắm hoặc mang vác.
+- `Inventory`, `Equipment` nếu loài có khả năng cầm nắm hoặc mang vác; vật phẩm bên trong tuân theo §8.5.
 - `BehaviorController`.
 
 Component chỉ `Sapient` mới có:
@@ -808,6 +968,8 @@ LLM chỉ chọn từ action mà engine công bố cho entity, ví dụ:
 - `observe`, `search`, `track`, `listen`.
 - `speak`, `ask`, `teach`, `threaten`, `negotiate`.
 - `take`, `drop`, `craft`, `repair`, `build`, `harvest`.
+- `read`, `write`, `copy`, `appraise`, `authenticate`, `forge_document`.
+- `lend`, `pledge`, `claim_ownership`, `transfer_claim`.
 - `attack`, `defend`, `treat_injury`, `cast_spell`.
 - `trade`, `sign_contract`, `vote`, `issue_order`.
 - `study`, `experiment`, `research`, `document`.
@@ -914,7 +1076,7 @@ Một quốc gia không có “bộ não toàn tri”. Quyết định của nó
 - Production dùng recipe, công cụ, skill, thời gian, năng lượng và hạ tầng.
 - Thị trường địa phương hình thành giá từ cung, cầu, tồn kho, rủi ro và thông tin.
 - Khu vực xa tổng hợp giao dịch theo luồng; giao dịch quan trọng hoặc gần người chơi được materialize.
-- Tiền là một loại claim xã hội, không tự có giá trị ở mọi world.
+- Tiền là một loại claim xã hội, không tự có giá trị ở mọi world; sở hữu, tiền tệ và claim trừu tượng được định nghĩa ở §12.8.
 - Nạn đói phải liên hệ với mùa màng, dự trữ, logistics, chiến tranh, phân phối và chính sách; không chỉ random event.
 
 ### 12.3. Văn hóa và ngôn ngữ
@@ -1084,6 +1246,77 @@ Sự kiện bạo lực tình dục được ghi như mọi event khác ở §17
 Đây vừa là ranh giới nội dung vừa là quyết định kỹ thuật. LLM nhập vai NPC cần một narration policy cố định, nếu không thì tone trôi theo từng model, audit log mất giá trị, và §22.17 (“narration không được thêm sự kiện không có trong event log”) không còn kiểm chứng được.
 
 `world.content_profile` cho phép True God chỉnh mức tối của từng world — Gaia và Umbral Abyss không cần giống nhau — nhưng nó chỉ điều chỉnh tần suất và mức độ của **sự kiện được mô phỏng**, không mở khóa tầng trình bày.
+
+### 12.8. Sở hữu, tiền tệ và claim trừu tượng
+
+§8.5 định nghĩa vật phẩm nhưng cố ý bỏ quyền sở hữu ra ngoài. Lý do ở đây.
+
+#### 12.8.1. Chiếm hữu khác quyền sở hữu
+
+Hai khái niệm tách hẳn:
+
+- **Possession** — ground truth vật lý: món đồ đang nằm trong tay ai, trong kho nào. Engine biết chính xác.
+- **Claim** — belief xã hội: ai *được công nhận* là chủ, theo `norm_set` nào ở §12.5.
+
+Một món đồ có thể có nhiều claim mâu thuẫn cùng lúc, và không claim nào tự thực thi được. Muốn đòi lại phải qua đúng bộ máy §12.5: phát hiện, chứng cứ, thủ tục, cưỡng chế.
+
+Từ một sự tách đôi này rơi ra: trộm cắp (chuyển possession không chuyển claim), tiêu thụ đồ gian, tẩy nguồn gốc, hoàn trả, chiếm hữu lâu ngày thành quyền, chiến lợi phẩm hợp pháp theo luật chiến tranh nhưng bất hợp pháp theo luật bên bại trận, và tranh chấp thừa kế. Không cần hệ thống riêng cho bất kỳ thứ nào.
+
+#### 12.8.2. Tiền tệ không phải điểm khởi đầu
+
+§12.2 đã nói tiền là một claim xã hội. Nhân học kinh tế đi xa hơn: các nghiên cứu của David Graeber lập luận rằng tín dụng và nợ xuất hiện **trước** tiền đúc, còn “nền kinh tế đổi chác nguyên thủy” gần như không có bằng chứng khảo cổ; nhu cầu cơ bản trong xã hội sơ khai được đáp ứng bằng mạng lưới nghĩa vụ tương hỗ.
+
+Vì thế thang tiến hóa tiền tệ trong world được mô hình hóa theo thứ tự đó, và scenario ở §7.6.3 chọn nền văn minh đang ở nấc nào:
+
+```text
+mạng nghĩa vụ tương hỗ → tín dụng và sổ nợ → tiền hàng hóa
+  → tiền đúc do nhà nước phát hành → tiền đại diện/tín dụng nhà nước
+  → tiền ngoại lai: mana, linh hồn, lời thề, ân huệ thần linh
+```
+
+Một world hoàn toàn có thể không bao giờ có tiền đúc. Một world khác có thể dùng ân huệ của thần làm đơn vị thanh toán. Cả hai đều hợp lệ.
+
+#### 12.8.3. Đồng xu là vật phẩm, tín dụng là bản ghi
+
+Phân biệt này cho ra rất nhiều thứ miễn phí:
+
+- **Đồng xu là item** theo §8.5, nên nó có `MaterialComposition`. Một nhà nước túng quẫn có thể **pha loãng hàm lượng bạc**. Thương nhân biết thử tuổi kim loại sẽ phát hiện, và lạm phát xuất hiện vì **niềm tin thay đổi**, không vì một biến toàn cục bị chỉnh. Cắt xén viền xu, nấu chảy xu lấy kim loại, tích trữ xu tốt và tiêu xu xấu đều là hành vi hợp lý của nhân vật.
+- **Tín dụng là claim record** do cả hai bên giữ, có thể giả mạo, chối bỏ, vỡ nợ, chuyển nhượng hoặc bị xóa bởi một cuộc cách mạng.
+
+#### 12.8.4. Vòi và cống
+
+Bài học từ những nền kinh tế do người chơi vận hành, rõ nhất là EVE Online: một nền kinh tế ổn định cần **vòi** (nguồn bơm vào) cân bằng với **cống** (đường rút ra), và rút tiền mà không có hao mòn vật chất sẽ dẫn thẳng tới giảm phát vì hàng hóa tích tụ mãi trong khi tiền bị hút bớt.
+
+Ràng buộc cho dự án này:
+
+- Mỗi world phải khai báo rõ vòi và cống của mình trong economy profile.
+- **Hao mòn ở §8.6.3 là cống vật chất chính.** Chiến tranh, hỏa hoạn, thiên tai và phá hủy là cống bổ sung — và cũng chính là lý do sản xuất không bao giờ dừng.
+- Yuu Auditor ở §15.1 theo dõi cung tiền so với lượng hàng hóa và **báo nguyên nhân** lạm phát hoặc giảm phát, thay vì âm thầm chỉnh một hệ số.
+- Cống hiệu quả nhất là cống mà người ta tự nguyện đi vào vì thấy đáng: lễ hội, xây đền, sính lễ, đấu giá địa vị, bảo trợ nghệ thuật. Ép thuế là cống kém nhất và tạo ra §12.5.
+
+#### 12.8.5. Claim trừu tượng là công dân hạng nhất
+
+Những thứ sau không phải vật chất nhưng chuyển nhượng được, tranh chấp được và trộm được. Chúng dùng chung một schema với vật phẩm ở phần định danh và provenance, nhưng không có `Form` hay `MaterialComposition`:
+
+| Loại | Ví dụ |
+|---|---|
+| Nợ | giấy nợ, sổ nợ, nợ máu, nợ ân tình |
+| Quyền tài sản | văn tự đất, quyền khai thác mỏ, quyền dùng nước |
+| Chức vị | tước hiệu, chức quan, quyền kế vị |
+| Giấy phép | phép hành nghề, phép dùng phép thuật, thông hành |
+| Phần góp | cổ phần thương hội, phần chia chiến lợi phẩm |
+| Cam kết | hợp đồng, hiệp ước, lời thề, giao ước với thần |
+| Danh nghĩa | ân xá, tiền treo thưởng, quyền báo thù được thừa nhận |
+
+Mỗi claim có bên phát hành, bên nắm giữ, điều khoản, cơ chế cưỡng chế, khả năng chuyển nhượng và thời hạn. Lời thề và giao ước đã có sẵn chỗ trong bộ nhớ ở §11.2, nên chúng nối liền vào ký ức nhân vật chứ không nằm trong một bảng tách rời.
+
+Điểm chung quan trọng nhất: **claim chỉ mạnh bằng cơ chế cưỡng chế đứng sau nó.** Một văn tự đất ở vùng chính quyền không với tới chỉ là một tờ giấy, và điều đó phải đúng trong mô phỏng.
+
+#### 12.8.6. Giả mạo và thẩm định
+
+Mọi thứ chuyển nhượng được đều giả mạo được: chữ ký, con dấu, văn tự, tiền, dấu ấn thợ ở §8.7, cả dấu phép. Thẩm định là node tri thức trong §13.1 với kỹ năng tương ứng, nên nó có người giỏi và người dở, có trường phái, và có thể sai.
+
+Cuộc chạy đua giữa làm giả và chống làm giả là một nhánh nghiên cứu hợp lệ trong §13.4, và là một trong những động lực tự nhiên đẩy một nền văn minh tới hóa học, luyện kim chính xác và phép thuật xác thực.
 
 ## 13. Tri thức, kỹ năng, công nghệ và ma thuật
 
@@ -1487,6 +1720,8 @@ Mọi thay đổi quan trọng có event:
 - Cá nhân: lời hứa, phản bội, cưới, học được skill, đổi mục tiêu.
 - Xã hội: bầu cử, đảo chính, luật mới, đình công, di cư.
 - Công nghệ: thí nghiệm, phát minh, tai nạn, phổ biến kiến thức.
+- Vật phẩm: chế tác, hư hỏng, sửa chữa, thất lạc, đánh cắp, phá hủy, đổi chủ, được đặt tên.
+- Kinh tế: đổi giá, vỡ nợ, pha loãng tiền, mất mùa thương mại, tranh chấp claim.
 - Quân sự: tuyên chiến, trận đánh, đầu hàng, hiệp ước.
 - Siêu hình: thăng thần, domain conflict, triệu hồi, portal, rift.
 - Tư pháp: phạm tội bị phát hiện, buộc tội, xét xử, phán quyết, hình phạt, ân xá, án oan được lật lại.
@@ -1520,6 +1755,7 @@ Sau đó nhà vua có thể thương lượng, xâm lược, đầu tư nghiên 
 - Pathfinding, tầm nhìn và âm thanh.
 - Biome, tài nguyên, ownership, biên giới và trade route.
 - Population, dịch bệnh, bất mãn và chiến tranh.
+- Cung tiền, dòng chảy tiền tệ và mức lạm phát theo khu vực.
 - Trật tự, tỉ lệ phát hiện tội phạm và vùng ảnh hưởng của quyền lực ngầm.
 - Ổ dịch, vùng kiểm dịch và `hygiene_load`.
 - Portal graph và event heatmap.
@@ -1530,6 +1766,7 @@ Màu có pattern/icon phụ để không phụ thuộc hoàn toàn vào khả n�
 
 - **World view**: bản đồ và điều khiển thời gian/lát cắt.
 - **Inspector**: cell, material, entity, body, inventory, belief và memory.
+- **Item view**: composition, chất lượng, tình trạng, dấu ấn thợ, chuỗi provenance và truyền thuyết đang lưu hành.
 - **Timeline**: event thật, filter theo cause/entity/world.
 - **Entity mind**: observation hiện tại, goal, plan, belief, ký ức được truy xuất và lý do chọn action.
 - **Society view**: quan hệ, tổ chức, economy, luật và diplomacy.
@@ -1584,6 +1821,7 @@ Một prototype thuần web có thể dùng Web Worker + IndexedDB, nhưng basel
 - `worldgen`: seed, terrain, biome, resource, structure placement.
 - `spatial`: chunk, occupancy, pathfinding, portal transfer.
 - `physics`: material, heat, fluid, reaction, combat resolution.
+- `items`: vật phẩm, chế tác, chất lượng, hao mòn, provenance và claim.
 - `life`: body, need, ecology, lifecycle.
 - `society`: relationship, organization, economy, diplomacy.
 - `knowledge`: learning, teaching, research, spell/tech graph.
@@ -2080,6 +2318,115 @@ trust: community
 
 `hash`, `fuel_limit` và `tests` là bắt buộc với mọi module WASM. Pack không có test hợp lệ vẫn nạp được ở chế độ thủ công nhưng không bao giờ được gắn nhãn `verified`.
 
+### 21.6. Vật phẩm: định nghĩa và thực thể
+
+Định nghĩa loại vật phẩm — dữ liệu tĩnh, đăng ký qua registry, plugin thêm được theo §19.7:
+
+```yaml
+schema: item_def/v1
+id: "item.sword.arming"
+form:
+  parts:
+    - { name: blade, volume_l: 0.42, material_slot: [steel, bronze, obsidian] }
+    - { name: hilt,  volume_l: 0.18, material_slot: [oak, ash, bone] }
+    - { name: fitting, volume_l: 0.05, material_slot: [iron, silver, gold], optional: true }
+  assembled_mass_kg: derived
+functions:                          # affordance suy ra, không phải nhãn "weapon"
+  - { id: cut,    from: [blade.sharpness, blade.hardness, geometry.edge_angle] }
+  - { id: strike, from: [assembled_mass_kg, mass_distribution] }
+  - { id: pry,    from: [blade.stiffness, length], efficiency: 0.3 }
+recipe: "knowledge:blade_forging"    # công thức là node tri thức, §13.1
+wear:
+  sources: [use.cut, use.strike, humidity, salt, acid]
+  maintenance: { action: action.sharpen, restores: condition.edge }
+quality_display: "culture/*/quality_scale"   # thang bậc theo văn hóa, §8.6.2
+stack_policy:
+  can_stack: false
+  promote_to_instance_if: [named, quality_above: 0.86, has_effect, is_evidence, disputed]
+```
+
+Thực thể vật phẩm — chỉ tồn tại đầy đủ khi đã lên mức instance theo §8.5.2:
+
+```yaml
+schema: item/v1
+id: "item:0f31..."
+def: "item.sword.arming"
+identity:
+  name: "Lời Hứa Mùa Đông"        # chỉ vật phẩm có tên riêng mới có khối này
+  named_by: "entity:aren"
+  named_at_event: "event:..."
+composition:
+  blade: { material: "material:crucible_steel", purity: 0.94 }
+  hilt:  { material: "material:oak" }
+craft_quality: 0.91                # bất biến, §8.6.1
+craft_marks:
+  maker: "entity:smith_hallan"
+  workshop: "organization:hallan_forge"
+  school_style: "culture:veskar/late_forge"
+  signature: "rune:hallan_mark"
+condition:
+  blade: { edge: 0.62, structural: 0.88, corrosion: 0.10 }
+  hilt:  { structural: 0.71, rot: 0.22 }
+  repairs:
+    - { part: hilt, by: "entity:village_carpenter", quality: 0.34, at_event: "event:..." }
+effects:
+  - "effect:enchant.frost_edge"    # dùng nguyên hệ §9.8
+provenance:                         # chuỗi thật, là nguồn của mọi truyền thuyết §8.9.2
+  - { kind: crafted,  actor: "entity:smith_hallan", event: "event:..." }
+  - { kind: gifted,   from: ..., to: ..., event: "event:..." }
+  - { kind: used_in,  context: "event:battle_of_thorn_pass" }
+  - { kind: stolen,   by: ..., event: "event:..." }
+location: { kind: inventory, holder: "entity:aren", slot: main_hand }
+```
+
+`location` có đúng một dạng trong `cell | container | inventory`, theo §8.5.3.
+
+### 21.7. Claim: sở hữu, tiền tệ và cam kết
+
+```yaml
+schema: claim/v1
+id: "claim:9b2e..."
+kind: ownership                     # ownership | debt | deed | office | license
+                                    # | share | contract | oath | bounty | amnesty
+subject: "item:0f31..."             # hoặc land, office, tỉ lệ lợi nhuận, một hành vi
+holder: "entity:aren"
+issued_by: "organization:nation.veskar"
+recognized_under: "nation.veskar.criminal_code.v3"   # §12.5.1
+terms:
+  transferable: true
+  expires: null
+  conditions: ["holder_remains_citizen"]
+enforcement:
+  agency: "organization:veskar.city_watch"
+  strength: derived                 # phụ thuộc coverage thật ở nơi tranh chấp
+competing_claims:
+  - { holder: "organization:hallan_forge", basis: "unpaid_commission", filed_event: "event:..." }
+authenticity:
+  seal: "seal:veskar_chancery"
+  forgery_risk: derived             # §12.8.6
+provenance: [ ... ]
+```
+
+Tiền tệ dùng cùng khung, và nói rõ nó thuộc nấc nào của §12.8.2:
+
+```yaml
+schema: currency/v1
+id: "currency:veskar_silver_mark"
+stage: minted_coin                  # obligation | credit | commodity | minted_coin
+                                    # | state_credit | exotic
+issuer: "organization:nation.veskar"
+embodiment:
+  kind: item
+  item_def: "item.coin.silver_mark"
+  declared_silver_ratio: 0.925
+  actual_silver_ratio: 0.780        # nhà nước đã pha loãng, §12.8.3
+  detectable_by: "knowledge:metal_assay"
+economy_profile:
+  faucets: [mining.silver, war_plunder, foreign_trade_surplus]
+  sinks: [item_wear, war_loss, temple_construction, festival, luxury_import]
+  monitored_by: yuu.auditor         # §12.8.4
+```
+
 ## 22. Bất biến phải giữ
 
 1. Một state change authoritative chỉ được commit qua simulation/transaction handler.
@@ -2113,6 +2460,13 @@ trust: community
 29. Mọi id do plugin đăng ký phải có namespace; ghi đè phải khai báo tường minh và xung đột là lỗi, không phải thắng theo thứ tự load.
 30. Save ghi pack set, version và content hash; thiếu hoặc lệch thì từ chối load thay vì load một phần.
 31. Không plugin nào được cấp quyền ghi state authoritative, nới bất biến engine hoặc đọc memory namespace mà nó không sở hữu.
+32. Vật phẩm là entity có component; không tồn tại bảng vật phẩm song song với ECS.
+33. Một vật phẩm nằm ở đúng một trong ba nơi — cell, container hoặc inventory. Chuyển chỗ là transaction, không nhân đôi và không bốc hơi.
+34. `CraftQuality` bất biến sau khi chế tác; sửa chữa chỉ phục hồi `Condition`.
+35. Vật phẩm không lưu giá trị; giá là kết quả của thị trường và belief của người đánh giá.
+36. Possession là ground truth vật lý, claim là belief xã hội; không claim nào tự thực thi mà không qua bộ máy §12.5.
+37. Truyền thuyết về vật phẩm phải suy ra từ chuỗi provenance có thật; biến dạng khi truyền lại thì được, bịa sự kiện thì không.
+38. Chế tác bảo toàn vật chất; không có đường sinh vật phẩm từ hư không ngoài genesis và override có provenance.
 
 ## 23. Mục tiêu kỹ thuật có thể đo
 
@@ -2134,6 +2488,10 @@ Các con số là mục tiêu baseline để kiểm chứng kiến trúc, có th
 - Một bản án truy được ngược về hành vi, nhân chứng, chứng cứ và điều luật đã áp dụng.
 - Cùng worldseed cộng cùng pack set cho cùng hash thế giới khởi đầu trên hai lần chạy.
 - Một content pack bên thứ ba nạp được, chạy test scenario và không làm đổi hash của world không dùng nó.
+- Một kho 4200 thỏi sắt không tạo 4200 entity; thăng và giáng giữa instance với stack cho cùng kết quả khi replay.
+- Truy được toàn bộ chuỗi đổi chủ của một vật phẩm và đặt nó cạnh truyền thuyết đang lưu hành để thấy chỗ lệch.
+- Tắt hao mòn trong một world thử nghiệm phải làm Auditor báo cảnh báo giảm phát trong khoảng thời gian mô phỏng đã định.
+- Đốt hết bản sao của một cuốn sách làm node tri thức đó biến mất khỏi world nếu không ai còn giữ nó trong `Knowledge`.
 
 Không đặt cam kết số lượng “một triệu NPC real-time” trước khi có benchmark. Quy mô thật phải được đo riêng cho entity active, scheduled, dormant và aggregate.
 
@@ -2162,6 +2520,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 
 - Body, homeostasis §9.7 với tích phân đóng, inventory, movement, perception và action registry.
 - Effect pipeline §9.8 ở mức cơ bản: đói, lạnh, thương tích, độc, một bệnh truyền nhiễm.
+- Vật phẩm cơ bản: instance/stack, chất lượng, hao mòn, chế tác và sửa chữa theo §8.5–§8.7.
 - Khoảng vài chục entity, nhà, nghề, resource, crafting và lịch trình.
 - Utility AI, event log, relationship cơ bản.
 - Active/near/far LOD đầu tiên.
@@ -2172,6 +2531,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Kinh tế nhỏ có nguồn và nơi tiêu thụ thật.
 - Tua thời gian xa rồi quay lại không làm mất dân/tài nguyên.
 - Áp rồi gỡ hàng nghìn effect trả về đúng base stat ban đầu.
+- Một kho hàng nghìn đơn vị hàng hóa không làm nổ số lượng entity.
 
 ### Giai đoạn C — Nhận thức LLM và ký ức
 
@@ -2199,6 +2559,8 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Thị trường/logistics cấp khu vực.
 - Yuu Director tạo pressure/event seed.
 - `norm_set`, pipeline tội phạm §12.5, tổ chức tội phạm và tệ nạn §12.6.
+- Sở hữu, claim, tiền tệ và economy profile có vòi/cống theo §12.8.
+- Vật phẩm mang thông tin: sách, bản đồ, sao chép có lỗi theo §8.8.
 
 **Điều kiện hoàn thành**:
 
@@ -2206,6 +2568,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 - Xung đột xã hội có cause chain, không phải random label.
 - Yuu tạo tình huống nhưng không ép quyết định nhân vật.
 - Một bản án truy được từ hình phạt ngược về hành vi, nhân chứng và chứng cứ.
+- Lạm phát hoặc giảm phát xuất hiện có nguyên nhân truy được, không do ai chỉnh hệ số.
 
 ### Giai đoạn E — Ma thuật và đa thế giới
 
@@ -2213,6 +2576,7 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 
 - Mana/law DSL Tier 0, sandbox WASM Tier 1 §13.9, spell action và counterplay.
 - Thiên phú, khải thị và tổng hợp spell §13.8.
+- Vật phẩm huyền thoại, phù phép, di sản và vật phẩm có tri giác §8.9.
 - World 1, World 2, World 3 và Super Ultra World.
 - Portal state machine, transactional transfer và access control.
 - Soul, summon, ascension và domain authority.
@@ -2265,6 +2629,9 @@ Không đặt cam kết số lượng “một triệu NPC real-time” trước
 | Nội dung tối trở thành văn bản tường minh | Lệch tone, audit log mất giá trị | Event record có cấu trúc, narration policy, render mức biên niên sử |
 | Plugin cộng đồng phá determinism hoặc save | Không replay được, hỏng save | Namespace, capability, fuel, content hash, determinism test bắt buộc |
 | Scenario ghi thẳng state | Thế giới khởi đầu không replay được | Biên dịch thành genesis command tại tick 0 |
+| Vật phẩm sinh sôi không kiểm soát | Nổ số lượng entity, save phình | Instance/stack/aggregate, điều kiện thăng-giáng là dữ liệu |
+| Kinh tế trôi vào lạm phát hoặc giảm phát | Giá vô nghĩa, thương mại chết | Khai báo vòi/cống, hao mòn là cống chính, Auditor báo nguyên nhân |
+| Truyền thuyết mâu thuẫn lịch sử | Mất niềm tin vào cause chain | Legend là biến dạng của provenance thật, hiển thị hai lớp cạnh nhau |
 
 ## 26. Một kịch bản emergent hoàn chỉnh
 
@@ -2299,4 +2666,5 @@ My Open World đạt đúng tầm nhìn khi:
 - Mặt tối của xã hội — tội phạm, tệ nạn, áp bức — tồn tại như hệ quả có nguyên nhân và có đường chống lại, không phải như nhãn dán.
 - Một người ngoài dự án thêm được loài, bệnh, luật hoặc cả một nền văn minh bằng content pack mà không cần sửa engine.
 - Hai người chơi trao đổi worldseed và nhận được cùng một thế giới khởi đầu, kiểm chứng bằng hash.
+- Một thanh kiếm kể được lịch sử của chính nó: ai rèn, qua tay ai, giết ai, ai vá lại — và điều người ta tin về nó lệch ở đâu so với điều đã thật sự xảy ra.
 - True God có toàn quyền nhưng luôn có công cụ preview, giải thích, snapshot và hoàn tác để tự do thử nghiệm.
