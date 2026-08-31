@@ -2640,24 +2640,33 @@ Overlay ở §18.2 là bản đồ nhiệt trên lưới. Chúng tuân theo bố
 
 **Không bao giờ dùng cầu vồng cho độ lớn**, và không bao giờ đặt một sắc ở điểm giữa của thang phân kỳ — điểm giữa phải là xám trung tính, nếu không người đọc không tìm được mốc 0.
 
-#### 18.6.2. Trần cứng: bản đồ chỉ chở được ba định danh bằng màu
+#### 18.6.2. Sàn ΔE cho định danh trên bản đồ
 
-Đây là ràng buộc quan trọng nhất và nó là **con số tính ra được**, không phải ý kiến.
+Đây là ràng buộc quan trọng nhất và nó là **con số tính ra được**, không phải ý kiến. Bộ kiểm ở `web/src/render/palette/` tái hiện được mọi con số dưới đây.
 
-Trên biểu đồ cột, hai màu chỉ cần phân biệt được với hàng xóm của nó trong thứ tự. Trên bản đồ thì **bất kỳ hai vùng nào cũng có thể nằm cạnh nhau**, nên mọi cặp đều phải phân biệt được. Kiểm tra bộ màu phân loại chuẩn theo chế độ "mọi cặp" cho kết quả:
+Trên biểu đồ cột, hai màu chỉ cần phân biệt được với hàng xóm của nó trong thứ tự. Trên bản đồ thì **bất kỳ hai vùng nào cũng có thể nằm cạnh nhau**, nên mọi cặp đều phải phân biệt được. Đo bằng CIEDE2000, lấy giá trị nhỏ nhất qua cả ba dạng mù màu:
 
-- Ba sắc đầu tiên: đạt. Cặp tệ nhất ΔE 9.2 với người mù màu, ΔE 24.0 với thị giác bình thường.
-- Thêm sắc thứ tư: **hỏng**. Cặp vàng–cam rơi xuống ΔE 13.7 với thị giác bình thường, dưới sàn 15 — nghĩa là ngay cả người nhìn màu đầy đủ cũng khó tách hai vùng đó.
+| Phép đo | ΔE₀₀ |
+|---|---|
+| `#eda100 ↔ #eb6834` với thị giác thường | 24.2 |
+| **cùng cặp đó với người deuteranopia** | **9.6** |
+| Okabe–Ito đủ tám màu, cặp yếu nhất | 10.9 |
 
-Hệ quả cho thiết kế:
+Hai điều rút ra:
 
-> Trên bản đồ, **màu chỉ chở được tối đa ba định danh then chốt**. Từ định danh thứ tư trở đi, danh tính phải do **hoa văn, kiểu viền và nhãn trực tiếp** chở, còn màu chỉ là củng cố.
+**Ràng buộc thật nằm ở mù màu, không ở thị giác thường.** Cặp cam kia cách nhau rõ ràng với hầu hết mọi người và gần như trùng nhau với người deuteranopia. Một bộ kiểm chỉ nhìn thị giác thường sẽ cho nó qua.
 
-Trần này áp cho **overlay định danh then chốt** — phe kiểm soát, quyền sở hữu, phe trong trận — nơi nhầm hai vùng là một lỗi chơi game thật.
+**Ràng buộc là một sàn, không phải một số đếm.** Bản trước của mục này chốt trần "tối đa ba định danh" dựa trên phép đo cũ. Đo lại cho thấy bảng phân loại an toàn kinh điển giữ được 10.9 tới tận tám màu — nghĩa là con số ba là một **biến thay thế** cho sàn, và biến thay thế sai ở cả hai phía: nó cấm những bộ bốn màu tốt và cho qua những bộ ba màu tồi.
+
+> Trên bản đồ, mọi cặp overlay định danh phải cách nhau **ΔE₀₀ ≥ 10 qua mọi dạng thị giác**. Sàn này nằm giữa cặp đã biết là dễ nhầm (9.6) và thứ tốt nhất ngành từng tìm ra (10.9); khoảng hẹp đó là thông tin, không phải sự tùy tiện.
+
+Trần **tám** màu vẫn còn nhưng với lý do khác: quá tám thì không bảng nào từng biết giữ nổi sàn trên, nên từ đó trở đi danh tính phải do **hoa văn, kiểu viền và nhãn trực tiếp** chở, còn màu chỉ là củng cố.
+
+Sàn này áp cho **overlay định danh then chốt** — phe kiểm soát, quyền sở hữu, phe trong trận — nơi nhầm hai vùng là một lỗi chơi game thật.
 
 Nó **không** áp cho nền phân loại môi trường như biome, vốn có nhiều hơn ba giá trị và vốn đã có tín hiệu phụ mạnh: hoa văn địa hình, độ cao, thảm thực vật. Nhầm rừng thưa với thảo nguyên là chuyện thẩm mỹ, không phải lỗi quyết định. Nền môi trường vẫn phải qua kiểm tra tương phản với nền và với sắc phủ overlay, chỉ là không chịu trần ba.
 
-Một thế giới có mười hai quốc gia vì thế không được tô mười hai màu. Nó dùng ba màu cho ba khối liên minh đang quan tâm, hoa văn cho từng nước bên trong khối, và phần còn lại gộp thành "khác" — đúng cách bản đồ chính trị thật vẫn làm.
+Một thế giới có mười hai quốc gia vì thế không được tô mười hai màu. Nó dùng một ít màu cho các khối liên minh đang quan tâm, hoa văn cho từng nước bên trong khối, và phần còn lại gộp thành "khác" — đúng cách bản đồ chính trị thật vẫn làm. Con số "một ít" do bộ kiểm quyết định, không do người thiết kế đoán.
 
 Kênh gỡ trần này là **hình dạng**: huy hiệu và icon phân biệt được nhiều danh tính hơn màu rất nhiều lần và không phụ thuộc khả năng phân biệt màu. Xem §18.14.
 

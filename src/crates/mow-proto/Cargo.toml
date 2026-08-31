@@ -1,0 +1,15 @@
+[package]
+name = "mow-proto"
+description = "Kieu sinh tu proto/ — hop dong RPC giua Rust, Python va TypeScript."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+prost = { workspace = true }
+
+[build-dependencies]
+prost = { workspace = true }
+prost-build = { workspace = true }
+prost-types = { workspace = true }

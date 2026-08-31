@@ -1,4 +1,4 @@
-//! Bus bền trên SQLite.
+//! Bus bền trên `SQLite`.
 //!
 //! Một bảng, ba trạng thái. Không có gì thông minh ở đây, và đó là tính năng.
 
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS bus_message (
 CREATE INDEX IF NOT EXISTS bus_ready ON bus_message (subject, state, seq);
 ";
 
-/// Bus trên SQLite.
+/// Bus trên `SQLite`.
 pub struct SqliteBus {
     conn: Connection,
 }

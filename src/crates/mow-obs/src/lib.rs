@@ -15,7 +15,20 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::must_use_candidate)]
+
+pub mod causechain;
+
+pub use causechain::{Chain, ChainView, Link};
 
 use mow_core::{BranchId, Tick, WorldId};
 use serde::Serialize;
@@ -174,7 +187,7 @@ impl LogRecord {
         let phu: String = self
             .fields
             .iter()
-            .map(|(k, v)| format!(" {k}={v}"))
+            .map(|(k, v)| " ".to_owned() + k + "=" + v)
             .collect();
         format!(
             "{muc} [b{} w{} t{}] {}{phu}",

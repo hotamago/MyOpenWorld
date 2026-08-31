@@ -37,6 +37,9 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
@@ -45,6 +48,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_wrap)]
 
+pub mod budget;
 pub mod clock;
 pub mod command;
 pub mod ecs;
@@ -55,6 +59,7 @@ pub mod sim;
 pub mod transaction;
 pub mod value;
 
+pub use budget::{CognitionScheduler, Deferred, Pending, Priority, Weights};
 pub use clock::{Clock, ClockDomain, Deadline, Tick, TickSpan};
 pub use command::{Command, CommandKind, CommandResult, Failure, FailureCode};
 pub use ecs::{AttrKey, Attrs, Identity, Store};

@@ -1,11 +1,11 @@
-//! Hiện thực SQLite — hiện thực **duy nhất** cho tới `PC-20`.
+//! Hiện thực `SQLite` — hiện thực **duy nhất** cho tới `PC-20`.
 //!
 //! Đây là backend của bản desktop (`§P3.3`): một file, không tiến trình phụ,
 //! không cấu hình. Nó cũng là backend của mọi bài test, vì một bài test tạo
 //! world trong bộ nhớ và chạy 1000 tick không nên cần một container.
 //!
 //! Lược đồ ở đây theo đúng `plan.md §P6.6`, kể cả những chỗ khó chịu:
-//! **không có cột `REAL`**. SQLite sẽ vui vẻ nhận số thực, và đó chính là vấn
+//! **không có cột `REAL`**. `SQLite` sẽ vui vẻ nhận số thực, và đó chính là vấn
 //! đề — một cột `REAL` trên đường commit phá cả determinism lẫn tính nhất quán
 //! giữa hai backend, và nó sẽ không báo lỗi cho tới khi hai máy khác nhau cho
 //! hai kết quả khác nhau.
@@ -17,7 +17,7 @@ use mow_math::StateHash;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 
-/// Kho trên SQLite.
+/// Kho trên `SQLite`.
 pub struct SqliteStore {
     conn: Connection,
 }
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS event (
     payload     BLOB    NOT NULL,
     cause       INTEGER,
     law_version INTEGER,
+    norm_set_version INTEGER,
     PRIMARY KEY (branch, seq)
 ) STRICT;
 
@@ -104,7 +105,7 @@ impl SqliteStore {
     ///
     /// `plan.md §P10.2.1` cấm điều này, nhưng lệnh cấm chỉ có giá trị khi có
     /// thứ gì đó kiểm tra. Hàm này chạy trong bộ test hợp đồng, nên **mọi**
-    /// backend đều phải vượt qua nó, không chỉ SQLite.
+    /// backend đều phải vượt qua nó, không chỉ `SQLite`.
     pub fn kiem_tra_khong_co_cot_thuc(&self) -> PersistResult<Vec<String>> {
         let mut vi_pham = Vec::new();
         let bang = ["event", "snapshot", "branch"];
@@ -140,8 +141,9 @@ impl Store for SqliteStore {
         {
             let mut stmt = tx.prepare_cached(
                 "INSERT INTO event
-                   (branch, seq, world, tick, kind, actor, subject, payload, cause, law_version)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                   (branch, seq, world, tick, kind, actor, subject, payload, cause, law_version,
+                    norm_set_version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             )?;
             for e in events {
                 stmt.execute(params![
@@ -155,6 +157,7 @@ impl Store for SqliteStore {
                     e.payload,
                     e.cause.map(|c| c.0 as i64),
                     e.law_version.map(i64::from),
+                    e.norm_set_version.map(i64::from),
                 ])?;
             }
         }
@@ -169,7 +172,8 @@ impl Store for SqliteStore {
         to: EventSeq,
     ) -> PersistResult<Vec<EventRecord>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT seq, world, tick, kind, actor, subject, payload, cause, law_version
+            "SELECT seq, world, tick, kind, actor, subject, payload, cause, law_version,
+                    norm_set_version
                FROM event
               WHERE branch = ?1 AND seq >= ?2 AND seq < ?3
               ORDER BY seq",
@@ -188,6 +192,7 @@ impl Store for SqliteStore {
                     payload: r.get(6)?,
                     cause: r.get::<_, Option<i64>>(7)?.map(|v| EventSeq(v as u64)),
                     law_version: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+                    norm_set_version: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
                 })
             },
         )?;

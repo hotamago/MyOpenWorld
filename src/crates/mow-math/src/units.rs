@@ -9,6 +9,7 @@
 //! Chuyển đổi giữa các đơn vị **luôn là hàm tường minh có kiểm tra tràn**;
 //! không có `From`/`Into` ngầm giữa hai đơn vị khác nhau.
 
+#![allow(clippy::many_single_char_names)]
 use crate::error::{overflow, MathError, MathResult};
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +41,12 @@ macro_rules! unit_scalar {
             pub const fn get(self) -> i64 { self.0 }
 
             #[doc = "Cộng có kiểm tra tràn."]
+            //
+            // Trùng tên với `std::ops::Add` là **có chủ đích**: `a.add(b)?` đọc
+            // như phép cộng thông thường mà vẫn bắt người viết xử lý tràn. Không
+            // hiện thực trait thật được vì trait trả thẳng giá trị và không có
+            // chỗ cho lỗi — đúng thứ mà `§P10.2.1` cấm trên đường commit.
+            #[allow(clippy::should_implement_trait)]
             #[inline]
             pub fn add(self, rhs: $name) -> MathResult<$name> {
                 self.0.checked_add(rhs.0).map($name)
@@ -47,6 +54,7 @@ macro_rules! unit_scalar {
             }
 
             #[doc = "Trừ có kiểm tra tràn."]
+            #[allow(clippy::should_implement_trait)]
             #[inline]
             pub fn sub(self, rhs: $name) -> MathResult<$name> {
                 self.0.checked_sub(rhs.0).map($name)
@@ -62,7 +70,7 @@ macro_rules! unit_scalar {
 
             #[doc = "Nhân với một tỉ lệ chuẩn hóa, làm tròn về phía 0."]
             pub fn scaled_by(self, r: crate::fixed::Unit) -> $name {
-                let p = (self.0 as i128) * (r.get().raw() as i128);
+                let p = (i128::from(self.0)) * (i128::from(r.get().raw()));
                 $name((if p < 0 { -((-p) >> crate::fixed::FRAC_BITS) }
                        else { p >> crate::fixed::FRAC_BITS }) as i64)
             }
@@ -74,7 +82,7 @@ macro_rules! unit_scalar {
                         op: concat!(stringify!($name), "::ratio"),
                     });
                 }
-                let v = (self.0 as i128) * (num as i128) / (den as i128);
+                let v = (i128::from(self.0)) * (i128::from(num)) / (i128::from(den));
                 i64::try_from(v).map($name)
                     .map_err(|_| overflow(concat!(stringify!($name), "::ratio"), num, den))
             }

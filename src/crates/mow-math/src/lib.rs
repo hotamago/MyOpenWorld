@@ -44,6 +44,10 @@
 #![deny(missing_docs)]
 #![deny(clippy::float_arithmetic)] // allow-float: đây chính là lint cấm số thực
 #![warn(clippy::pedantic)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]

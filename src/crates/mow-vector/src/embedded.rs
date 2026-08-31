@@ -1,4 +1,4 @@
-//! Chỉ mục nhúng trên SQLite — hiện thực duy nhất cho tới `PC-20` (Qdrant).
+//! Chỉ mục nhúng trên `SQLite` — hiện thực duy nhất cho tới `PC-20` (Qdrant).
 //!
 //! Quét tuyến tính, không có HNSW. Với vài chục nghìn ký ức của một bản
 //! single-player thì quét tuyến tính trên số nguyên nhanh hơn người ta tưởng,
@@ -164,7 +164,7 @@ impl VectorIndex for EmbeddedIndex {
         let mut hits: Vec<Hit> = Vec::new();
         for row in rows {
             let p = row?;
-            if !q.namespaces.iter().any(|n| *n == p.namespace) {
+            if !q.namespaces.contains(&p.namespace) {
                 continue;
             }
             if bia_mo.contains(&p.id.0) {

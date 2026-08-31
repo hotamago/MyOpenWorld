@@ -24,7 +24,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-__all__ = ["DebugBridge", "BridgeError"]
+__all__ = ["BridgeError", "DebugBridge"]
 
 
 class BridgeError(RuntimeError):
@@ -61,7 +61,7 @@ class DebugBridge:
     """Một phiên gỡ lỗi đang chạy."""
 
     def __init__(self, cwd: Path | None = None) -> None:
-        self._cmd = _tim_mow_cli() + ["debug-session"]
+        self._cmd = [*_tim_mow_cli(), "debug-session"]
         self._cwd = cwd or Path(__file__).resolve().parents[4]
         self._proc: subprocess.Popen[str] | None = None
         self._id = 0
@@ -73,7 +73,7 @@ class DebugBridge:
         """Khởi động tiến trình con."""
         if self._proc is not None:
             return
-        self._proc = subprocess.Popen(  # noqa: S603
+        self._proc = subprocess.Popen(
             self._cmd,
             cwd=self._cwd,
             stdin=subprocess.PIPE,
@@ -92,7 +92,7 @@ class DebugBridge:
             if self._proc.stdin:
                 self._proc.stdin.close()
             self._proc.wait(timeout=5)
-        except Exception:  # noqa: BLE001 — đóng được thì tốt, không thì giết
+        except Exception:
             self._proc.kill()
         finally:
             self._proc = None
@@ -131,7 +131,8 @@ class DebugBridge:
 
         if not res.get("ok"):
             raise BridgeError(res.get("error", "lỗi không rõ"))
-        return res.get("result", {})
+        ket_qua: dict[str, Any] = res.get("result", {})
+        return ket_qua
 
     def __enter__(self) -> DebugBridge:
         self.start()

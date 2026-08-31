@@ -1,0 +1,15 @@
+[package]
+name = "mow-knowledge"
+description = "Do thi tri thuc, hoc va truyen day co hao hut, vat pham mang thong tin, giao duc va luu tru."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -13,9 +13,9 @@ from agent_service.prompts.registry import (
     CLOSE_DELIM,
     OPEN_DELIM,
     PromptError,
-    PromptLeak,
+    PromptLeakError,
     PromptRegistry,
-    UntrustedSlotNotWrapped,
+    UntrustedSlotNotWrappedError,
     untrusted,
 )
 
@@ -30,7 +30,7 @@ def reg() -> PromptRegistry:
     return r
 
 
-def bien_mau() -> dict:
+def bien_mau() -> dict[str, object]:
     return {
         "persona": {"name": "Aren", "species": "nguoi", "age": 40},
         "observations": "Ban thay kho thoc khong co ai canh.",
@@ -80,7 +80,7 @@ def test_thieu_truong_bat_buoc_bi_tu_choi(tmp_path: Path) -> None:
 # ── §22.18 — dữ liệu không tin cậy ───────────────────────────────────────────
 
 
-def test_slot_untrusted_khong_boc_thi_TU_CHOI_NAP(tmp_path: Path) -> None:
+def test_slot_untrusted_khong_boc_thi_tu_choi_nap(tmp_path: Path) -> None:
     """Kiểm ở lúc nạp, không phải lúc render.
 
     Một prompt sai phải làm tiến trình không khởi động được, chứ không phải
@@ -92,7 +92,7 @@ def test_slot_untrusted_khong_boc_thi_TU_CHOI_NAP(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     r = PromptRegistry(tmp_path)
-    with pytest.raises(UntrustedSlotNotWrapped) as e:
+    with pytest.raises(UntrustedSlotNotWrappedError) as e:
         r.load_dir()
     assert "memories" in str(e.value)
     assert "untrusted" in str(e.value)
@@ -106,7 +106,7 @@ def test_slot_untrusted_qua_filter_khac_van_bi_bat(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     r = PromptRegistry(tmp_path)
-    with pytest.raises(UntrustedSlotNotWrapped):
+    with pytest.raises(UntrustedSlotNotWrappedError):
         r.load_dir()
 
 
@@ -161,7 +161,7 @@ def test_leak_guard_bat_duoc_ca_ro_co_tinh_cai_vao(reg: PromptRegistry) -> None:
     # mật mà nhân vật này không được biết.
     bien["memories"] = f"Ban nho rang khau quyet la {khau_quyet}."
 
-    with pytest.raises(PromptLeak) as e:
+    with pytest.raises(PromptLeakError) as e:
         reg.render("cognition.plan", 2, bien, secrets=[khau_quyet])
 
     # Thông báo lỗi không được in ra chính bí mật — log thì được thu thập.
@@ -172,7 +172,7 @@ def test_leak_guard_bat_duoc_ca_ro_co_tinh_cai_vao(reg: PromptRegistry) -> None:
 def test_leak_guard_khong_phan_biet_hoa_thuong(reg: PromptRegistry) -> None:
     bien = bien_mau()
     bien["memories"] = "khau quyet la menh-lenh-cua-vua-xanh"
-    with pytest.raises(PromptLeak):
+    with pytest.raises(PromptLeakError):
         reg.render("cognition.plan", 2, bien, secrets=["MENH-LENH-CUA-VUA-XANH"])
 
 

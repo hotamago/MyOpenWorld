@@ -260,7 +260,7 @@ impl AdmissionLedger {
         // Ghi model **thật sự đã dùng**, kể cả khi gateway đã hạ cấp (`§20.10`).
         // Không ghi cái đã yêu cầu, vì lúc đọc lại log ta cần biết cái gì đã
         // thật sự sinh ra câu trả lời này.
-        c.model = model_thuc_te.to_owned();
+        model_thuc_te.clone_into(&mut c.model);
         c.response = Some(response);
         Ok(true)
     }

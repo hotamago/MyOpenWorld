@@ -17,3 +17,6 @@ mow-plugin = { workspace = true }
 mow-scenario = { path = "../mow-scenario" }
 mow-devtool = { path = "../mow-devtool" }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

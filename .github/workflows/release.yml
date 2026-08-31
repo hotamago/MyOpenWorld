@@ -1,0 +1,81 @@
+name: Release
+
+# Ban desktop la mot SMOKE BUILD (`PA-09`): no ton tai de bat som ba lop loi chi
+# lo ra khi dong goi that — duong dan file, quyen he thong, va CSP cua WebView.
+# Chay moi PR cham vao `web/` hoac `deploy/tauri/`, khong chay moi PR.
+on:
+  push:
+    branches: [master, main]
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "src/web/**"
+      - "src/deploy/tauri/**"
+      - ".github/workflows/release.yml"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-smoke:
+    name: Ban desktop build duoc tren ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.22.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm, cache-dependency-path: src/pnpm-lock.yaml }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { toolchain: "1.90.0" }
+
+      # Phu thuoc he thong cua WebKitGTK. Chi Linux can; hai he kia co WebView
+      # san trong he dieu hanh.
+      - name: phu thuoc he thong (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - name: dung frontend
+        working-directory: src
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter web build
+
+      # Buoc thuc su: neu dong goi hong o bat ky he nao, no do o day chu khong
+      # do o Giai doan F khi kien truc da dong cung.
+      - name: build ban desktop
+        working-directory: src/deploy/tauri/src-tauri
+        run: cargo build --locked
+
+      - name: binary co ton tai
+        shell: bash
+        working-directory: src/deploy/tauri/src-tauri
+        run: |
+          set -eu
+          f=$(ls target/debug/mow-desktop target/debug/mow-desktop.exe 2>/dev/null | head -1)
+          test -n "$f"
+          echo "OK: $f"
+
+      # `§P10.5`: devtool khong bao gio vao ban phat hanh. Kiem tren chinh
+      # binary, khong tren ma nguon — feature flag co the bi bat nham qua mot
+      # phu thuoc bac cau, va luc do chi binary moi noi that.
+      - name: khong co symbol devtool trong binary
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        working-directory: src/deploy/tauri/src-tauri
+        run: |
+          if strings target/debug/mow-desktop | grep -q 'mow_devtool'; then
+            echo "::error::devtool bi link vao ban desktop (§P10.5)"
+            exit 1
+          fi
+          echo "OK: khong co symbol devtool"

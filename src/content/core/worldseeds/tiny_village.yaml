@@ -1,0 +1,58 @@
+# Worldseed nho, dung cho kich ban khoi va cho harness tu kiem chinh no.
+#
+# §22.28: moi thu o day bien dich thanh command tai tick 0. Khong co duong ghi
+# thang state vao save — ke ca cho noi dung chinh thuc.
+
+id: "gaia:tiny_village"
+version: 1
+description: "Mot thung lung on doi, mot lang nho ba nguoi va mot kho thoc."
+
+generation_profile: "gaia"
+packs: ["core"]
+
+genesis:
+  - command: core.spawn
+    name: village
+    args:
+      kind: settlement
+      name: "Lang Nho"
+
+  - command: core.spawn
+    name: aren
+    args:
+      kind: entity
+      name: "Aren"
+      age: 40
+      within: $village
+      tags: ["sapient"]
+
+  - command: core.spawn
+    name: bram
+    args:
+      kind: entity
+      name: "Bram"
+      age: 40
+      within: $village
+      tags: ["sapient"]
+
+  - command: core.spawn
+    name: cira
+    args:
+      kind: entity
+      name: "Cira"
+      age: 31
+      within: $village
+      tags: ["sapient"]
+
+  - command: core.spawn
+    name: granary
+    args:
+      kind: building
+      name: "Kho Thoc"
+      within: $village
+      tags: ["food_store"]
+
+named_entities:
+  aren: "Aren"
+  bram: "Bram"
+  cira: "Cira"

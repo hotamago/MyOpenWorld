@@ -1119,7 +1119,7 @@ Phạm vi: monorepo, workspace Rust + uv Python, Makefile, docker-compose, CI. `
 - Một repro bundle chụp được rồi chạy lại cho **đúng cùng state hash** — vòng lặp báo lỗi đã đóng trước khi có gameplay để báo lỗi.
 - Prompt leak guard chạy được và bắt được một trường hợp rò cố tình cài vào test.
 - Build release **không** chứa symbol nào của `devtool`; có test trên artifact chứng minh điều đó.
-- Bốn trừu tượng của §P3.4 (`VectorIndex`, `MessageBus`, persistence, model client) đã có hai hiện thực và chạy cùng bộ test.
+- Bốn trừu tượng của §P3.4 (`VectorIndex`, `MessageBus`, persistence, model client) mỗi cái có **đúng một** hiện thực, cộng một bộ test hợp đồng viết sẵn mà hiện thực thứ hai sẽ dùng lại **nguyên vẹn** ở `PC-20`. Viết hai hiện thực ngay bây giờ — trước khi có workload thật nào uốn nắn interface — sẽ làm cả hai sai theo cùng một kiểu, và phải sửa hai chỗ.
 
 ### Giai đoạn A — Hạt nhân không gian
 

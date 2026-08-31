@@ -22,12 +22,31 @@ fn goc() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Feature `devtool` khong duoc nam trong `default`.
+///
+/// Kiem tren **manifest** chu khong tren `cfg!(feature = ...)`. Ly do rat cu
+/// the: `cargo test --all-features` — chinh la lenh ma `make test-rust` chay —
+/// bat moi feature len, nen mot bai test dua vao `cfg!` se do o do. Va no do
+/// **dung**: `--all-features` la mot lan bat tuong minh, tuc la khong vi pham gi.
+///
+/// Mot bai test do trong tinh huong hop le la mot bai test se bi tat, va luc do
+/// lop bao ve nay bien mat. Nen no doc thang cai ma no thuc su muon khang dinh:
+/// dong `default = [...]` trong `Cargo.toml`.
 #[test]
-fn feature_devtool_tat_mac_dinh() {
-    // Neu bai nay do, ai do da them `devtool` vao `default` trong Cargo.toml.
+fn feature_devtool_khong_nam_trong_default() {
+    let mp = goc().join("crates/mow-devtool/Cargo.toml");
+    let text = std::fs::read_to_string(&mp).expect("co Cargo.toml");
+
+    let dong_default = text
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("default"))
+        .unwrap_or("default = []");
+
     assert!(
-        !cfg!(feature = "devtool"),
-        "feature `devtool` dang bat o build mac dinh — no phai duoc bat tuong minh"
+        !dong_default.contains("devtool"),
+        "`devtool` nam trong feature mac dinh cua mow-devtool: {dong_default}
+         No phai duoc bat tuong minh, neu khong ban release se mang theo cong go loi."
     );
 }
 

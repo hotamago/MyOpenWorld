@@ -85,6 +85,15 @@ pub struct Event {
     /// hành vi hợp pháp năm xưa bỗng thành phạm pháp khi ta chỉnh `norm_set`
     /// hôm nay.
     pub law_version: Option<u32>,
+    /// Phiên bản **bộ chuẩn mực** đang hiệu lực lúc đó (`§18.10`, `§22.49`).
+    ///
+    /// Tách khỏi [`Event::law_version`] vì luật và chuẩn mực là hai thứ khác
+    /// nhau, và chúng đổi độc lập: luật là thứ engine cưỡng chế, chuẩn mực là
+    /// thứ một nền văn hóa tán thành. Cùng một hành vi có thể hợp pháp mà bị
+    /// khinh, hoặc phạm pháp mà được nể — và khung xem nhân quả phải nói được
+    /// điều đó, nếu không nó chỉ trả lời được "chuyện gì đã xảy ra" chứ không
+    /// trả lời được "vì sao cả làng phản ứng như thế".
+    pub norm_set_version: Option<u32>,
 }
 
 impl CanonicalHash for Event {
@@ -98,6 +107,9 @@ impl CanonicalHash for Event {
         self.subject.canonical_hash(h);
         self.payload.canonical_hash(h);
         h.write_option(self.cause, |hh, c| c.canonical_hash(hh));
+        h.write_option(self.norm_set_version, |hh, v| {
+            hh.write_u64(u64::from(v));
+        });
         h.write_option(self.law_version, |hh, v| {
             hh.write_u64(u64::from(v));
         });
@@ -122,6 +134,8 @@ pub struct EventDraft {
     pub cause: Option<EventSeq>,
     /// Phiên bản luật.
     pub law_version: Option<u32>,
+    /// Phiên bản bộ chuẩn mực lúc đó.
+    pub norm_set_version: Option<u32>,
 }
 
 impl EventDraft {
@@ -134,6 +148,7 @@ impl EventDraft {
             payload,
             cause: None,
             law_version: None,
+            norm_set_version: None,
         }
     }
 
@@ -162,6 +177,13 @@ impl EventDraft {
     #[must_use]
     pub fn under_law(mut self, v: u32) -> EventDraft {
         self.law_version = Some(v);
+        self
+    }
+
+    /// Gắn phiên bản bộ chuẩn mực.
+    #[must_use]
+    pub fn under_norms(mut self, v: u32) -> EventDraft {
+        self.norm_set_version = Some(v);
         self
     }
 }
@@ -232,6 +254,7 @@ impl EventLog {
             payload: draft.payload,
             cause: draft.cause,
             law_version: draft.law_version,
+            norm_set_version: draft.norm_set_version,
         };
         let mut h = StateHasher::with_domain("mow.eventlog.v1");
         h.write_hash(self.running);

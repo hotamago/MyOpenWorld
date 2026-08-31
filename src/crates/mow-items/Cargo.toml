@@ -1,0 +1,16 @@
+[package]
+name = "mow-items"
+description = "Vat pham: instance/stack, CraftQuality bat bien tach khoi Condition, tui do theo the tich va khoi luong, trang bi theo bo phan co the."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

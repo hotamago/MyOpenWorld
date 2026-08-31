@@ -1,7 +1,7 @@
 //! Test sổ đăng ký.
 
 use mow_plugin::manifest::{content_hash, PackRef};
-use mow_plugin::{PackManifest, Registry, RegistryError};
+use mow_plugin::{Capability, PackManifest, Registry, RegistryError};
 use std::collections::BTreeMap;
 
 fn mf(id: &str, requires: &[&str], overrides: &[&str]) -> PackManifest {
@@ -19,6 +19,15 @@ fn mf(id: &str, requires: &[&str], overrides: &[&str]) -> PackManifest {
             .collect(),
         overrides: overrides.iter().map(|s| (*s).to_owned()).collect(),
         tests: Vec::new(),
+        // Khai `overrides` là cần nhưng chưa đủ: pack ghi đè còn phải **xin
+        // quyền** `override_foreign` (`PF-01`). Helper này cấp sẵn để các bài
+        // cũ vẫn kiểm đúng thứ chúng định kiểm; bài kiểm chính cái quyền đó
+        // nằm ở `tests/capability.rs`.
+        capabilities: if overrides.is_empty() {
+            Vec::new()
+        } else {
+            vec![Capability::OverrideForeign]
+        },
     }
 }
 

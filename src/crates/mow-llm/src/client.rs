@@ -20,6 +20,7 @@
 use mow_math::{StateHash, StateHasher};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -152,7 +153,7 @@ impl core::fmt::Debug for Gateway {
             .field("cassettes", &self.cassettes.len())
             .field("stubs", &self.stubs.len())
             .field("has_upstream", &self.upstream.is_some())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -233,7 +234,7 @@ impl Gateway {
             response: res.clone(),
         };
         let dong = serde_json::to_string(&rec).map_err(|e| LlmError::BadCassette(e.to_string()))?;
-        use std::io::Write;
+
         let mut f = std::fs::OpenOptions::new()
             .create(true)
             .append(true)

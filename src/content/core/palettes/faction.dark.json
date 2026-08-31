@@ -1,0 +1,11 @@
+{
+  "id": "faction",
+  "kind": "identity_critical",
+  "mode": "dark",
+  "background": "#12151a",
+  "entries": [
+    { "id": "blue",  "color": "#6fa8ff" },
+    { "id": "amber", "color": "#e8a33d" },
+    { "id": "slate", "color": "#b8c4cc" }
+  ]
+}

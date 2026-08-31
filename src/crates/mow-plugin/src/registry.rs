@@ -1,5 +1,6 @@
 //! Sổ đăng ký: thứ tự nạp xác định, namespace bắt buộc, xung đột là lỗi.
 
+use crate::capability::{Capability, Grants, Violation};
 use crate::manifest::{content_hash, PackManifest};
 use mow_math::StateHash;
 use std::collections::{BTreeMap, BTreeSet};
@@ -88,6 +89,38 @@ pub enum RegistryError {
     #[error("save cần pack `{0}` nhưng nó không được nạp")]
     PackAbsent(String),
 
+    /// Version của pack khác với version ghi trong save (`§22.30`).
+    ///
+    /// Tách khỏi [`RegistryError::HashMismatch`] vì hai lỗi này nói hai chuyện
+    /// khác nhau với người dùng: hash lệch nghĩa là *"có ai đó sửa file"*, còn
+    /// version lệch nghĩa là *"bạn đã cập nhật pack"* — và cách xử lý khác hẳn.
+    #[error(
+        "pack `{pack}`: save ghi version {expected}, đang nạp {actual}.          Từ chối nạp thay vì nạp một phần"
+    )]
+    VersionMismatch {
+        /// Pack.
+        pack: String,
+        /// Version trong save.
+        expected: String,
+        /// Version thật.
+        actual: String,
+    },
+
+    /// Pack có nội dung cần quyền mà nó không xin (`§19.7`, `PF-01`).
+    #[error(
+        "pack `{pack}` xin thiếu quyền, {} chỗ:
+{}",
+        .violations.len(),
+        .violations.iter().map(ToString::to_string).collect::<Vec<_>>().join("
+")
+    )]
+    MissingCapability {
+        /// Pack.
+        pack: String,
+        /// Mọi vi phạm, không chỉ cái đầu tiên.
+        violations: Vec<Violation>,
+    },
+
     /// Lỗi đọc file.
     #[error("không đọc được `{path}`: {source}")]
     Io {
@@ -118,6 +151,8 @@ struct LoadedPack {
     hash: StateHash,
     /// Các id nội dung mà pack này định nghĩa.
     defines: BTreeSet<String>,
+    /// Quyền đã cấp, suy từ manifest (`PF-01`).
+    grants: Grants,
 }
 
 /// Thứ tự nạp đã được quyết định.
@@ -183,6 +218,18 @@ impl Registry {
             return Err(RegistryError::DuplicatePack(manifest.id));
         }
 
+        // **Quyền kiểm bằng nội dung thật, không bằng lời khai** (`§19.7`).
+        // Một pack khai `capabilities: []` mà có `laws/fire.yaml` thì bị từ
+        // chối ở đây — trước khi bất kỳ định nghĩa nào của nó vào sổ.
+        let grants = Grants::from_declared(&manifest.capabilities);
+        let vi_pham = grants.audit(&manifest.id, files.keys());
+        if !vi_pham.is_empty() {
+            return Err(RegistryError::MissingCapability {
+                pack: manifest.id.clone(),
+                violations: vi_pham,
+            });
+        }
+
         let hash = content_hash(&manifest, files);
         let id = manifest.id.clone();
         self.packs.insert(
@@ -191,9 +238,29 @@ impl Registry {
                 manifest,
                 hash,
                 defines: BTreeSet::new(),
+                grants,
             },
         );
         Ok(())
+    }
+
+    /// Quyền đã cấp cho một pack.
+    pub fn grants_of(&self, id: &str) -> Option<&Grants> {
+        self.packs.get(id).map(|p| &p.grants)
+    }
+
+    /// Mọi pack đang giữ một quyền **đổi được kết quả mô phỏng**.
+    ///
+    /// Đây là thứ UI quản lý pack hiện lên: người dùng cần biết trong ba mươi
+    /// pack đã cài, ba cái nào viết lại luật.
+    pub fn packs_with_risky_capabilities(&self) -> Vec<(&str, Vec<Capability>)> {
+        self.packs
+            .iter()
+            .filter_map(|(id, p)| {
+                let r = p.grants.risky();
+                (!r.is_empty()).then_some((id.as_str(), r))
+            })
+            .collect()
     }
 
     /// Khai báo một id nội dung do pack định nghĩa.
@@ -218,7 +285,11 @@ impl Registry {
             });
         }
 
-        let la_ghi_de = p.manifest.overrides.iter().any(|o| o == id);
+        // Khai `overrides` là **cần**, chưa **đủ**: pack còn phải xin quyền
+        // `override_foreign`. Nếu chỉ cần khai overrides thì quyền này tự cấp
+        // được bằng một dòng YAML, và nó không còn là quyền nữa.
+        let la_ghi_de = p.manifest.overrides.iter().any(|o| o == id)
+            && p.grants.has(Capability::OverrideForeign);
         if ns != pack && !la_ghi_de {
             return Err(RegistryError::ForeignNamespace {
                 pack: pack.to_owned(),
@@ -336,10 +407,17 @@ impl Registry {
     /// những thứ không tồn tại — hỏng theo cách rải rác và khó truy hơn nhiều
     /// so với một lỗi rõ ràng lúc mở file.
     pub fn verify_against(&self, saved: &PackSet) -> RegistryResult<()> {
-        for (id, _ver, hash) in &saved.entries {
+        for (id, ver, hash) in &saved.entries {
             let Some(p) = self.packs.get(id) else {
                 return Err(RegistryError::PackAbsent(id.clone()));
             };
+            if p.manifest.version != *ver {
+                return Err(RegistryError::VersionMismatch {
+                    pack: id.clone(),
+                    expected: ver.clone(),
+                    actual: p.manifest.version.clone(),
+                });
+            }
             if p.hash != *hash {
                 return Err(RegistryError::HashMismatch {
                     pack: id.clone(),

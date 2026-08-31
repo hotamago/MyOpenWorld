@@ -1,0 +1,14 @@
+[package]
+name = "mow-society"
+description = "Kinh te nho, ho gia dinh, dia diem sinh hoat va do thi tiep xuc."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

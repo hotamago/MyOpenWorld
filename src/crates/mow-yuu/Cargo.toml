@@ -1,0 +1,17 @@
+[package]
+name = "mow-yuu"
+description = "Control plane Yuu: tao noi dung, auditor, historian, console True God."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+mow-magic = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

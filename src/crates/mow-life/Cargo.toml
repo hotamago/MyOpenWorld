@@ -1,0 +1,17 @@
+[package]
+name = "mow-life"
+description = "Homeostasis tich phan dong, bo gen nen, lao hoa, mo hinh thuong tich."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+proptest = { workspace = true }

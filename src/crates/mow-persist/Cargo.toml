@@ -7,8 +7,18 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+postgres = { version = "0.19", optional = true }
 mow-math = { workspace = true }
 mow-core = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = []
+# Backend thu hai cho server mode (`PC-20`, `plan.md §P3.4`). Tat mac dinh: ban
+# desktop la muc tieu phat trien mac dinh va khong duoc keo theo client Postgres.
+postgres = ["dep:postgres"]

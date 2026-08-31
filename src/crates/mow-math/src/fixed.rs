@@ -4,6 +4,7 @@
 //! `CraftQuality`. **Không đủ** cho xác suất hiếm — xem [`crate::prob`] và bảng
 //! miền ở `plan.md §P10.2.1`.
 
+#![allow(clippy::many_single_char_names)]
 use crate::error::{overflow, MathError, MathResult};
 use serde::{Deserialize, Serialize};
 
@@ -67,10 +68,10 @@ impl Fx {
                 op: "Fx::from_frac",
             });
         }
-        let scaled = (num as i128)
-            .checked_mul(ONE_RAW as i128)
+        let scaled = i128::from(num)
+            .checked_mul(i128::from(ONE_RAW))
             .ok_or_else(|| overflow("Fx::from_frac", num, den))?;
-        let q = scaled / (den as i128);
+        let q = scaled / i128::from(den);
         i64::try_from(q)
             .map(Fx)
             .map_err(|_| overflow("Fx::from_frac", num, den))
@@ -90,6 +91,10 @@ impl Fx {
 
     /// Cộng có kiểm tra tràn.
     #[inline]
+    // Trùng tên với `std::ops` là **có chủ đích**: `a.add(b)?` đọc như
+    // phép toán thông thường mà vẫn bắt xử lý tràn. Trait thật trả thẳng giá
+    // trị và không có chỗ cho lỗi — đúng thứ `§P10.2.1` cấm trên đường commit.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, rhs: Fx) -> MathResult<Fx> {
         self.0
             .checked_add(rhs.0)
@@ -99,6 +104,10 @@ impl Fx {
 
     /// Trừ có kiểm tra tràn.
     #[inline]
+    // Trùng tên với `std::ops` là **có chủ đích**: `a.sub(b)?` đọc như
+    // phép toán thông thường mà vẫn bắt xử lý tràn. Trait thật trả thẳng giá
+    // trị và không có chỗ cho lỗi — đúng thứ `§P10.2.1` cấm trên đường commit.
+    #[allow(clippy::should_implement_trait)]
     pub fn sub(self, rhs: Fx) -> MathResult<Fx> {
         self.0
             .checked_sub(rhs.0)
@@ -107,9 +116,13 @@ impl Fx {
     }
 
     /// Nhân, trung gian `i128`, làm tròn về phía 0.
+    // Trùng tên với `std::ops` là **có chủ đích**: `a.mul(b)?` đọc như
+    // phép toán thông thường mà vẫn bắt xử lý tràn. Trait thật trả thẳng giá
+    // trị và không có chỗ cho lỗi — đúng thứ `§P10.2.1` cấm trên đường commit.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, rhs: Fx) -> MathResult<Fx> {
-        let p = (self.0 as i128)
-            .checked_mul(rhs.0 as i128)
+        let p = i128::from(self.0)
+            .checked_mul(i128::from(rhs.0))
             .ok_or_else(|| overflow("Fx::mul", self, rhs))?;
         // Dịch phải trên số âm là làm tròn xuống, nên xử lý dấu tường minh để
         // giữ tính đối xứng đã hứa ở `from_frac`.
@@ -124,12 +137,16 @@ impl Fx {
     }
 
     /// Chia, trung gian `i128`, làm tròn về phía 0.
+    // Trùng tên với `std::ops` là **có chủ đích**: `a.div(b)?` đọc như
+    // phép toán thông thường mà vẫn bắt xử lý tràn. Trait thật trả thẳng giá
+    // trị và không có chỗ cho lỗi — đúng thứ `§P10.2.1` cấm trên đường commit.
+    #[allow(clippy::should_implement_trait)]
     pub fn div(self, rhs: Fx) -> MathResult<Fx> {
         if rhs.0 == 0 {
             return Err(MathError::DivideByZero { op: "Fx::div" });
         }
-        let n = (self.0 as i128) << FRAC_BITS;
-        let q = n / (rhs.0 as i128);
+        let n = i128::from(self.0) << FRAC_BITS;
+        let q = n / i128::from(rhs.0);
         i64::try_from(q)
             .map(Fx)
             .map_err(|_| overflow("Fx::div", self, rhs))
@@ -177,7 +194,7 @@ impl core::fmt::Display for Fx {
         // In ra 6 chữ số thập phân từ số nguyên — không dùng số thực ở bất kỳ
         // bước nào, kể cả khi chỉ để hiển thị.
         let neg = self.0 < 0;
-        let mag = (self.0 as i128).unsigned_abs();
+        let mag = i128::from(self.0).unsigned_abs();
         let int_part = mag >> FRAC_BITS;
         let frac_raw = mag & ((1u128 << FRAC_BITS) - 1);
         let frac_micro = (frac_raw * 1_000_000) >> FRAC_BITS;
@@ -255,7 +272,7 @@ impl Unit {
     /// và `Fx::mul` chỉ tràn khi toán hạng vượt `2^47`, nên phép này toàn phần.
     pub fn and(self, other: Unit) -> Unit {
         Unit(Fx(
-            (((self.0 .0 as i128) * (other.0 .0 as i128)) >> FRAC_BITS) as i64,
+            ((i128::from(self.0 .0) * i128::from(other.0 .0)) >> FRAC_BITS) as i64,
         ))
     }
 }

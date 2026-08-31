@@ -1,0 +1,15 @@
+[package]
+name = "mow-director"
+description = "Storylet va bien nien su hai lop: dat dieu kien, khong bao gio dat ket qua."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

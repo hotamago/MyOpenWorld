@@ -1,0 +1,88 @@
+{
+  "id": "biome",
+  "kind": "environment",
+  "mode": "dark",
+  "background": "#12151a",
+  "entries": [
+    {
+      "id": "ocean",
+      "color": "#395b7a",
+      "pattern": "solid"
+    },
+    {
+      "id": "shallow_sea",
+      "color": "#5297ba",
+      "pattern": "wave-fine"
+    },
+    {
+      "id": "lake",
+      "color": "#69b7d2",
+      "pattern": "wave-wide"
+    },
+    {
+      "id": "river",
+      "color": "#97d6e3",
+      "pattern": "flow-lines"
+    },
+    {
+      "id": "beach",
+      "color": "#ede1ba",
+      "pattern": "dots-sparse"
+    },
+    {
+      "id": "glacier",
+      "color": "#f8fbfe",
+      "pattern": "crosshatch-fine"
+    },
+    {
+      "id": "tundra",
+      "color": "#bbc6b7",
+      "pattern": "dots-fine"
+    },
+    {
+      "id": "boreal_forest",
+      "color": "#52775e",
+      "pattern": "tree-conifer"
+    },
+    {
+      "id": "temperate_forest",
+      "color": "#6d9b62",
+      "pattern": "tree-broad"
+    },
+    {
+      "id": "grassland",
+      "color": "#9ab76b",
+      "pattern": "grass-short"
+    },
+    {
+      "id": "steppe",
+      "color": "#f7e99e",
+      "pattern": "grass-sparse"
+    },
+    {
+      "id": "desert",
+      "color": "#dbbc82",
+      "pattern": "dunes"
+    },
+    {
+      "id": "savanna",
+      "color": "#af9657",
+      "pattern": "grass-tall"
+    },
+    {
+      "id": "rainforest",
+      "color": "#44865b",
+      "pattern": "tree-dense"
+    },
+    {
+      "id": "wetland",
+      "color": "#749a89",
+      "pattern": "reeds"
+    },
+    {
+      "id": "alpine",
+      "color": "#aaadb3",
+      "pattern": "rock"
+    }
+  ]
+}

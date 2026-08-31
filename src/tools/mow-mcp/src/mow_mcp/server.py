@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined]
 
 from .bridge import BridgeError, DebugBridge
 

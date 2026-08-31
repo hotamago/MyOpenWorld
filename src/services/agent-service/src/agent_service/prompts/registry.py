@@ -36,13 +36,13 @@ from jinja2 import Environment, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 
 __all__ = [
-    "PromptDef",
-    "PromptRegistry",
-    "PromptLeak",
-    "UntrustedSlotNotWrapped",
-    "untrusted",
-    "OPEN_DELIM",
     "CLOSE_DELIM",
+    "OPEN_DELIM",
+    "PromptDef",
+    "PromptLeakError",
+    "PromptRegistry",
+    "UntrustedSlotNotWrappedError",
+    "untrusted",
 ]
 
 # Delimiter cố định bao quanh dữ liệu không tin cậy. Cố định chứ không ngẫu
@@ -62,11 +62,11 @@ class PromptError(Exception):
     """Lỗi nền của mọi lỗi prompt."""
 
 
-class UntrustedSlotNotWrapped(PromptError):
+class UntrustedSlotNotWrappedError(PromptError):
     """Một slot khai báo untrusted nhưng được nội suy trực tiếp."""
 
 
-class PromptLeak(PromptError):
+class PromptLeakError(PromptError):
     """Leak guard bắt được một bí mật trong prompt sắp gửi.
 
     Đây **luôn** là bug nghiêm trọng (`§22.40`): nó nghĩa là tầng ACL đã để lọt
@@ -213,7 +213,7 @@ class PromptRegistry:
                 if "untrusted" not in m.group(1):
                     vi_pham.append(f"`{{{{ {slot}{m.group(1)}}}}}`")
         if vi_pham:
-            raise UntrustedSlotNotWrapped(
+            raise UntrustedSlotNotWrappedError(
                 f"{d.path}: slot khai báo untrusted nhưng nội suy trực tiếp: "
                 f"{', '.join(vi_pham)}. Thêm ` | untrusted`. "
                 f"(§22.18 — nội dung hội thoại, sách và ký ức là dữ liệu không "
@@ -281,10 +281,10 @@ class PromptRegistry:
 
     @staticmethod
     def leak_guard(prompt_id: str, text: str, secrets: list[str]) -> None:
-        """Ném [`PromptLeak`] nếu bất kỳ bí mật nào xuất hiện trong prompt."""
+        """Ném [`PromptLeakError`] nếu bất kỳ bí mật nào xuất hiện trong prompt."""
         thap = text.casefold()
         # Bỏ qua chuỗi quá ngắn: một "bí mật" ba ký tự sẽ khớp ngẫu nhiên trong
         # mọi văn bản đủ dài, và một guard hay báo nhầm là một guard bị tắt.
         tim_thay = [s for s in secrets if len(s) >= 4 and s.casefold() in thap]
         if tim_thay:
-            raise PromptLeak(prompt_id, tim_thay)
+            raise PromptLeakError(prompt_id, tim_thay)

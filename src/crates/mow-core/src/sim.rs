@@ -42,7 +42,7 @@ impl core::fmt::Debug for Sim {
             .field("entities", &self.store.len())
             .field("events", &self.log.len())
             .field("hash", &self.state_hash().short())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

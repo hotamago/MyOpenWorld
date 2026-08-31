@@ -438,6 +438,10 @@ fn truot(name: &str, detail: impl Into<String>) -> AssertResult {
     }
 }
 
+// Dài vì nó **liệt kê**: một nhánh cho mỗi động từ. Chia nhỏ ra sẽ làm
+// danh sách khó đọc hơn chứ không dễ hơn — người đọc phải nhảy qua lại
+// để biết có bao nhiêu động từ, và đó chính là câu hỏi hay được hỏi nhất.
+#[allow(clippy::too_many_lines)]
 fn danh_gia(sim: &Sim, a: &Assertion, aliases: &BTreeMap<String, EntityId>) -> AssertResult {
     let ten = a.name().unwrap_or("?").to_owned();
     match ten.as_str() {
@@ -500,7 +504,7 @@ fn danh_gia(sim: &Sim, a: &Assertion, aliases: &BTreeMap<String, EntityId>) -> A
             // định luôn xanh mà chẳng kiểm gì.
             let khong_biet: Vec<&String> = muon
                 .iter()
-                .filter(|m| !rep.checked.iter().any(|c| *c == m.as_str()))
+                .filter(|m| !rep.checked.contains(&m.as_str()))
                 .collect();
             if !khong_biet.is_empty() {
                 return truot(

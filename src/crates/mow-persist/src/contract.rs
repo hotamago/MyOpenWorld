@@ -1,6 +1,6 @@
 //! Bộ test hợp đồng — **dùng lại nguyên vẹn cho backend thứ hai** (`PC-20`).
 //!
-//! Đây là lý do crate này tồn tại dưới dạng trait thay vì một struct SQLite
+//! Đây là lý do crate này tồn tại dưới dạng trait thay vì một struct `SQLite`
 //! trần trụi. Khi Postgres được thêm vào ở Giai đoạn C, nó phải vượt qua đúng
 //! những hàm dưới đây, **không sửa một dòng nào**. Nếu phải sửa thì trait đã rò
 //! rỉ chi tiết cài đặt, và đó chính là phát hiện mà bộ test này tồn tại để tạo
@@ -37,6 +37,7 @@ fn ev(branch: BranchId, seq: u64, tick: u64, kind: &str) -> EventRecord {
         payload: format!("payload-{seq}").into_bytes(),
         cause: None,
         law_version: None,
+        norm_set_version: None,
     }
 }
 
@@ -66,6 +67,9 @@ pub fn ghi_them_va_doc_lai<S: Store, F: Fn() -> S>(f: &F) {
     e.subject = 7;
     e.cause = Some(EventSeq(0));
     e.law_version = Some(3);
+    // Luật và chuẩn mực đổi độc lập, nên hai giá trị khác nhau: một backend
+    // đọc nhầm cột sẽ trả về cùng số ở cả hai và test này bắt được.
+    e.norm_set_version = Some(11);
     s.append_events(&[e.clone()]).unwrap();
 
     let doc = s.read_events(B1, EventSeq(0), EventSeq(100)).unwrap();
@@ -264,7 +268,7 @@ pub fn payload_la_byte_duc<S: Store, F: Fn() -> S>(f: &F) {
     // đưa payload qua một cột TEXT.
     let tho = vec![0u8, 0xff, 0x00, 0x80, b'a', 0x00];
     let mut e = ev(B1, 0, 0, "x");
-    e.payload = tho.clone();
+    tho.clone_into(&mut e.payload);
     s.append_events(&[e]).unwrap();
 
     let doc = s.read_events(B1, EventSeq(0), EventSeq(1)).unwrap();

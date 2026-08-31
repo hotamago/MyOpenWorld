@@ -1,0 +1,15 @@
+[package]
+name = "mow-org"
+description = "To chuc, nha nuoc, chinh danh, hanh dong tap the va tai nguyen chung."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

@@ -69,8 +69,8 @@ impl Prob {
             });
         }
         // num * 2^64 / den, trọn vẹn trong u128 vì num < den <= u64::MAX.
-        let scaled = (num as u128) << 64;
-        Ok(Prob((scaled / (den as u128)) as u64))
+        let scaled = u128::from(num) << 64;
+        Ok(Prob((scaled / u128::from(den)) as u64))
     }
 
     /// Dựng từ ký hiệu khoa học thập phân `mantissa × 10^-exp10`.
@@ -100,7 +100,7 @@ impl Prob {
     /// Xác suất cả hai sự kiện **độc lập** cùng xảy ra.
     #[inline]
     pub fn and(self, other: Prob) -> Prob {
-        Prob((((self.0 as u128) * (other.0 as u128)) >> 64) as u64)
+        Prob(((u128::from(self.0) * u128::from(other.0)) >> 64) as u64)
     }
 
     /// Xác suất ít nhất một trong hai sự kiện độc lập xảy ra.
@@ -136,8 +136,8 @@ impl Prob {
         if den == 0 {
             return Err(MathError::DivideByZero { op: "Prob::scaled" });
         }
-        let v = (self.0 as u128) * (num as u128) / (den as u128);
-        Ok(Prob(v.min(u64::MAX as u128) as u64))
+        let v = u128::from(self.0) * u128::from(num) / u128::from(den);
+        Ok(Prob(v.min(u128::from(u64::MAX)) as u64))
     }
 
     /// Tung xúc xắc. `true` với đúng xác suất này.
@@ -159,7 +159,7 @@ impl Prob {
         }
         let mut exp = 0u32;
         // v giữ giá trị p × 10^exp ở thang 2^64.
-        let mut v = self.0 as u128;
+        let mut v = u128::from(self.0);
         while v < (1u128 << 64) / 10_000 && exp < 40 {
             v *= 10;
             exp += 1;

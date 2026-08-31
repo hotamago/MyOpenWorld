@@ -15,6 +15,22 @@ mow-schema = { path = "crates/mow-schema" }
 mow-core = { path = "crates/mow-core" }
 mow-persist = { path = "crates/mow-persist" }
 mow-plugin = { path = "crates/mow-plugin" }
+mow-proto = { path = "crates/mow-proto" }
+mow-action = { path = "crates/mow-action" }
+mow-view = { path = "crates/mow-view" }
+mow-law = { path = "crates/mow-law" }
+mow-org = { path = "crates/mow-org" }
+mow-econ = { path = "crates/mow-econ" }
+mow-knowledge = { path = "crates/mow-knowledge" }
+mow-culture = { path = "crates/mow-culture" }
+mow-director = { path = "crates/mow-director" }
+mow-war = { path = "crates/mow-war" }
+mow-magic = { path = "crates/mow-magic" }
+mow-society = { path = "crates/mow-society" }
+mow-portal = { path = "crates/mow-portal" }
+mow-eco = { path = "crates/mow-eco" }
+mow-divine = { path = "crates/mow-divine" }
+mow-yuu = { path = "crates/mow-yuu" }
 
 anyhow = "1"
 thiserror = "2"
@@ -29,6 +45,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 schemars = { version = "0.8", features = ["indexmap2"] }
 proptest = "1"
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+prost = "0.13"
+prost-build = { version = "0.13", default-features = false }
+prost-types = "0.13"
 rusqlite = { version = "0.32", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 time = { version = "0.3", features = ["formatting", "parsing", "serde"] }

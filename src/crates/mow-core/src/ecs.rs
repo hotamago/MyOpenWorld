@@ -54,7 +54,7 @@ impl core::fmt::Debug for Store {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Store")
             .field("entities", &self.index.len())
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -85,7 +85,11 @@ impl Store {
     }
 
     /// Toàn bộ định danh, **theo thứ tự tăng dần**.
-    pub fn ids(&self) -> impl Iterator<Item = EntityId> + '_ {
+    ///
+    /// `DoubleEndedIterator` để `.next_back()` lấy được id lớn nhất — thứ mà
+    /// genesis cần để gán tên cho thực thể vừa tạo, và làm được trong `O(1)`
+    /// thay vì duyệt hết.
+    pub fn ids(&self) -> impl DoubleEndedIterator<Item = EntityId> + '_ {
         self.index.keys().copied()
     }
 
@@ -104,6 +108,20 @@ impl Store {
     pub fn attr_int(&self, id: EntityId, key: &str) -> Option<i64> {
         match self.attr(id, key) {
             Some(Value::Int(v)) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Thuộc tính dưới dạng **tham chiếu thực thể**.
+    ///
+    /// Tách khỏi [`Store::attr_int`] vì hai thứ này có kiểu khác nhau trong
+    /// [`Value`], và trộn chúng là một lỗi im lặng: `attr_int` trên một
+    /// `Value::Uint` trả `None`, nên một điều kiện tiên quyết sẽ **luôn thất
+    /// bại** thay vì báo sai kiểu. Nó biểu hiện thành "không nhặt được đồ" mà
+    /// không có thông báo nào giải thích.
+    pub fn attr_entity(&self, id: EntityId, key: &str) -> Option<EntityId> {
+        match self.attr(id, key) {
+            Some(Value::Uint(v)) => Some(EntityId(*v)),
             _ => None,
         }
     }

@@ -4,7 +4,7 @@
 //! tháng sau, mà không cần gì ngoài chính nó cộng đúng bản engine.
 //!
 //! Chữ "tự chứa" là phần khó và cũng là phần hay bị bỏ sót. Một bundle chỉ ghi
-//! "worldseed: test:tiny_village" thì phụ thuộc vào việc worldseed đó *hôm nay*
+//! "worldseed: `test:tiny_village`" thì phụ thuộc vào việc worldseed đó *hôm nay*
 //! còn giống *hôm chụp* — và nó sẽ không giống, vì content pack tiến hóa. Nên
 //! bundle ghi kèm **content hash của toàn bộ pack set**, và [`ReproBundle::verify`]
 //! từ chối chạy nếu chúng lệch. Thà báo "không tái hiện được vì pack đã đổi"

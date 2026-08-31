@@ -90,14 +90,15 @@ impl WorldPos {
     ///
     /// Trả `i128` vì hiệu của hai `i64` ở hai cực có thể vượt `i64`.
     pub fn chebyshev_xy(self, other: WorldPos) -> i128 {
-        let dx = (self.x as i128 - other.x as i128).abs();
-        let dy = (self.y as i128 - other.y as i128).abs();
+        let dx = (i128::from(self.x) - i128::from(other.x)).abs();
+        let dy = (i128::from(self.y) - i128::from(other.y)).abs();
         dx.max(dy)
     }
 
     /// Khoảng cách Manhattan trên `xy`.
     pub fn manhattan_xy(self, other: WorldPos) -> i128 {
-        (self.x as i128 - other.x as i128).abs() + (self.y as i128 - other.y as i128).abs()
+        (i128::from(self.x) - i128::from(other.x)).abs()
+            + (i128::from(self.y) - i128::from(other.y)).abs()
     }
 
     /// Bình phương khoảng cách Euclid trong không gian 3 chiều, **bão hòa**.
@@ -114,8 +115,8 @@ impl WorldPos {
     /// "xa bằng nhau", điều vốn đúng.
     pub fn dist_sq(self, other: WorldPos) -> u128 {
         let comp = |a: i64, b: i64| -> u128 {
-            let d = (a as i128 - b as i128).unsigned_abs();
-            d.checked_mul(d).unwrap_or(u128::MAX)
+            let d = (i128::from(a) - i128::from(b)).unsigned_abs();
+            d.saturating_mul(d)
         };
         comp(self.x, other.x)
             .saturating_add(comp(self.y, other.y))

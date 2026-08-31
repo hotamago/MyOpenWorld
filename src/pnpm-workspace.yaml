@@ -1,2 +1,13 @@
 packages:
   - "web"
+
+allowBuilds:
+  esbuild: set this to true or false
+  vue-demi: set this to true or false
+
+# esbuild va vue-demi can chay script cai dat. pnpm 11 chan mac dinh, va do la
+# mac dinh dung — nhung ba goi nay la phu thuoc truc tiep cua Vite/Pinia va
+# khong chay duoc neu thieu binary.
+onlyBuiltDependencies:
+  - esbuild
+  - vue-demi

@@ -88,7 +88,7 @@ impl Default for SimConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PersistenceConfig {
-    /// Đường dẫn file save (SQLite) hoặc DSN (Postgres, từ Giai đoạn C).
+    /// Đường dẫn file save (`SQLite`) hoặc DSN (Postgres, từ Giai đoạn C).
     #[serde(default = "mac_dinh_save")]
     pub url: String,
 }

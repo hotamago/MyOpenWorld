@@ -32,6 +32,8 @@ pub struct EventRecord {
     pub cause: Option<EventSeq>,
     /// Phiên bản luật lúc xảy ra.
     pub law_version: Option<u32>,
+    /// Phiên bản bộ chuẩn mực lúc xảy ra (`§18.10`, `§22.49`).
+    pub norm_set_version: Option<u32>,
 }
 
 /// Ảnh chụp state tại một tick.

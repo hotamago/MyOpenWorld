@@ -1,0 +1,20 @@
+[package]
+name = "mow-worldgen"
+description = "Sinh the gioi luoi va xac dinh: nhieu so nguyen, dac trung lon quyet dinh o luoi tho."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-math = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "worldgen"
+harness = false

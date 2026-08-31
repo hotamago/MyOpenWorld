@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Generator
 
 import pytest
 from mow_mcp.bridge import BridgeError, DebugBridge
@@ -20,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
-def bridge():
+def bridge() -> Generator[DebugBridge, None, None]:
     b = DebugBridge()
     b.start()
     yield b

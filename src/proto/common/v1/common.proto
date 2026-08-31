@@ -1,0 +1,67 @@
+// Kiểu dùng chung giữa mọi hợp đồng RPC (`plan.md §P4.1`, pipeline 1).
+//
+// Quy tắc version hóa: **additive-only trong một major, và field number không
+// bao giờ được dùng lại.** Dùng lại một số đã bỏ nghĩa là một bản ghi cũ đọc
+// bằng schema mới sẽ ra một giá trị hoàn toàn khác kiểu — và nó sẽ không báo
+// lỗi, nó chỉ sai.
+
+syntax = "proto3";
+
+package mow.common.v1;
+
+// Định danh thực thể.
+//
+// Bọc trong message thay vì dùng `uint64` trần, vì `§22.43` nói `EntityId` chỉ
+// được dùng để **phá hòa**, không bao giờ để quyết định kết quả. Một kiểu riêng
+// làm chỗ để ghi điều đó xuống, và làm cho việc lỡ tay đem nó đi so sánh lớn
+// nhỏ trong luật trở nên khó hơn.
+message EntityId {
+  uint64 value = 1;
+}
+
+// Một mốc thời gian mô phỏng.
+//
+// Không có `timestamp` theo giờ thực ở bất kỳ đâu trong hợp đồng này. Giờ thực
+// không replay được, và một trường giờ thực lọt vào state là đủ để phá vỡ
+// `§22.9`.
+message Tick {
+  uint64 value = 1;
+}
+
+// Nhánh thế giới.
+message BranchId {
+  string value = 1;
+}
+
+// Thế giới.
+message WorldId {
+  string value = 1;
+}
+
+// Một giá trị thuộc tính.
+//
+// **Không có biến thể dấu phẩy động.** Đây không phải là thiếu sót: `§P10.2.1`
+// cấm số thực trên đường commit vì phép cộng số thực không kết hợp, nên hai máy
+// cộng cùng một tập số theo hai thứ tự sẽ ra hai kết quả khác nhau, và replay
+// hỏng. Ai cần phân số thì dùng `fixed_q16_16`.
+message Value {
+  oneof kind {
+    int64 int_value = 1;
+    uint64 uint_value = 2;
+    bool bool_value = 3;
+    string text_value = 4;
+    // Q16.16: giá trị thật = `fixed_q16_16 / 65536`.
+    int64 fixed_q16_16 = 5;
+  }
+}
+
+// Mã lỗi có cấu trúc.
+//
+// Chuỗi tự do không dùng được: `§10.4` bước 7 đòi `failure_code` để planner
+// biết *vì sao* hỏng mà chọn cách khác, và "Không thể thực hiện hành động" thì
+// không nói được gì cho một cỗ máy.
+message Failure {
+  string code = 1;
+  string field_path = 2;
+  string detail = 3;
+}

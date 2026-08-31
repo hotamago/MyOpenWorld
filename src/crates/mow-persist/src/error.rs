@@ -20,6 +20,14 @@ pub enum PersistError {
     /// Khong tim thay thu duoc yeu cau.
     #[error("khong tim thay: {0}")]
     NotFound(String),
+
+    /// Loi tu mot backend khong phai `SQLite` (Postgres, ...).
+    ///
+    /// Tach khoi `Backend` vi `Backend` mang thang `rusqlite::Error`. Doi no
+    /// thanh mot kieu chung se bat moi cho goi phai bo `?` va viet tay
+    /// `map_err` — mot thay doi lan ra ca crate chi de phuc vu backend thu hai.
+    #[error("loi backend: {0}")]
+    External(String),
 }
 
 /// Ket qua cua thao tac luu tru.

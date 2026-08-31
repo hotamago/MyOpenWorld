@@ -1,0 +1,14 @@
+[package]
+name = "mow-spatial"
+description = "Chunk, occupancy, tai luoi; save la seed cong delta."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+mow-worldgen = { path = "../mow-worldgen" }
+serde = { workspace = true }
+thiserror = { workspace = true }

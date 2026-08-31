@@ -1,0 +1,112 @@
+// Hợp đồng của memory-service (`idea.md §11.1`, `§11.5`, `plan.md §P6.3`).
+//
+// ## Ai được ghi ký ức canonical
+//
+// Chỉ `mow-server`. Ký ức và belief chi phối quyết định của NPC, nên chúng **là
+// state authoritative** và phải đi qua đúng transaction handler như mọi state
+// khác (`§22.1`).
+//
+// Vì vậy service này không có RPC nào tên `WriteMemory`. Nó chỉ trả về
+// [MemoryMutationProposal], và Rust validate rồi commit. Nếu để Python ghi
+// thẳng, state sẽ đổi ngoài event log và ngoài state hash — và cái hỏng đầu tiên
+// sẽ là replay, âm thầm, hàng giờ sau.
+
+syntax = "proto3";
+
+package mow.memory.v1;
+
+import "common/v1/common.proto";
+
+// Một bản ghi ký ức authoritative.
+message MemoryRecord {
+  string id = 1;
+  // Namespace cách ly: thường là entity, có thể là một nhóm.
+  string namespace = 2;
+  string content = 3;
+  mow.common.v1.Tick created_tick = 4;
+  // Event đã sinh ra ký ức này. Không có nó thì không truy ngược được, và
+  // `§18.10` cause chain sẽ đứt đúng ở chỗ thú vị nhất.
+  uint64 source_event_seq = 5;
+  string persona_version = 6;
+  // Nhánh đã tạo ra nó.
+  mow.common.v1.BranchId created_branch = 7;
+  // Những nhánh đã **quên** nó. Xem [MemoryQuery] để biết vì sao là danh sách.
+  repeated mow.common.v1.BranchId tombstoned_in_branches = 8;
+}
+
+// Truy vấn ký ức.
+//
+// ## Vì sao lọc theo **dòng dõi** chứ không theo `branch_id` phẳng
+//
+// Lọc phẳng không diễn đạt được điều mà một nhánh cần: *"thấy ký ức của cha tới
+// điểm fork, không thấy sau đó"*. Thiếu nó thì một trong hai chuyện xảy ra, và
+// cả hai đều là bug im lặng:
+//
+// - nhánh con đọc phải ký ức mà chính nó đã quên; hoặc
+// - ký ức mới của nhánh con rò ngược sang nhánh cha.
+//
+// Điều kiện đầy đủ, theo `§P6.3`:
+//
+// ```text
+// created_branch_id ∈ ancestry(current_branch)
+// AND current_branch ∉ tombstoned_in_branches
+// AND created_tick <= fork_tick(nhánh tương ứng)
+// ```
+message MemoryQuery {
+  string namespace = 1;
+  string query = 2;
+  uint32 limit = 3;
+  // Nhánh đang đứng.
+  mow.common.v1.BranchId branch = 4;
+  // Dòng dõi của nhánh đó, từ gốc tới hiện tại.
+  repeated mow.common.v1.BranchId ancestry = 5;
+  mow.common.v1.Tick now = 6;
+  // Persona version của thực thể đang truy vấn — một phần của khóa cách ly.
+  string persona_version = 7;
+}
+
+message MemoryHit {
+  MemoryRecord record = 1;
+  // Thang `0`–`1000`. Số nguyên, vì nó quyết định thứ tự.
+  uint32 relevance = 2;
+}
+
+message MemoryQueryResponse {
+  repeated MemoryHit hits = 1;
+}
+
+// Loại thay đổi được đề nghị.
+enum MutationKind {
+  MUTATION_KIND_UNSPECIFIED = 0;
+  MUTATION_KIND_ADD = 1;
+  MUTATION_KIND_UPDATE = 2;
+  // Quên: tạo tombstone. **Không xóa vật lý**, vì `§11.5` đòi việc quên phải
+  // truy ngược được — và vì xóa vật lý làm replay của một save cũ hỏng.
+  MUTATION_KIND_FORGET = 3;
+}
+
+// Đề nghị thay đổi ký ức. Rust quyết định có commit hay không.
+message MemoryMutationProposal {
+  MutationKind kind = 1;
+  string namespace = 2;
+  // Rỗng khi `kind = ADD`.
+  string record_id = 3;
+  string content = 4;
+  uint64 source_event_seq = 5;
+  mow.common.v1.BranchId branch = 6;
+}
+
+// Yêu cầu dựng lại toàn bộ chỉ mục từ event log (`§P6.3`, `PC-06`).
+//
+// Tồn tại vì chỉ mục vector **phải** là thứ vứt đi được. Nếu mất chỉ mục mà mất
+// dữ liệu thì nó đã trở thành nguồn sự thật thứ hai, và hai nguồn sự thật luôn
+// lệch nhau — chỉ là chưa lệch thôi.
+message RebuildRequest {
+  string namespace = 1;
+  mow.common.v1.BranchId branch = 2;
+}
+
+message RebuildResponse {
+  uint64 records_indexed = 1;
+  uint64 tombstones_applied = 2;
+}

@@ -1,5 +1,6 @@
 //! Manifest của một content pack (`pack.yaml`).
 
+use crate::capability::Capability;
 use mow_math::{CanonicalHash, StateHash, StateHasher};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -41,6 +42,15 @@ pub struct PackManifest {
     /// Kịch bản test mà pack này khai báo, chạy bởi `mow-cli pack test`.
     #[serde(default)]
     pub tests: Vec<String>,
+
+    /// Quyền pack xin (`§19.7`, `PF-01`).
+    ///
+    /// Mặc định **rỗng**, nghĩa là chỉ khai được dữ liệu tĩnh. Một pack muốn
+    /// khai luật, module, prompt hoặc generator phải nói ra ở đây — và
+    /// [`crate::capability::Grants::audit`] kiểm lại bằng nội dung thật trên
+    /// đĩa, không tin lời khai.
+    #[serde(default)]
+    pub capabilities: Vec<Capability>,
 }
 
 /// Tham chiếu tới một pack khác.

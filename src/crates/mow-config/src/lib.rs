@@ -28,6 +28,19 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
+// Biến thể lỗi cấu hình mang **đường dẫn field** theo yêu cầu của
+// `§P6.1`. Thu nhỏ nó lại nghĩa là bỏ bớt thông tin đó, và đánh đổi sai
+// chiều: cấu hình được đọc đúng một lần lúc khởi động, còn một thông báo
+// khó hiểu thì làm mất cả buổi của người dùng.
+#![allow(clippy::result_large_err)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 

@@ -80,6 +80,8 @@ impl Rate {
     }
 
     /// Cộng hai tốc độ. Mẫu số kết quả là tích, không rút gọn.
+    // Trùng tên với `std::ops::Add` là **có chủ đích**; xem `fixed.rs`.
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, other: Rate) -> MathResult<Rate> {
         let den = self
             .den
@@ -110,12 +112,12 @@ impl Rate {
         if ticks == 0 {
             return Ok((0, carry));
         }
-        let total = (self.num as i128)
-            .checked_mul(ticks as i128)
+        let total = i128::from(self.num)
+            .checked_mul(i128::from(ticks))
             .ok_or_else(|| overflow("Rate::integrate", self.num, ticks))?
-            .checked_add(carry as i128)
+            .checked_add(i128::from(carry))
             .ok_or_else(|| overflow("Rate::integrate", self.num, carry))?;
-        let den = self.den as i128;
+        let den = i128::from(self.den);
         // Chia làm tròn xuống với số dư không âm, để `carry` luôn nằm trong
         // `[0, den)` bất kể dấu của tốc độ. Phép `/` của Rust cắt về 0, cho số
         // dư âm khi tử số âm, và như thế `carry` sẽ không phải bất biến ổn định.
@@ -146,9 +148,9 @@ impl Rate {
             return None;
         }
 
-        let den = self.den as i128;
-        let carry = carry as i128;
-        let amount = amount as i128;
+        let den = i128::from(self.den);
+        let carry = i128::from(carry);
+        let amount = i128::from(amount);
 
         // Điều kiện phải khớp **đúng** phép làm tròn của `integrate`, vốn là
         // chia làm tròn xuống. Viết `|num*t| / den >= |amount|` nghe hợp lý
@@ -171,7 +173,7 @@ impl Rate {
         if tu_so <= 0 {
             return Some(0);
         }
-        let mau_so = (self.num as i128).abs();
+        let mau_so = i128::from(self.num).abs();
         u64::try_from((tu_so + mau_so - 1) / mau_so).ok()
     }
 }

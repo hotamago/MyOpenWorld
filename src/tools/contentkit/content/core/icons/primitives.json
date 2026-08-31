@@ -1,0 +1,627 @@
+[
+  {
+    "id": "core.altar",
+    "layer": "silhouette",
+    "svg": "<path d=\"M7 19 h18 v9 h-18 z\" fill=\"currentColor\"/><path d=\"M11 9 h10 v10 h-10 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.amulet",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 5 a11 9 0 0 0 16 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 13 a6 6 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.armor",
+    "layer": "silhouette",
+    "svg": "<path d=\"M9 7 l7 -3 l7 3 v13 a7 7 0 0 1 -14 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.axe",
+    "layer": "silhouette",
+    "svg": "<path d=\"M10 24 L20 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M18 4 h8 v8 h-8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.banner",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 3 h16 v20 l-8 -6 l-8 6 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.barrel",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 5 h16 v22 h-16 z\" fill=\"currentColor\"/><path d=\"M8 12 h16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/><path d=\"M8 20 h16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.basket",
+    "layer": "silhouette",
+    "svg": "<path d=\"M7 11 h18 l-3 16 h-12 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.beast",
+    "layer": "silhouette",
+    "svg": "<path d=\"M6 13 h15 v9 h-15 z\" fill=\"currentColor\"/><path d=\"M21 10 h6 v8 h-6 z\" fill=\"currentColor\"/><path d=\"M8 22 v6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M19 22 v6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.bird",
+    "layer": "silhouette",
+    "svg": "<path d=\"M9 14 a8 6 0 0 1 14 0 l5 -4 l-3 8 z\" fill=\"currentColor\"/><path d=\"M9 20 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.book",
+    "layer": "silhouette",
+    "svg": "<path d=\"M6 5 h20 v22 h-20 z\" fill=\"currentColor\"/><path d=\"M16 5 v22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.boot",
+    "layer": "silhouette",
+    "svg": "<path d=\"M10 4 h7 v15 h9 v8 h-16 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.bottle",
+    "layer": "silhouette",
+    "svg": "<path d=\"M13 3 h6 v6 l4 5 v15 h-14 v-15 l4 -5 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.bow",
+    "layer": "silhouette",
+    "svg": "<path d=\"M12 5 A11 11 0 0 1 12 27\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M12 5 L12 27\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.bowl",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 13 h22 a11 11 0 0 1 -22 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.bread",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 11 a12 6 0 0 1 24 0 v10 h-24 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.bridge",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 19 a13 9 0 0 1 26 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M8 19 v7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M24 19 v7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.cheese",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 21 l12 -11 h12 v11 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.chest",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 12 h24 v15 h-24 z\" fill=\"currentColor\"/><path d=\"M4 12 a12 6 0 0 1 24 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.clock",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 16 m-12 0 a12 12 0 1 0 24 0 a12 12 0 1 0 -24 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 16 V8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 16 h6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.cloud",
+    "layer": "silhouette",
+    "svg": "<path d=\"M7 21 a7 7 0 0 1 2 -12 a9 9 0 0 1 17 3 a6 6 0 0 1 -1 9 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.coin",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 4 a12 12 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.dragon",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 20 l9 -9 l9 5 l7 -7 v15 h-25 z\" fill=\"currentColor\"/><path d=\"M27 6 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.egg",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 4 a8 11 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.eye",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 16 a15 10 0 0 1 26 0 a15 10 0 0 1 -26 0 z\" fill=\"currentColor\"/><path d=\"M16 16 a4 4 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.farm",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 23 h26\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M8 23 V14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 23 V11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M24 23 V14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.fish",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 16 l10 -7 l10 7 l-10 7 z\" fill=\"currentColor\"/><path d=\"M24 11 l5 5 l-5 5 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.fish_creature",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 16 l11 -8 l11 8 l-11 8 z\" fill=\"currentColor\"/><path d=\"M26 12 v8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.flame",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 c7 9 9 11 9 15 a9 9 0 1 1 -18 0 c0 -4 2 -6 9 -15 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.footprint",
+    "layer": "silhouette",
+    "svg": "<path d=\"M12 7 a5 7 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M12 21 a4 5 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.forge",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 16 h22 v12 h-22 z\" fill=\"currentColor\"/><path d=\"M11 16 V6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M21 16 V9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.fruit",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 8 a9 9 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M16 8 V3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.gate",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 28 V13 a11 11 0 0 1 22 0 v15 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.gem",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 l11 9 l-11 17 l-11 -17 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.grain",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 29 V6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 11 l6 -5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 18 l-6 -5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 24 l6 -5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.hammer",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 28 L16 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M9 6 h14 v8 h-14 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.hand",
+    "layer": "silhouette",
+    "svg": "<path d=\"M11 28 v-13 h2 v-7 h2.5 v7 h2 v-8 h2.5 v8 h2 v-5 h2 v18 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.heart",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 29 l-11 -11 a7 7 0 0 1 11 -8 a7 7 0 0 1 11 8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.helmet",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 19 a11 11 0 0 1 22 0 v6 h-22 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.house",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 16 l13 -11 l13 11 v13 h-26 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.humanoid",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 4 a4 4 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M12 11 h8 v11 h-8 z\" fill=\"currentColor\"/><path d=\"M13 22 v7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M19 22 v7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.insect",
+    "layer": "silhouette",
+    "svg": "<path d=\"M13 9 h6 v15 h-6 z\" fill=\"currentColor\"/><path d=\"M13 13 h-7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M19 13 h7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M13 19 h-6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.key",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 16 a6 6 0 1 1 12 0 a6 6 0 1 1 -12 0 z\" fill=\"currentColor\"/><path d=\"M20 16 h9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M26 16 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.knife",
+    "layer": "silhouette",
+    "svg": "<path d=\"M11 25 L19 13\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M19 13 L23 7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.letter",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 9 h24 v14 h-24 z\" fill=\"currentColor\"/><path d=\"M4 9 l12 9 l12 -9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.lock",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 15 h16 v13 h-16 z\" fill=\"currentColor\"/><path d=\"M12 15 v-4 a4 4 0 0 1 8 0 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.map",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 7 l8 -2 l8 2 l8 -2 v20 l-8 2 l-8 -2 l-8 2 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.market",
+    "layer": "silhouette",
+    "svg": "<path d=\"M4 11 h24 v5 h-24 z\" fill=\"currentColor\"/><path d=\"M7 16 v12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M25 16 v12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.meat",
+    "layer": "silhouette",
+    "svg": "<path d=\"M7 14 a9 7 0 0 1 18 0 v7 h-18 z\" fill=\"currentColor\"/><path d=\"M25 17 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.moon",
+    "layer": "silhouette",
+    "svg": "<path d=\"M21 3 a13 13 0 1 0 0 26 a11 13 0 0 1 0 -26 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.mountain",
+    "layer": "silhouette",
+    "svg": "<path d=\"M2 27 l11 -18 l7 10 l4 -6 l6 14 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.mushroom",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 15 a11 9 0 0 1 22 0 z\" fill=\"currentColor\"/><path d=\"M13 15 h6 v13 h-6 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.pick",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 28 L16 14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M5 12 A16 16 0 0 1 27 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.plant",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 29 V11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 11 a7 7 0 0 0 -9 7 a9 9 0 0 0 9 -7 z\" fill=\"currentColor\"/><path d=\"M16 11 a7 7 0 0 1 9 7 a9 9 0 0 1 -9 -7 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.portal",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 16 m-11 0 a11 13 0 1 0 22 0 a11 13 0 1 0 -22 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.pot",
+    "layer": "silhouette",
+    "svg": "<path d=\"M7 11 h18 v16 h-18 z\" fill=\"currentColor\"/><path d=\"M7 11 h18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.question",
+    "layer": "silhouette",
+    "svg": "<path d=\"M11 11 a5 5 0 1 1 5 6 v3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"/><path d=\"M14 24 h4 v4 h-4 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.reptile",
+    "layer": "silhouette",
+    "svg": "<path d=\"M5 19 h17 a5 5 0 0 0 0 -7 h-17 z\" fill=\"currentColor\"/><path d=\"M5 15 h-3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.ring",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 17 m-9 0 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.road",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 28 L29 4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"4\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.rune",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 V29\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 11 l8 -8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 21 l-8 -8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.sack",
+    "layer": "silhouette",
+    "svg": "<path d=\"M11 7 h10 l4 20 h-18 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.scale",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 28 V5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M5 9 h22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M2 9 l3 9 l3 -9 z\" fill=\"currentColor\"/><path d=\"M24 9 l3 9 l3 -9 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.scroll",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 7 h16 v18 h-16 z\" fill=\"currentColor\"/><path d=\"M8 7 a3 3 0 0 0 0 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.shield",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 L27 8 v9 a11 13 0 0 1 -11 12 a11 13 0 0 1 -11 -12 V8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.shovel",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 28 L16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M11 4 h10 v12 h-10 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.skull",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 a11 10 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M12 21 h8 v7 h-8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.spear",
+    "layer": "silhouette",
+    "svg": "<path d=\"M6 26 L26 6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M22 4 l6 0 l0 6 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.spirit",
+    "layer": "silhouette",
+    "svg": "<path d=\"M9 25 a7 13 0 0 1 14 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 5 a7 7 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.staff",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 29 L16 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 3 a4 4 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.star",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 l4 10 l11 1 l-8 7 l3 11 l-10 -6 l-10 6 l3 -11 l-8 -7 l11 -1 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.sun",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 9 a7 7 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M16 1 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M16 27 v4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M1 16 h4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M27 16 h4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.sword",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 24 L24 8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M20 4 h6 v6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.tablet",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 4 h16 v24 h-16 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.tower",
+    "layer": "silhouette",
+    "svg": "<path d=\"M10 5 h12 v24 h-12 z\" fill=\"currentColor\"/><path d=\"M8 5 h16 v3 h-16 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.tree",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 29 V17\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M16 3 a11 11 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.undead",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 5 a7 8 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M12 20 h8 v8 h-8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.vegetable",
+    "layer": "silhouette",
+    "svg": "<path d=\"M11 9 h10 v17 h-10 z\" fill=\"currentColor\"/><path d=\"M16 9 V3\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.wall",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 11 h26 v16 h-26 z\" fill=\"currentColor\"/><path d=\"M3 19 h26\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.wand",
+    "layer": "silhouette",
+    "svg": "<path d=\"M10 22 L22 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M23 6 l1 3 l3 1 l-3 1 l-1 3 l-1 -3 l-3 -1 l3 -1 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.water",
+    "layer": "silhouette",
+    "svg": "<path d=\"M16 3 l8 13 a8 8 0 1 1 -16 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.wave",
+    "layer": "silhouette",
+    "svg": "<path d=\"M3 18 q6 -7 13 0 t13 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M3 24 q6 -7 13 0 t13 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.well",
+    "layer": "silhouette",
+    "svg": "<path d=\"M8 13 h16 v15 h-16 z\" fill=\"currentColor\"/><path d=\"M16 13 V4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M9 6 h14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.bone",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#ddd6c0\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.brass",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#b08d3f\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.clay",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#a06848\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.cloth",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#b8a98c\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.copper",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#a75c34\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.crystal",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#9fd0e8\" opacity=\"0.5\"/>"
+  },
+  {
+    "id": "core.glass",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#8fc4cc\" opacity=\"0.4\"/>"
+  },
+  {
+    "id": "core.gold",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#d4a220\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.iron",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#5c6470\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.leather",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#7a4a24\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.obsidian",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#2b2b33\" opacity=\"0.6\"/>"
+  },
+  {
+    "id": "core.silver",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#c3c8cc\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.steel",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#9aa4b0\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.stone",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#7d7f82\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.wood",
+    "layer": "material",
+    "svg": "<rect x=\"0\" y=\"0\" width=\"32\" height=\"32\" fill=\"#8a5a2b\" opacity=\"0.55\"/>"
+  },
+  {
+    "id": "core.blessed",
+    "layer": "state",
+    "svg": "<path d=\"M28 3 v6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M25 6 h6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.broken",
+    "layer": "state",
+    "svg": "<path d=\"M7 7 L25 25\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M25 7 L7 25\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.burnt",
+    "layer": "state",
+    "svg": "<path d=\"M3 29 h26 v3 h-26 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.chipped",
+    "layer": "state",
+    "svg": "<path d=\"M22 4 l5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.cursed",
+    "layer": "state",
+    "svg": "<path d=\"M2 16 q4 -5 8 0 t8 0 t8 0 t6 0\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.enchanted",
+    "layer": "state",
+    "svg": "<path d=\"M27 3 l1 3.5 l3.5 1 l-3.5 1 l-1 3.5 l-1 -3.5 l-3.5 -1 l3.5 -1 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.frozen",
+    "layer": "state",
+    "svg": "<path d=\"M3 3 L10 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/><path d=\"M29 3 L22 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.hidden",
+    "layer": "state",
+    "svg": "<path d=\"M1 31 L31 1\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.poisoned",
+    "layer": "state",
+    "svg": "<path d=\"M26 25 a3 3 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.sealed",
+    "layer": "state",
+    "svg": "<path d=\"M4 4 h7 v7 h-7 z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.wet",
+    "layer": "state",
+    "svg": "<path d=\"M5 3 a2 3 0 1 0 0.1 0 z\" fill=\"currentColor\"/><path d=\"M26 5 a2 3 0 1 0 0.1 0 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.worn",
+    "layer": "state",
+    "svg": "<path d=\"M5 29 h22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.claimed",
+    "layer": "marker",
+    "svg": "<path d=\"M23 23 h8 v8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.faction_amber",
+    "layer": "marker",
+    "svg": "<circle cx=\"27\" cy=\"27\" r=\"4.5\" fill=\"#b5651d\"/>"
+  },
+  {
+    "id": "core.faction_blue",
+    "layer": "marker",
+    "svg": "<circle cx=\"27\" cy=\"27\" r=\"4.5\" fill=\"#1a4fa0\"/>"
+  },
+  {
+    "id": "core.faction_slate",
+    "layer": "marker",
+    "svg": "<circle cx=\"27\" cy=\"27\" r=\"4.5\" fill=\"#3d4b52\"/>"
+  },
+  {
+    "id": "core.owned",
+    "layer": "marker",
+    "svg": "<rect x=\"23\" y=\"23\" width=\"8\" height=\"8\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.stolen",
+    "layer": "marker",
+    "svg": "<path d=\"M23 31 l8 -8 v8 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.unowned",
+    "layer": "marker",
+    "svg": "<circle cx=\"27\" cy=\"27\" r=\"4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"/>"
+  },
+  {
+    "id": "core.quality_fine",
+    "layer": "annotation",
+    "svg": "<path d=\"M2 29 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M2 25 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.quality_legendary",
+    "layer": "annotation",
+    "svg": "<path d=\"M5 21 l1.6 3.8 l4 0.6 l-2.8 2.8 l0.6 4 l-3.4 -2.1 l-3.4 2.1 l0.6 -4 l-2.8 -2.8 l4 -0.6 z\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.quality_master",
+    "layer": "annotation",
+    "svg": "<path d=\"M2 29 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M2 25 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/><path d=\"M2 21 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.quality_poor",
+    "layer": "annotation",
+    "svg": "<path d=\"M2 29 h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/>"
+  },
+  {
+    "id": "core.quantity_full",
+    "layer": "annotation",
+    "svg": "<rect x=\"2\" y=\"26\" width=\"5\" height=\"5\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.quantity_low",
+    "layer": "annotation",
+    "svg": "<rect x=\"2\" y=\"26\" width=\"5\" height=\"5\" fill=\"currentColor\" opacity=\"0.4\"/>"
+  },
+  {
+    "id": "core.stack_many",
+    "layer": "annotation",
+    "svg": "<circle cx=\"5\" cy=\"5\" r=\"2.5\" fill=\"currentColor\"/><circle cx=\"11\" cy=\"5\" r=\"2.5\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.stack_small",
+    "layer": "annotation",
+    "svg": "<circle cx=\"5\" cy=\"5\" r=\"2.5\" fill=\"currentColor\"/>"
+  },
+  {
+    "id": "core.unappraised",
+    "layer": "annotation",
+    "svg": "<path d=\"M2 8 a3.5 3.5 0 1 1 3.5 4 v2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><rect x=\"4.5\" y=\"16\" width=\"2.5\" height=\"2.5\" fill=\"currentColor\"/>"
+  }
+]

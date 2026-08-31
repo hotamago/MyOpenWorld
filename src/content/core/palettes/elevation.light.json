@@ -1,0 +1,33 @@
+{
+  "id": "elevation",
+  "kind": "sequential",
+  "mode": "light",
+  "background": "#f5f2ea",
+  "entries": [
+    {
+      "id": "s0",
+      "color": "#1d3a55"
+    },
+    {
+      "id": "s1",
+      "color": "#2f6079"
+    },
+    {
+      "id": "s2",
+      "color": "#4b8a93"
+    },
+    {
+      "id": "s3",
+      "color": "#7cb3a4"
+    },
+    {
+      "id": "s4",
+      "color": "#b3d6bc"
+    },
+    {
+      "id": "s5",
+      "color": "#e2efdc"
+    }
+  ],
+  "noData": "#6b6b6b"
+}

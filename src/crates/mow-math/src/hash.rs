@@ -11,6 +11,7 @@
 //!    khác nhau; mọi thứ có độ dài thay đổi đều được ghi kèm độ dài.
 //! 3. **Endianness.** Mọi số ghi ở little-endian tường minh.
 
+#![allow(clippy::many_single_char_names)]
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 
@@ -24,9 +25,12 @@ impl StateHash {
 
     /// Dạng hex thường, 64 ký tự. Đây là dạng dùng trong log và repro bundle.
     pub fn to_hex(self) -> String {
+        use core::fmt::Write as _;
         let mut s = String::with_capacity(64);
         for b in self.0 {
-            s.push_str(&format!("{b:02x}"));
+            // `write!` thay vì `push_str(&format!(..))`: cái sau cấp phát một
+            // `String` tạm cho mỗi byte, tức 32 lần cấp phát cho một hash.
+            let _ = write!(s, "{b:02x}");
         }
         s
     }
@@ -261,7 +265,7 @@ pub trait CanonicalHash {
 macro_rules! impl_int {
     ($($t:ty => $m:ident),* $(,)?) => {
         $(impl CanonicalHash for $t {
-            fn canonical_hash(&self, h: &mut StateHasher) { h.$m(*self as _); }
+            fn canonical_hash(&self, h: &mut StateHasher) { h.$m((*self).into()); }
         })*
     };
 }

@@ -1,0 +1,68 @@
+name: Soak nightly
+
+# `plan.md §P7.7`: 3 world song song, mỗi world 200 năm.
+#
+# Chạy hằng đêm chứ không mỗi PR vì đây là cách phát hiện **các lỗi chỉ lộ ra
+# sau hàng chục giờ** — đúng loại lỗi mà một người ngồi chơi thử không bao giờ
+# bắt được, và cũng là loại lỗi mà chạy 30 giây mỗi PR không bắt được.
+
+on:
+  schedule:
+    # 02:00 UTC — sau khi mọi PR trong ngày đã merge.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+defaults:
+  run:
+    working-directory: src
+
+jobs:
+  soak:
+    name: Soak — 3 world × 200 năm
+    runs-on: ubuntu-latest
+    # Một lần chạy dài thật sự cần thời gian; cắt ở 2 giờ để một lần treo không
+    # chiếm runner cả ngày.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Chạy soak
+        run: cargo run -p mow-cli --release --quiet -- soak --years 200 --worlds 3 | tee soak-report.json
+
+      # Báo cáo được giữ lại kể cả khi soak đỏ: `if: always()`. Không có nó thì
+      # đúng những lần cần đọc báo cáo nhất lại là những lần không có báo cáo.
+      - name: Lưu World Health Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-health-report
+          path: src/soak-report.json
+          retention-days: 30
+
+  benches:
+    name: Bench — ngân sách §P8.1
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Bench chạy ở nightly chứ không mỗi PR: số đo trên runner chia sẻ dao
+      # động, và một cổng hay báo động giả là một cổng sẽ bị tắt.
+      - name: Chạy bench
+        run: cargo bench -p mow-worldgen -- --output-format bencher | tee bench.txt
+
+      - name: Lưu kết quả bench
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: src/bench.txt
+          retention-days: 30

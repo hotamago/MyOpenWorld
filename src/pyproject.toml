@@ -19,9 +19,18 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Ma sinh khong bao gio sua tay (`plan.md §P4.1`), nen lint no la vo nghia: moi
+# canh bao o do hoac phai bo qua, hoac phai sua bang cach sua bo sinh — va khong
+# ai lam dieu thu hai. De no trong danh sach chi lam nguoi ta quen doc lint.
+extend-exclude = ["**/generated/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+# Cac ky tu goc nhon dung de **thay the** dau `<` `>` trong noi dung khong tin
+# cay (`§22.18`). Su giong nhau la co chu dich: nguoi doc thay nguyen van, con
+# bo phan tich prompt thi khong con thay mot the dong mo nao.
+allowed-confusables = ["‹", "›", "–", "—"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -30,14 +39,55 @@ warn_unreachable = true
 # Cung tinh than voi `deny(missing_docs)` cua Rust: hop dong phai tuong minh.
 disallow_untyped_defs = true
 
+# Ma sinh: BO QUA LOI, nhung VAN DOC KIEU.
+#
+# `exclude` khong lam duoc dieu nay — no bo qua viec *kiem* file, nhung mypy van
+# di theo import va suy kieu tu do, nen ket qua la kieu mo ho o phia goi. Con
+# `follow_imports = skip` thi bien moi kieu sinh thanh `Any`, va luc do hop dong
+# proto khong con duoc kiem o bat cu dau. `ignore_errors` la thu dung: kieu van
+# day du, chi co canh bao ve phong cach cua bo sinh la im.
+[[tool.mypy.overrides]]
+module = ["*.generated.*", "*.generated"]
+ignore_errors = true
+
+# Thu vien ben ngoai khong co stub. Khong phai loi cua ta va khong sua duoc o day.
+[[tool.mypy.overrides]]
+module = ["mcp.*", "langgraph.*", "betterproto.*"]
+ignore_missing_imports = true
+
+# `FastMCP` dung decorator khong co kieu. Tat rieng cho module do thay vi tat
+# toan cuc: cho nao ta viet duoc kieu thi van phai viet.
+[[tool.mypy.overrides]]
+module = ["mow_mcp.server"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Phai liet ke tung noi co test Python. `testpaths = ["tests"]` o day tro toi
+# `tests/` cua repo — noi chua kich ban YAML, khong co file .py nao — nen
+# `make test-py` chay 0 test va bao thanh cong. Mot cong CI xanh ma chua kiem gi
+# la thu te hon la khong co cong nao.
+testpaths = ["services", "tools"]
 addopts = "-q"
 
 [dependency-groups]
 dev = [
+  # Cac thanh vien workspace phai co mat o day, neu khong `uv sync` se don chung
+  # ra khoi moi truong va `uv run pytest` bao `ModuleNotFoundError` cho chinh ma
+  # cua du an. Goc `package = false` nghia la goc khong tu keo theo ai ca.
+  "agent-service",
+  "api-gateway",
+  "memory-service",
+  "mow-mcp",
+
+  "types-PyYAML>=6.0",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "ruff>=0.8",
   "mypy>=1.13",
 ]
+
+[tool.uv.sources]
+agent-service = { workspace = true }
+api-gateway = { workspace = true }
+memory-service = { workspace = true }
+mow-mcp = { workspace = true }

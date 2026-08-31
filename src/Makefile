@@ -88,6 +88,12 @@ determinism: ## Chạy lại với số luồng khác nhau rồi so state hash (
 soak: ## Mô phỏng dài, theo dõi bất biến và bộ nhớ (§P7.7)
 	cargo run -p mow-cli --release --quiet -- soak --years 200 --worlds 3
 
+bench: ## Đo hiệu năng (§P8.1)
+	cargo bench -p mow-worldgen
+
+budget: ## Áp bảng ngân sách hiệu năng lên phép đo ở stdin (§P8.1)
+	cargo run -p mow-cli --quiet -- budget --phase F
+
 # ── Khác ─────────────────────────────────────────────────────────────────────
 
 doctor: ## Kiểm tra máy có đủ công cụ không

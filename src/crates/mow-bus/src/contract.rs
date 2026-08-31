@@ -1,9 +1,9 @@
-//! Hợp đồng của bus — dùng lại nguyên vẹn cho NATS JetStream ở `PC-20`.
+//! Hợp đồng của bus — dùng lại nguyên vẹn cho NATS `JetStream` ở `PC-20`.
 //!
 //! Bộ này định nghĩa **ngữ nghĩa tối thiểu bắt buộc**. Điều quan trọng không
 //! kém là những gì nó *không* kiểm: thứ tự giữa hai chủ đề khác nhau, công bằng
 //! giữa nhiều consumer, độ trễ. Code gọi không được dựa vào những thứ đó, kể cả
-//! khi hiện thực SQLite tình cờ cung cấp — vì JetStream sẽ không.
+//! khi hiện thực `SQLite` tình cờ cung cấp — vì `JetStream` sẽ không.
 
 use crate::MessageBus;
 

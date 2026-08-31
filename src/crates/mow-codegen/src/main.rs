@@ -189,24 +189,152 @@ fn pipeline_rpc(root: &Path, check: bool) -> Result<(), String> {
         println!("  (chưa có file .proto nào — bỏ qua)");
         return Ok(());
     }
+    println!("  {} file .proto", files.len());
 
-    // Bộ sinh thật cần `protoc`. Nó có trong toolbox (`deploy/docker/toolbox.Dockerfile`)
-    // nhưng không nhất thiết có trên máy thật, nên báo rõ thay vì fail khó hiểu.
-    if which_protoc().is_none() {
-        let msg = "  không tìm thấy `protoc`. Chạy trong toolbox: `./mow exec make codegen`";
-        if check {
-            // Ở chế độ kiểm, thiếu công cụ **không** được coi là đạt: một CI
-            // thiếu protoc sẽ xanh mà chưa bao giờ kiểm gì.
-            return Err(format!(
-                "{msg}\n  (chế độ --check không được bỏ qua bước này)"
-            ));
-        }
-        println!("{msg}");
-        return Ok(());
+    // `protoc` lấy từ gói `grpcio-tools` trong uv workspace, không phải từ một
+    // bản cài sẵn trên máy.
+    //
+    // Lý do: một `protoc` cài tay có version tùy máy, và hai version protoc khác
+    // nhau sinh ra mã hơi khác nhau — đủ để `--check` đỏ trên máy này và xanh
+    // trên máy kia, mà không ai đổi gì. Khóa nó vào lockfile Python là cách rẻ
+    // nhất để mọi người và CI dùng đúng một bản.
+    let protoc = tim_protoc(root)?;
+
+    // **Đường dẫn tương đối, luôn luôn.** Trên Windows, `protoc` tách tham số
+    // plugin ở dấu hai chấm, nên một đường dẫn tuyệt đối `D:\...` bị hiểu thành
+    // tên plugin `D` cộng tham số — và thông báo lỗi nó in ra không hề nhắc tới
+    // ổ đĩa, nên chỗ hỏng rất khó nhìn ra. Chạy với `current_dir(root)` rồi
+    // truyền đường tương đối là cách tránh gọn nhất.
+    const OUT_PY: &str = "services/agent-service/src/agent_service/generated";
+    const FDS: &str = "proto/descriptor_set.bin";
+    const TAM_PY: &str = "target/codegen-check/py";
+    let out_py = root.join(OUT_PY);
+
+    // Một lần gọi, hai sản phẩm: mã Python, và **descriptor set** cho phía Rust.
+    //
+    // Descriptor set là chỗ khéo của thiết kế này: `prost-build` biên dịch được
+    // trực tiếp từ nó, nên build Rust **không cần protoc**. Người clone repo và
+    // gõ `cargo build` không phải cài gì thêm, và mã Rust sinh ra không phụ
+    // thuộc version protoc trên máy họ.
+    let tam = root.join(TAM_PY);
+    let dich_py = if check { TAM_PY } else { OUT_PY };
+    std::fs::create_dir_all(root.join(dich_py))
+        .map_err(|e| format!("  không tạo được {dich_py}: {e}"))?;
+
+    let mut cmd = std::process::Command::new(&protoc.0);
+    cmd.current_dir(root)
+        .args(&protoc.1)
+        .args(["-I", "proto"])
+        .arg(format!("--descriptor_set_out={FDS}"))
+        .arg("--include_imports")
+        // Mang chú thích trong `.proto` sang mã sinh ở cả ba ngôn ngữ. Không có
+        // cờ này, phần giải thích *vì sao* một trường tồn tại chỉ nằm trong file
+        // proto — và người đọc mã sinh, tức là hầu hết mọi người, không thấy nó.
+        .arg("--include_source_info")
+        .arg(format!("--python_betterproto_out={dich_py}"));
+    for f in &files {
+        // Cũng phải tương đối, vì cùng lý do.
+        cmd.arg(f.strip_prefix(root).unwrap_or(f));
     }
 
-    println!("  {} file .proto", files.len());
+    let ra = cmd
+        .output()
+        .map_err(|e| format!("  không chạy được protoc: {e}"))?;
+    if !ra.status.success() {
+        return Err(format!(
+            "  protoc lỗi:\n{}",
+            String::from_utf8_lossy(&ra.stderr)
+        ));
+    }
+
+    if check {
+        // So mã sinh với mã đã commit. Lệch nghĩa là ai đó sửa proto mà quên
+        // chạy `make codegen`, và hai phía hợp đồng đã bắt đầu trôi khỏi nhau.
+        let lech = so_thu_muc(&tam, &out_py);
+        let _ = std::fs::remove_dir_all(&tam);
+        if !lech.is_empty() {
+            return Err(format!(
+                "  mã sinh khác mã đã commit ({} file):\n    {}\n  chạy `make codegen` rồi commit lại.",
+                lech.len(),
+                lech.join("\n    ")
+            ));
+        }
+        println!("  ✓ mã Python khớp");
+    } else {
+        println!("  → {}", out_py.display());
+    }
+
+    println!("  → {FDS}");
     Ok(())
+}
+
+/// Tìm protoc: ưu tiên `grpcio-tools` trong uv workspace, sau đó mới tới máy.
+///
+/// Trả về `(chương trình, tham số dẫn đầu)` vì bản trong uv là một module Python
+/// chứ không phải một file thực thi.
+fn tim_protoc(root: &Path) -> Result<(PathBuf, Vec<String>), String> {
+    for uv in ["uv", "uv.exe"] {
+        let thu = std::process::Command::new(uv)
+            .current_dir(root)
+            .args(["run", "python", "-c", "import grpc_tools.protoc"])
+            .output();
+        if matches!(thu, Ok(ref r) if r.status.success()) {
+            return Ok((
+                PathBuf::from(uv),
+                ["run", "python", "-m", "grpc_tools.protoc"]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+            ));
+        }
+    }
+
+    if let Some(p) = which_protoc() {
+        println!("  (dùng protoc của hệ thống — version có thể khác CI)");
+        return Ok((p, Vec::new()));
+    }
+
+    Err("  không tìm thấy protoc.\n           Chạy `uv sync` để lấy `grpcio-tools`, hoặc dùng toolbox: `./mow exec make codegen`"
+        .to_owned())
+}
+
+/// Những file khác nhau giữa hai cây thư mục, tính cả file chỉ có ở một bên.
+fn so_thu_muc(a: &Path, b: &Path) -> Vec<String> {
+    let mut lech = Vec::new();
+    let mut ta = Vec::new();
+    let mut tb = Vec::new();
+    thu_thap_moi(a, a, &mut ta);
+    thu_thap_moi(b, b, &mut tb);
+    ta.sort();
+    tb.sort();
+
+    for r in &ta {
+        if !tb.contains(r) {
+            lech.push(format!("{} (thừa)", r.display()));
+        } else if std::fs::read(a.join(r)).ok() != std::fs::read(b.join(r)).ok() {
+            lech.push(format!("{} (khác)", r.display()));
+        }
+    }
+    for r in &tb {
+        if !ta.contains(r) {
+            lech.push(format!("{} (thiếu)", r.display()));
+        }
+    }
+    lech
+}
+
+fn thu_thap_moi(goc: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            thu_thap_moi(goc, &p, out);
+        } else if let Ok(r) = p.strip_prefix(goc) {
+            out.push(r.to_path_buf());
+        }
+    }
 }
 
 fn thu_thap_proto(dir: &Path, out: &mut Vec<PathBuf>) {

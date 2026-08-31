@@ -81,7 +81,7 @@ fn toc_do_mang_khong_lot_vao_the_gioi() {
 }
 
 #[test]
-fn ket_qua_ve_som_van_phai_cho_toi_T_cong_D() {
+fn ket_qua_ve_som_van_phai_cho_toi_t_cong_d() {
     let mut s = so();
     len_lich(&mut s, 1, 100, 10);
     s.record_response(1, "claude-opus-5", "xong".into())
@@ -101,7 +101,7 @@ fn ket_qua_ve_som_van_phai_cho_toi_T_cong_D() {
 }
 
 #[test]
-fn khong_kip_thi_fallback_dung_tai_T_cong_D() {
+fn khong_kip_thi_fallback_dung_tai_t_cong_d() {
     let mut s = so();
     len_lich(&mut s, 1, 100, 10);
     // Không có kết quả.

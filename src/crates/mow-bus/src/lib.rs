@@ -1,8 +1,8 @@
 //! # `mow-bus` — bus thông điệp bền
 //!
-//! `P0-08` nói rõ một điều dễ làm sai: **"Không tự dựng lại JetStream."**
+//! `P0-08` nói rõ một điều dễ làm sai: **"Không tự dựng lại `JetStream`."**
 //!
-//! Cám dỗ là viết một bus in-process "có cùng ngữ nghĩa durable như JetStream"
+//! Cám dỗ là viết một bus in-process "có cùng ngữ nghĩa durable như `JetStream`"
 //! — at-least-once, consumer group, replay theo sequence, redelivery có
 //! backoff. Nhưng đó chính là viết một hàng đợi thứ hai, và nguyên tắc 2 của
 //! `plan.md §P1` cấm điều đó.
@@ -13,14 +13,19 @@
 //!
 //! Chỉ vậy. Không phân phối, không nhiều consumer tranh nhau, không backoff
 //! tinh vi. Đủ để bản desktop chạy đúng, và đủ để interface không phải đổi khi
-//! NATS JetStream thay thế nó ở `PC-20`.
+//! NATS `JetStream` thay thế nó ở `PC-20`.
 //!
 //! Điều còn lại quan trọng hơn: bộ test hợp đồng ở [`contract`] định nghĩa
 //! **ngữ nghĩa nào là bắt buộc**. Ngữ nghĩa nào không có trong đó thì code gọi
-//! không được phép dựa vào — kể cả khi hiện thực SQLite tình cờ cung cấp nó.
+//! không được phép dựa vào — kể cả khi hiện thực `SQLite` tình cờ cung cấp nó.
 
 #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::cast_possible_truncation)]
@@ -28,6 +33,10 @@
 #![allow(clippy::cast_possible_wrap)]
 
 pub mod contract;
+/// Backend thứ hai cho server mode (`PC-20`). Sau feature vì nó kéo theo một
+/// client NATS mà bản desktop không bao giờ dùng tới.
+#[cfg(feature = "nats")]
+pub mod nats;
 pub mod sqlite;
 
 use serde::{Deserialize, Serialize};
@@ -42,6 +51,9 @@ pub enum BusError {
     /// Ack một thông điệp không đang được giữ.
     #[error("ack {0} nhưng nó không đang được giữ")]
     NotLeased(u64),
+    /// Lỗi từ một backend không phải `SQLite` (NATS, ...).
+    #[error("lỗi backend bus: {0}")]
+    External(String),
 }
 
 /// Kết quả.

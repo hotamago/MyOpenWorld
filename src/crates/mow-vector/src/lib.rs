@@ -37,6 +37,11 @@
 
 #![deny(missing_docs)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::cast_possible_truncation)]
@@ -45,6 +50,10 @@
 
 pub mod contract;
 pub mod embedded;
+/// Backend thứ hai cho server mode (`PC-20`). Sau feature vì bản desktop dùng
+/// chỉ mục nhúng và không được kéo theo một client HTTP.
+#[cfg(feature = "qdrant")]
+pub mod qdrant;
 
 use mow_core::{BranchId, Tick};
 use serde::{Deserialize, Serialize};
@@ -56,6 +65,9 @@ pub enum VectorError {
     /// Lỗi lưu trữ.
     #[error("lỗi lưu trữ chỉ mục: {0}")]
     Backend(#[from] rusqlite::Error),
+    /// Lỗi từ một backend không phải `SQLite` (Qdrant, ...).
+    #[error("lỗi backend chỉ mục: {0}")]
+    External(String),
     /// Số chiều không khớp với chiều đã khai báo lúc tạo chỉ mục.
     #[error("vector {got} chiều, chỉ mục khai báo {want} chiều")]
     Dimension {

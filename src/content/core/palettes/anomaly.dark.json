@@ -1,0 +1,29 @@
+{
+  "id": "anomaly",
+  "kind": "diverging",
+  "mode": "dark",
+  "background": "#12151a",
+  "entries": [
+    {
+      "id": "d-2",
+      "color": "#2b5f9e"
+    },
+    {
+      "id": "d-1",
+      "color": "#77a6d6"
+    },
+    {
+      "id": "d0",
+      "color": "#d8d3c6"
+    },
+    {
+      "id": "d+1",
+      "color": "#dd9a5f"
+    },
+    {
+      "id": "d+2",
+      "color": "#a8511b"
+    }
+  ],
+  "noData": "#4a4a4a"
+}

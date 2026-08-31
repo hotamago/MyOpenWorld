@@ -13,5 +13,12 @@ description: "Vat lieu, loai, nhu cau, hieu ung va luat nen tang."
 requires: []
 overrides: []
 
+# Quyen pack xin (§19.7, PF-01). Khai it nhat co the: core co thu muc `laws/`
+# nen phai xin `define_law`, con lai deu la du lieu tinh. Khong xin
+# `override_foreign` — core khong ghi de cua ai, va neu mot ngay no can thi
+# viec phai them dong nay la mot cau hoi dang duoc hoi.
+capabilities:
+  - define_law
+
 tests:
   - smoke/genesis.yaml

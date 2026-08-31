@@ -135,6 +135,12 @@ pub mod streams {
     pub const SOCIAL_WITNESS: StreamName = StreamName("society.crime.witness");
     /// Nhiễu khi tin đồn lan.
     pub const SOCIAL_RUMOR: StreamName = StreamName("society.message.drift");
+    /// Lấy mẫu tính cách khi một người được sinh ra.
+    ///
+    /// Tách khỏi [`LIFE_RECOMBINATION`] có chủ đích: tính cách và gen là hai
+    /// thứ khác nhau, và dùng chung dòng sẽ buộc chúng tương quan ngầm — anh
+    /// em ruột sẽ có tính cách giống nhau vì một lý do thuần kỹ thuật.
+    pub const SOCIAL_PERSONALITY: StreamName = StreamName("society.personality.sample");
 
     /// Chọn storylet khi salience bằng nhau.
     pub const DIRECTOR_TIEBREAK: StreamName = StreamName("director.salience.tiebreak");

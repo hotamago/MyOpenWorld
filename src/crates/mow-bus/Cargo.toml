@@ -7,6 +7,14 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+async-nats = { version = "0.50", optional = true }
+futures = { version = "0.3", optional = true }
+tokio = { version = "1", features = ["rt", "macros", "time"], optional = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+
+[features]
+default = []
+# Backend thu hai cho server mode (`PC-20`, `plan.md §P3.4`).
+nats = ["dep:async-nats", "dep:futures", "dep:tokio"]
