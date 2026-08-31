@@ -1496,8 +1496,10 @@ dependencies = [
 name = "mow-cli"
 version = "0.1.0"
 dependencies = [
+ "mow-config",
  "mow-core",
  "mow-devtool",
+ "mow-llm",
  "mow-math",
  "mow-plugin",
  "mow-scenario",
@@ -1662,6 +1664,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "ureq",
 ]
 
 [[package]]

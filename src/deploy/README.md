@@ -28,10 +28,29 @@ container, chúng không với tới ổ đĩa, biến môi trường hay khóa 
 
 ## Hai nhóm dịch vụ
 
-| Nhóm | Profile | Có từ | Gồm |
-|---|---|---|---|
-| **toolbox** | *(mặc định)* | ngay | Rust 1.90, Node 24, pnpm, uv, protoc, SQLite, target wasm32 |
-| **infra** | `infra` | Giai đoạn C | Postgres 17, NATS JetStream, Qdrant, Jaeger, MinIO |
+| Nhóm | Profile | Gồm |
+|---|---|---|
+| **toolbox** | *(mặc định)* | Rust 1.90, Node 24, pnpm, uv, protoc, SQLite, target wasm32 |
+| **app** | `app` | frontend Vue (`web`), sidecar nhận thức Python (`agent`) |
+| **ai** | `ai` | máy chủ embedding cục bộ (vLLM + GPU) |
+| **infra** | `infra` | Postgres 17, NATS JetStream, Qdrant, Jaeger, MinIO |
+
+### "Sao chỉ có toolbox? Frontend, backend, agent đâu?"
+
+Câu hỏi đúng, và câu trả lời cần nói thẳng.
+
+`app` có **hai** tiến trình: `web` (Vue + Pixi, `PA-05`) và `agent` (sidecar
+nhận thức, `PC-01`/`PF-12`). Cả hai chạy được ngay bằng `./mow app up`.
+
+**Không có `mow-server`.** `plan.md §P3.1` mô tả `mow-server` và `mow-worker`
+là hai binary trung tâm — "một nguồn quyền lực duy nhất" — nhưng `progress.md`
+chưa bao giờ có task dựng chúng. 147/147 task xây engine dưới dạng **thư viện**
+cộng với `mow-cli`; workspace hôm nay có đúng hai binary, `mow-cli` và
+`mow-codegen`.
+
+Hệ quả thực tế: `web` chạy với dữ liệu của chính nó, `agent` trả lời `/health`,
+và cầu nối giữa chúng với engine là `mow-cli` chạy tay. Đó là hình trạng
+desktop-first của `§P3.4`, chưa phải server mode.
 
 `infra` **không** bật mặc định, và đó là chủ đích. Tới hết Giai đoạn B thì
 SQLite cộng bus in-process là đủ (`P0-07`, `P0-08`); bắt mọi người chạy năm
@@ -54,6 +73,8 @@ thực thứ hai và chứng minh nó vượt đúng bộ test hợp đồng đ�
 | `./mow determinism` | chạy lại với 1, 2, 8 luồng rồi so state hash (`§P7.5`) |
 | `./mow exec <lệnh>` | lệnh bất kỳ bên trong |
 | `./mow native <lệnh>` | chạy thẳng trên máy, bỏ qua container |
+| `./mow app up\|down\|logs` | frontend + sidecar nhận thức |
+| `./mow ai up\|down\|logs` | máy chủ embedding cục bộ (cần GPU NVIDIA) |
 | `./mow infra up\|down` | hạ tầng server mode |
 | `./mow logs [dịch vụ]` | xem log |
 | `./mow doctor` | máy thật có đủ gì, thiếu gì |
@@ -68,18 +89,31 @@ quả bất kể số luồng" thật sự được kiểm chứng chứ không 
 ## Cổng ra máy thật
 
 Cố ý đặt lệch dải thường dùng để không đụng Postgres hay Qdrant bạn đang chạy
-sẵn cho việc khác:
+sẵn cho việc khác — nhưng **dưới 49152**, và vế thứ hai mới là vế đắt:
+
+> Dải 49152–65535 là dải cổng động. Trên Windows, Hyper-V và WinNAT đặt trước
+> hàng loạt khối trong dải đó, và khối nào thì **đổi sau mỗi lần khởi động**.
+> Bind vào một cổng đã bị đặt trước cho lỗi `An attempt was made to access a
+> socket in a way forbidden by its access permissions` — một câu không hề
+> nhắc tới Hyper-V, nên nó thường bị đọc nhầm thành "cổng đã có ai chiếm".
+>
+> Xem máy bạn đang đặt trước những khối nào:
+> `netsh interface ipv4 show excludedportrange protocol=tcp`
+
 
 | Dịch vụ | Cổng | Ghi đè bằng |
 |---|---|---|
-| Postgres | `55432` | `MOW_PG_PORT` |
-| NATS | `54222` | `MOW_NATS_PORT` |
-| NATS monitor | `58222` | `MOW_NATS_MON_PORT` |
-| Qdrant HTTP | `56333` | `MOW_QDRANT_PORT` |
-| Qdrant gRPC | `56334` | `MOW_QDRANT_GRPC_PORT` |
-| Jaeger UI | `56686` | `MOW_JAEGER_UI_PORT` |
-| OTLP | `54317` | `MOW_OTLP_PORT` |
-| MinIO | `59000` / `59001` | `MOW_MINIO_PORT` / `MOW_MINIO_CONSOLE_PORT` |
+| Postgres | `15432` | `MOW_PG_PORT` |
+| NATS | `14222` | `MOW_NATS_PORT` |
+| NATS monitor | `18222` | `MOW_NATS_MON_PORT` |
+| Qdrant HTTP | `16333` | `MOW_QDRANT_PORT` |
+| Qdrant gRPC | `16334` | `MOW_QDRANT_GRPC_PORT` |
+| Jaeger UI | `16686` | `MOW_JAEGER_UI_PORT` |
+| OTLP | `14317` | `MOW_OTLP_PORT` |
+| MinIO | `19000` / `19001` | `MOW_MINIO_PORT` / `MOW_MINIO_CONSOLE_PORT` |
+| Web (Vite) | `15173` | `MOW_WEB_PORT` |
+| Agent | `18765` | `MOW_AGENT_PORT` |
+| Embedding | `18080` | `MOW_EMBED_PORT` |
 
 ## Cache
 
@@ -93,11 +127,14 @@ một lần.
 
 ## Image chạy thật
 
-`docker/server.Dockerfile` build `mow-server` và `mow-worker` ở chế độ release.
+`docker/server.Dockerfile` build **`mow-cli`** ở chế độ release — không phải
+`mow-server`, vì binary đó chưa tồn tại (xem mục trên). Bản trước của file đó
+build `--bin mow-server --bin mow-worker` và vì thế chưa bao giờ build được.
+
 Nó có một bước không phải ai cũng nghĩ tới:
 
 ```dockerfile
-RUN if strings /out/mow-server | grep -q 'mow_devtool'; then exit 1; fi
+RUN if strings /out/mow-cli | grep -q 'mow_devtool'; then exit 1; fi
 ```
 
 `§P10.5` yêu cầu devtool không có trong bản phát hành. Feature flag đã lo phần

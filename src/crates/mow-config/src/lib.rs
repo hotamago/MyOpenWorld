@@ -44,13 +44,14 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 
+pub mod dotenv;
 pub mod error;
 pub mod schema;
 
 pub use error::{ConfigError, ConfigResult};
 pub use schema::{
-    AppConfig, BudgetConfig, ContentConfig, LlmConfig, LlmMode, LogFormat, ObservabilityConfig,
-    PersistenceConfig, SimConfig, VectorConfig,
+    AppConfig, BudgetConfig, ContentConfig, EmbeddingConfig, EmbeddingMode, LlmConfig, LlmMode,
+    LogFormat, ObservabilityConfig, PersistenceConfig, SimConfig, VectorConfig,
 };
 
 use figment::providers::{Env, Format, Yaml};
@@ -79,7 +80,21 @@ pub fn load(root: impl AsRef<Path>, env: &str) -> ConfigResult<AppConfig> {
     // vì tên field có thể chứa một gạch dưới đơn.
     fig = fig.merge(Env::prefixed("MOW_").split("__"));
 
-    let cfg: AppConfig = fig.extract().map_err(ConfigError::from)?;
+    let mut cfg: AppConfig = fig.extract().map_err(ConfigError::from)?;
+
+    // `env` là **dẫn xuất**, không phải cấu hình: nó luôn bằng tên môi trường
+    // đã thật sự được nạp.
+    //
+    // Không có dòng này thì `MOW_ENV` làm hai việc mâu thuẫn nhau. Nó chọn file
+    // (chỗ gọi đọc nó để truyền vào `env`), *và* nó là một field nên lớp biến
+    // môi trường ghi đè lên YAML. Đặt `MOW_ENV=dev` rồi gọi `load(root, "test")`
+    // cho ra một config đã nạp `test.yaml` nhưng **tự khai là `dev`** — tức là
+    // đúng cái nhầm lẫn mà field này tồn tại để chống.
+    //
+    // Chuyện đó đã xảy ra thật: container `toolbox` đặt `MOW_ENV=dev`, và bài
+    // test nạp môi trường `test` đỏ ở đó trong khi xanh trên máy thật.
+    env.clone_into(&mut cfg.env);
+
     cfg.validate()?;
     Ok(cfg)
 }

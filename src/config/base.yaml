@@ -1,6 +1,6 @@
 # Lop nen. Luon duoc nap truoc moi lop khac.
 # KHONG BAO GIO dat bi mat o day: file nay duoc commit.
-# Bi mat nam o .env, tham chieu qua bien moi truong MOW_*.
+# Bi mat nam o .env, tham chieu qua ten bien trong `*.api_key_env`.
 
 env: dev
 
@@ -16,16 +16,55 @@ persistence:
 vector:
   # Phai khac persistence.url — P0-09.
   url: "memory-index/index.sqlite"
-  dimension: 768
+  # 1024 = so chieu goc cua jina-embeddings-v5-text-small (nen Qwen3-0.6B).
+  # Model ho tro Matryoshka nen cat duoc ve 768/512/256...; muon vay thi doi so
+  # nay va de `embedding.send_dimensions: true`. Day la NGUON DUY NHAT cua so
+  # chieu — `embedding` khong khai lai no.
+  dimension: 1024
 
 llm:
+  # STUB o moi truong mac dinh: khong mang, khong token, xac dinh.
+  # Doi sang LIVE bang `MOW_ENV=live` (xem live.yaml) chu khong sua file nay.
   mode: STUB
-  provider: ""
-  model: ""
+  provider: openrouter
+  base_url: "https://openrouter.ai/api/v1"
+  # TEN bien moi truong, khong phai khoa. Khoa nam o `.env`.
+  api_key_env: OPENROUTER_API_KEY
+  model: "deepseek/deepseek-v4-flash-0731"
+  max_output_tokens: 2048
+  # Phan nghin. 0 = tham lam. Da dang cua the gioi den tu seed, khong tu bo lay
+  # mau — da dang cua bo lay mau khong phat lai duoc.
+  temperature_milli: 0
+  # Ghi cong tren bang xep hang cua OpenRouter. Tuy chon.
+  app_url: "https://github.com/hotamago/MyOpenWorld"
+  app_title: "My Open World"
   # Do tre nhan thuc co dinh D, theo §20.2.2. Xem tai lieu cua truong nay.
   cognitive_latency_ticks: 10
   timeout_ms: 30000
   cassette_dir: "llm-cassettes"
+
+embedding:
+  # STUB = bam dac trung chay tai cho: xac dinh, khong mang, khong khoa.
+  # Cho tuong dong TU VUNG, khong phai ngu nghia — du de ca duong ong ky uc
+  # chay va replay duoc truoc khi co bat ky khoa nao.
+  mode: STUB
+  provider: local
+  # May chu cuc bo dung bang `./mow ai up` (vLLM phuc vu model duoi day).
+  base_url: "http://localhost:18080/v1"
+  api_key_env: EMBEDDINGS_API_KEY
+  # Khop `--served-model-name` trong docker-compose.yml.
+  model: "jina-embeddings-v5-text-small"
+  batch_size: 32
+  timeout_ms: 30000
+  # TAT. Model goc ho tro Matryoshka, nhung ban `-retrieval` da gop adapter
+  # thi khong: vLLM tra `400 does not support Matryoshka embeddings;
+  # dimensions must be unset`. Khong sao — 1024 la so chieu goc, dung bang
+  # `vector.dimension`, nen khong can cat gi ca.
+  send_dimensions: false
+  # De trong: ban `-retrieval` da gop adapter nen may chu tu ap tien to tac vu.
+  # Dat gia tri neu ban doi sang mot model doi tien to tuong minh.
+  query_prefix: ""
+  document_prefix: ""
 
 budget:
   max_calls_per_tick: 8

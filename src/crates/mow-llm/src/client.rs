@@ -119,6 +119,24 @@ pub enum LlmError {
     /// Lỗi mã hóa bản ghi.
     #[error("bản ghi hỏng: {0}")]
     BadCassette(String),
+    /// Không nối được tới provider: DNS, TLS, quá hạn.
+    ///
+    /// Tách khỏi [`LlmError::Upstream`] vì hai bên đòi hai phản ứng khác nhau:
+    /// lỗi vận chuyển đáng thử lại, còn `400 Bad Request` thì thử lại bao nhiêu
+    /// lần cũng vẫn `400`.
+    #[error("không gọi được provider: {0}")]
+    Transport(String),
+    /// Provider trả về mã lỗi, hoặc trả về `{{"error": ...}}` kèm mã 200.
+    #[error("provider trả lỗi {status}: {message}")]
+    Upstream {
+        /// Mã trạng thái HTTP.
+        status: u16,
+        /// Thông báo, **đã che bí mật**.
+        message: String,
+    },
+    /// Trả lời có mã 2xx nhưng không đúng hình dạng đã hứa.
+    #[error("trả lời không đúng hình dạng: {0}")]
+    BadResponse(String),
 }
 
 /// Kết quả.

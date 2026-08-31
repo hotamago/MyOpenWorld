@@ -27,7 +27,7 @@
 //!
 //! ```bash
 //! ./mow infra up          # dựng Postgres trong deploy/
-//! MOW_POSTGRES_URL=postgres://mow:mow@localhost:5432/mow \
+//! MOWTEST_POSTGRES_URL=postgres://mow:mow@localhost:15432/mow \
 //!   cargo test -p mow-persist --features postgres -- --ignored
 //! ```
 //!

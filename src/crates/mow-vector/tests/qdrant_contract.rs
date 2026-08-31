@@ -5,7 +5,7 @@
 //!
 //! ```bash
 //! ./mow infra up
-//! MOW_QDRANT_URL=http://localhost:6333 \
+//! MOWTEST_QDRANT_URL=http://localhost:16333 \
 //!   cargo test -p mow-vector --features qdrant -- --ignored --test-threads=1
 //! ```
 
@@ -15,10 +15,10 @@ use mow_vector::contract;
 use mow_vector::qdrant::QdrantIndex;
 
 #[test]
-#[ignore = "cần Qdrant: ./mow infra up, rồi đặt MOW_QDRANT_URL"]
+#[ignore = "cần Qdrant: ./mow infra up, rồi đặt MOWTEST_QDRANT_URL"]
 fn hop_dong_chi_muc_chay_nguyen_ven_tren_qdrant() {
-    let u = std::env::var("MOW_QDRANT_URL").expect(
-        "thiếu MOW_QDRANT_URL — bài này `#[ignore]`, nên bạn đã chạy `--ignored` \
+    let u = std::env::var("MOWTEST_QDRANT_URL").expect(
+        "thiếu MOWTEST_QDRANT_URL — bài này `#[ignore]`, nên bạn đã chạy `--ignored` \
          mà chưa dựng hạ tầng: `./mow infra up`",
     );
 

@@ -31,7 +31,7 @@
 //!
 //! ```bash
 //! ./mow infra up
-//! MOW_QDRANT_URL=http://localhost:6333 \
+//! MOWTEST_QDRANT_URL=http://localhost:16333 \
 //!   cargo test -p mow-vector --features qdrant -- --ignored
 //! ```
 
@@ -41,6 +41,34 @@ use serde_json::{json, Value};
 
 fn loi(e: impl std::fmt::Display) -> VectorError {
     VectorError::External(e.to_string())
+}
+
+/// Doc mot tra loi, bien `4xx`/`5xx` thanh loi **kem than**.
+///
+/// Ton tai vi mot dong `http status: 400` khong du de sua bat cu thu gi. Qdrant
+/// tra ve `{"status": {"error": "..."}}` va cau do thuong noi thang truong nao
+/// sai — day la cho duy nhat trong ca backend nay biet dieu do.
+fn kiem(
+    ngu_canh: &str,
+    r: Result<ureq::http::Response<ureq::Body>, ureq::Error>,
+) -> VectorResult<Value> {
+    let mut resp = r.map_err(loi)?;
+    let ma = resp.status().as_u16();
+    let than = resp.body_mut().read_to_string().unwrap_or_default();
+    if !(200..300).contains(&ma) {
+        let chi_tiet = serde_json::from_str::<Value>(&than)
+            .ok()
+            .and_then(|v| {
+                v.pointer("/status/error")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .unwrap_or(than);
+        return Err(VectorError::External(format!(
+            "{ngu_canh}: HTTP {ma} — {chi_tiet}"
+        )));
+    }
+    Ok(serde_json::from_str(&than).unwrap_or(Value::Null))
 }
 
 /// Chỉ mục trên Qdrant.
@@ -58,7 +86,15 @@ impl QdrantIndex {
             base: base_url.trim_end_matches('/').to_owned(),
             collection: collection.to_owned(),
             dim,
-            agent: ureq::Agent::new_with_defaults(),
+            // `http_status_as_error(false)`: mac dinh cua `ureq` bien `4xx`
+            // thanh `Err(StatusCode(n))` va **vut than tra loi di**. Qdrant
+            // luon noi ro truong nao sai trong than do, nen mac dinh ay bien
+            // moi loi cau hinh thanh dung mot dong: `http status: 400`.
+            agent: ureq::Agent::new_with_config(
+                ureq::Agent::config_builder()
+                    .http_status_as_error(false)
+                    .build(),
+            ),
         };
         idx.ensure_collection()?;
         Ok(idx)
@@ -76,13 +112,22 @@ impl QdrantIndex {
         let body = json!({
             "vectors": { "size": self.dim, "distance": "Dot" }
         });
-        let r = self.agent.put(&self.url("")).send_json(&body);
-        match r {
-            // 409 nghĩa là collection đã tồn tại — chuyện bình thường ở lần chạy
-            // thứ hai, không phải lỗi.
-            Ok(_) | Err(ureq::Error::StatusCode(409)) => Ok(()),
-            Err(e) => Err(loi(e)),
+        let mut resp = self
+            .agent
+            .put(&self.url(""))
+            .send_json(&body)
+            .map_err(loi)?;
+        let ma = resp.status().as_u16();
+        // 409 nghĩa là collection đã tồn tại — chuyện bình thường ở lần chạy
+        // thứ hai, không phải lỗi.
+        if (200..300).contains(&ma) || ma == 409 {
+            return Ok(());
         }
+        let than = resp.body_mut().read_to_string().unwrap_or_default();
+        Err(VectorError::External(format!(
+            "tạo collection `{}`: HTTP {ma} — {than}",
+            self.collection
+        )))
     }
 
     /// Điều kiện lọc, gửi **cùng** truy vấn. Xem phần đầu file.
@@ -100,7 +145,20 @@ impl QdrantIndex {
                 json!({
                     "must": [
                         { "key": "created_branch", "match": { "value": s.branch.get() as i64 } },
-                        { "key": "created_tick", "range": { "lte": s.cutoff.0 as i64 } },
+                        // `try_from`, KHONG phai `as`. `cutoff` mang gia tri
+                        // `u64::MAX` de noi "khong cat gi ca", va `u64::MAX as
+                        // i64` la `-1` — nen dieu kien tro thanh
+                        // `created_tick <= -1`, khong khop gi het. Truy xuat tra
+                        // ve rong, khong loi, khong canh bao: NPC mat sach ky uc
+                        // mot cach im lang.
+                        //
+                        // Cung mot lop loi da sua o `mow-persist` (SQLite va
+                        // Postgres). No song sot o day vi bo test hop dong
+                        // Qdrant chua bao gio chay that.
+                        {
+                            "key": "created_tick",
+                            "range": { "lte": i64::try_from(s.cutoff.0).unwrap_or(i64::MAX) }
+                        },
                     ]
                 })
             })
@@ -114,9 +172,18 @@ impl QdrantIndex {
                 { "should": dong_doi },
                 // Đã quên trên nhánh hiện tại thì không trả về.
                 {
+                    // `any` doi mot MANG. Truyen mot so tran vao day cho ra
+                    // `HTTP 400 — data did not match any variant of untagged
+                    // enum Condition`, mot thong bao khong he nhac toi truong
+                    // nao sai. Va vi ca bo test hop dong Qdrant chua bao gio
+                    // chay that, loi nay song tu luc viet toi luc co Docker.
                     "must_not": [{
                         "key": "tombstoned_in",
-                        "match": { "any": q.lineage.first().map(|s| s.branch.get() as i64) },
+                        "match": {
+                            "any": q.lineage.first()
+                                .map(|s| vec![s.branch.get() as i64])
+                                .unwrap_or_default()
+                        },
                     }]
                 },
             ]
@@ -149,16 +216,18 @@ impl VectorIndex for QdrantIndex {
                     "namespace": point.namespace,
                     "persona_version": point.persona_version,
                     "created_branch": point.created_branch.get() as i64,
-                    "created_tick": point.created_tick.0 as i64,
+                    "created_tick": i64::try_from(point.created_tick.0).unwrap_or(i64::MAX),
                     "tombstoned_in": Vec::<i64>::new(),
                     "blob": point.payload,
                 }
             }]
         });
-        self.agent
-            .put(&self.url("/points?wait=true"))
-            .send_json(&body)
-            .map_err(loi)?;
+        kiem(
+            "upsert",
+            self.agent
+                .put(&self.url("/points?wait=true"))
+                .send_json(&body),
+        )?;
         Ok(())
     }
 
@@ -172,14 +241,12 @@ impl VectorIndex for QdrantIndex {
         // Qdrant không có "append vào mảng payload" nguyên tử, nên đọc–sửa–ghi.
         // Chấp nhận được vì tombstone đi qua đường commit của Rust, và ở đó chỉ
         // có một người ghi (`§22.1`).
-        let cu: Value = self
-            .agent
-            .get(&format!("{}/points/{}", self.url(""), id.0))
-            .call()
-            .map_err(loi)?
-            .body_mut()
-            .read_json()
-            .map_err(loi)?;
+        let cu = kiem(
+            "đọc điểm trước khi tombstone",
+            self.agent
+                .get(&format!("{}/points/{}", self.url(""), id.0))
+                .call(),
+        )?;
 
         let mut ds: Vec<i64> = cu["result"]["payload"]["tombstoned_in"]
             .as_array()
@@ -191,13 +258,15 @@ impl VectorIndex for QdrantIndex {
         }
 
         let _ = body;
-        self.agent
-            .post(&self.url("/points/payload?wait=true"))
-            .send_json(json!({
-                "points": [id.0],
-                "payload": { "tombstoned_in": ds },
-            }))
-            .map_err(loi)?;
+        kiem(
+            "ghi tombstone",
+            self.agent
+                .post(&self.url("/points/payload?wait=true"))
+                .send_json(json!({
+                    "points": [id.0],
+                    "payload": { "tombstoned_in": ds },
+                })),
+        )?;
         Ok(())
     }
 
@@ -212,14 +281,12 @@ impl VectorIndex for QdrantIndex {
             "with_payload": true,
             "with_vector": true,
         });
-        let ra: Value = self
-            .agent
-            .post(&self.url("/points/search"))
-            .send_json(&body)
-            .map_err(loi)?
-            .body_mut()
-            .read_json()
-            .map_err(loi)?;
+        let ra = kiem(
+            "search",
+            self.agent
+                .post(&self.url("/points/search"))
+                .send_json(&body),
+        )?;
 
         let mut hits: Vec<Hit> = Vec::new();
         for r in ra["result"].as_array().into_iter().flatten() {
@@ -259,22 +326,22 @@ impl VectorIndex for QdrantIndex {
     }
 
     fn clear(&mut self) -> VectorResult<()> {
-        self.agent
-            .post(&self.url("/points/delete?wait=true"))
-            .send_json(json!({ "filter": {} }))
-            .map_err(loi)?;
+        kiem(
+            "clear",
+            self.agent
+                .post(&self.url("/points/delete?wait=true"))
+                .send_json(json!({ "filter": {} })),
+        )?;
         Ok(())
     }
 
     fn len(&self) -> VectorResult<usize> {
-        let ra: Value = self
-            .agent
-            .post(&self.url("/points/count"))
-            .send_json(json!({ "exact": true }))
-            .map_err(loi)?
-            .body_mut()
-            .read_json()
-            .map_err(loi)?;
+        let ra = kiem(
+            "count",
+            self.agent
+                .post(&self.url("/points/count"))
+                .send_json(json!({ "exact": true })),
+        )?;
         Ok(usize::try_from(ra["result"]["count"].as_u64().unwrap_or(0)).unwrap_or(0))
     }
 }

@@ -45,7 +45,7 @@
 //!
 //! ```bash
 //! ./mow infra up
-//! MOW_NATS_URL=nats://localhost:4222 \
+//! MOWTEST_NATS_URL=nats://localhost:14222 \
 //!   cargo test -p mow-bus --features nats -- --ignored
 //! ```
 

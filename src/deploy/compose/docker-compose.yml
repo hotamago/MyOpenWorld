@@ -6,17 +6,25 @@
 #     ./mow up          # dựng toolbox, cài phụ thuộc
 #     ./mow test        # chạy toàn bộ test trong môi trường cách ly
 #     ./mow shell       # vào trong toolbox
+#     ./mow app up      # bật frontend + sidecar nhận thức
 #     ./mow infra up    # bật Postgres/NATS/Qdrant/Jaeger cho server mode
+#     ./mow ai up       # bật máy chủ embedding cục bộ (TEI + GPU)
 #     ./mow down        # dọn
 #
 # Hai nhóm dịch vụ tách hẳn nhau bằng `profiles`:
 #
 #   (không profile) toolbox — luôn có, đủ để build và test toàn bộ dự án.
+#   `app`           web + agent — phần chạy được của ứng dụng. Xem chú thích
+#                   ở khối đó: hôm nay CHƯA có `mow-server`.
 #   `infra`         Postgres, NATS, Qdrant, Jaeger, MinIO — chỉ cần từ Giai
 #                   đoạn C khi `PC-20` dựng hiện thực thứ hai cho server mode
 #                   (`plan.md §P3.4`). Trước đó SQLite + bus in-process là đủ,
 #                   và bắt mọi người chạy 5 container để sửa một dòng math thì
 #                   là thuế vô ích.
+#   `ai`            máy chủ embedding cục bộ. Tách khỏi `infra` vì nó tải
+#                   ~1.2GB trọng số và giữ VRAM; ai chỉ sửa luật kinh tế thì
+#                   không cần nó, và `embedding.mode: STUB` vẫn cho một chỉ mục
+#                   chạy được, xác định, không cần mạng.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: myopenworld
@@ -33,8 +41,11 @@ services:
   # ── Môi trường build/test cách ly ──────────────────────────────────────────
   toolbox:
     build:
-      context: ../..
-      dockerfile: deploy/docker/toolbox.Dockerfile
+      # Goc repo, khong phai `src/`. `.dockerignore` nam o goc va Docker chi doc
+      # `<context>/.dockerignore` — dat context o `src/` lam file do vo hieu, va
+      # build context nuot ca `src/target`.
+      context: ../../..
+      dockerfile: src/deploy/docker/toolbox.Dockerfile
       args:
         UID: ${MOW_UID:-1000}
         GID: ${MOW_GID:-1000}
@@ -43,12 +54,25 @@ services:
       <<: *common-env
       # Trong container, "server mode" trỏ tới các container infra chứ không
       # phải localhost của máy thật.
-      MOW_DATABASE__URL: postgres://mow:mow@postgres:5432/mow
-      MOW_BUS__URL: nats://nats:4222
-      MOW_VECTOR__URL: http://qdrant:6333
-      MOW_OTEL__ENDPOINT: http://jaeger:4317
+      #
+      # Tiền tố `MOWTEST_`, KHÔNG phải `MOW_`. `Env::prefixed("MOW_")` đọc mọi
+      # biến `MOW_*` thành một field của `AppConfig`, và `deny_unknown_fields`
+      # biến mỗi biến không khớp thành lỗi khởi động:
+      #
+      #     MOW_DATABASE__URL  → field `database.url`  → unknown field
+      #     MOW_BUS__URL       → field `bus.url`       → unknown field
+      #     MOW_OTEL__ENDPOINT → field `otel.endpoint` → unknown field
+      #
+      # Bản trước đặt đúng ba biến đó ở đây, nên **mọi** lệnh chạy trong
+      # container mà nạp config đều chết — 11 bài test của `mow-config` đỏ khi
+      # chạy `./mow test` trong khi chúng xanh trên máy thật.
+      MOWTEST_POSTGRES_URL: postgres://mow:mow@postgres:5432/mow
+      MOWTEST_NATS_URL: nats://nats:4222
+      MOWTEST_QDRANT_URL: http://qdrant:6333
+      # Cái này thì đúng là một field có thật.
+      MOW_OBSERVABILITY__OTEL_ENDPOINT: http://jaeger:4317
     volumes:
-      - ../..:/workspace:cached
+      - ../../..:/workspace:cached
       # Cache nằm trên volume có tên: rebuild nhanh, và không đụng vào
       # `target/` của máy thật — hai toolchain khác nhau dùng chung một
       # `target/` là nguồn của những lỗi link rất khó hiểu.
@@ -61,6 +85,99 @@ services:
     command: ["sleep", "infinity"]
     stdin_open: true
     tty: true
+    init: true
+
+  # ── Ứng dụng (profile `app`) ───────────────────────────────────────────────
+  # Hai tiến trình này là **toàn bộ** phần chạy được của dự án hôm nay. Cần nói
+  # thẳng vì file compose dễ gây hiểu nhầm ngược lại:
+  #
+  #   web    giao diện Vue + Pixi (`PA-05`)
+  #   agent  sidecar nhận thức Python (`PC-01`, `PF-12`)
+  #
+  # **Không có `mow-server`.** `plan.md §P3.1` mô tả `mow-server` và
+  # `mow-worker` là hai binary trung tâm, nhưng `progress.md` chưa bao giờ có
+  # task dựng chúng — 147/147 task xây engine dưới dạng **thư viện** cộng với
+  # `mow-cli`, không phải một tiến trình phục vụ. `deploy/docker/server.Dockerfile`
+  # trỏ vào hai binary đó và vì thế chưa từng build được.
+  #
+  # Hệ quả thực tế: hôm nay `web` chạy với dữ liệu của chính nó, `agent` trả
+  # lời `/health`, và cầu nối giữa chúng với engine là `mow-cli` chạy tay. Đó
+  # là hình trạng desktop-first của `§P3.4`, chưa phải server mode.
+  web:
+    profiles: ["app"]
+    image: myopenworld/toolbox:local
+    environment:
+      <<: *common-env
+      # `pnpm install` thấy `node_modules` rỗng (volume mới), muốn dọn nó, rồi
+      # dừng lại hỏi — nhưng không có TTY nên nó bỏ cuộc:
+      #   ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY
+      # `CI=true` là câu trả lời chính thức của pnpm cho tình huống này.
+      CI: "true"
+    working_dir: /workspace/src
+    # `node_modules` phải là volume, không phải thư mục của máy thật: máy thật
+    # là Windows, và một `node_modules` cài trên Windows chứa binary Windows.
+    # Mount nó vào Linux thì `esbuild` chết bằng "Exec format error".
+    volumes:
+      - ../../..:/workspace:cached
+      - pnpm-cache:/cache/pnpm
+      - web-node-modules:/workspace/src/node_modules
+      - web-app-node-modules:/workspace/src/web/node_modules
+    command:
+      - bash
+      - -lc
+      # `--store-dir` tro vao volume, KHONG de mac dinh.
+      #
+      # pnpm dat store canh project khi project nam tren mot thiet bi khac
+      # `$HOME` — o day la `/workspace/.pnpm-store`, tuc la tren bind mount
+      # tu Windows. Store cua pnpm 11 la mot CSDL SQLite, va SQLite tren
+      # lop chia se file cua Docker Desktop khong khoa duoc:
+      #     ERR_SQLITE_ERROR attempt to write a readonly database
+      # Mot volume Linux that lam van de bien mat.
+      - pnpm install --frozen-lockfile --store-dir /cache/pnpm/store && pnpm --filter web dev --host 0.0.0.0 --port 5173
+    ports:
+      - "${MOW_WEB_PORT:-15173}:5173"
+    init: true
+
+  agent:
+    profiles: ["app"]
+    image: myopenworld/toolbox:local
+    environment:
+      <<: *common-env
+      # Venv nằm NGOÀI cây bind mount. Hai lý do, cả hai đã cắn một lần:
+      #
+      # 1. `.venv` của máy thật là venv Windows — có `Scripts\python.exe`, không
+      #    có `bin/python`. Nhìn từ Linux thì nó là một venv hỏng.
+      # 2. Che nó bằng một volume rỗng cũng không đủ: `uv` thấy thư mục `.venv`
+      #    tồn tại nhưng không có Python trong đó và **từ chối** thay vì dựng
+      #    lại — "cannot be used because it is not a valid Python environment".
+      #
+      # Trỏ hẳn sang một đường dẫn khác thì cả hai vấn đề biến mất.
+      UV_PROJECT_ENVIRONMENT: /venv
+      # Cache va venv nam tren hai volume khac nhau nen hardlink khong
+      # duoc; noi truoc de `uv` khong in mot canh bao moi lan khoi dong.
+      UV_LINK_MODE: copy
+    working_dir: /workspace/src/services/agent-service
+    volumes:
+      - ../../..:/workspace:cached
+      - uv-cache:/cache/uv
+      - agent-venv:/venv
+    # `--host 0.0.0.0` chứ không phải mặc định `127.0.0.1`: mặc định đó là đúng
+    # cho sidecar desktop (`§P3.4` muốn nó KHÔNG nghe ra ngoài), và sai cho một
+    # container mà cả mạng compose phải gọi được.
+    command:
+      - bash
+      - -lc
+      - uv run python -m agent_service.main --host 0.0.0.0 --port 8765
+    ports:
+      - "${MOW_AGENT_PORT:-18765}:8765"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python3 -c "import urllib.request as u; u.urlopen('http://localhost:8765/health')"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
     init: true
 
   # ── Hạ tầng cho server mode (profile `infra`) ──────────────────────────────
@@ -87,7 +204,7 @@ services:
       # ở prod.
       - -c
       - synchronous_commit=off
-    ports: ["${MOW_PG_PORT:-55432}:5432"]
+    ports: ["${MOW_PG_PORT:-15432}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -104,8 +221,8 @@ services:
     # một hành động của NPC biến mất không dấu vết (§P0-08).
     command: ["-js", "-sd", "/data", "-m", "8222"]
     ports:
-      - "${MOW_NATS_PORT:-54222}:4222"
-      - "${MOW_NATS_MON_PORT:-58222}:8222"
+      - "${MOW_NATS_PORT:-14222}:4222"
+      - "${MOW_NATS_MON_PORT:-18222}:8222"
     volumes:
       - natsdata:/data
     healthcheck:
@@ -118,8 +235,8 @@ services:
     profiles: ["infra"]
     image: qdrant/qdrant:v1.12.4
     ports:
-      - "${MOW_QDRANT_PORT:-56333}:6333"
-      - "${MOW_QDRANT_GRPC_PORT:-56334}:6334"
+      - "${MOW_QDRANT_PORT:-16333}:6333"
+      - "${MOW_QDRANT_GRPC_PORT:-16334}:6334"
     volumes:
       - qdrantdata:/qdrant/storage
     healthcheck:
@@ -130,12 +247,15 @@ services:
 
   jaeger:
     profiles: ["infra"]
-    image: jaegertracing/all-in-one:1.62
+    # Tag phải đủ ba số. `1.62` **không tồn tại** trên Docker Hub — Jaeger chỉ
+    # phát hành tag đầy đủ, và `docker compose up` thất bại ở bước resolve chứ
+    # không rơi về một bản gần đúng.
+    image: jaegertracing/all-in-one:1.62.0
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "${MOW_JAEGER_UI_PORT:-56686}:16686"
-      - "${MOW_OTLP_PORT:-54317}:4317"
+      - "${MOW_JAEGER_UI_PORT:-16686}:16686"
+      - "${MOW_OTLP_PORT:-14317}:4317"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:14269/ || exit 1"]
       interval: 10s
@@ -150,8 +270,8 @@ services:
       MINIO_ROOT_USER: mow
       MINIO_ROOT_PASSWORD: mowmowmow
     ports:
-      - "${MOW_MINIO_PORT:-59000}:9000"
-      - "${MOW_MINIO_CONSOLE_PORT:-59001}:9001"
+      - "${MOW_MINIO_PORT:-19000}:9000"
+      - "${MOW_MINIO_CONSOLE_PORT:-19001}:9001"
     volumes:
       - miniodata:/data
     healthcheck:
@@ -160,7 +280,96 @@ services:
       timeout: 5s
       retries: 10
 
+  # ── Embedding chạy nội bộ (profile `ai`) ───────────────────────────────────
+  # `jina-embeddings-v5-text-small-retrieval` — bản đã gộp adapter truy xuất.
+  # Nền Qwen3-0.6B-Base, `hidden_size` 1024, ngữ cảnh gốc 32k.
+  #
+  # ## Vì sao vLLM chứ không phải TEI
+  #
+  # TEI là lựa chọn đầu tiên và nó **hỏng ở đây**, theo một cách đáng ghi lại:
+  #
+  #     Error: Failed to parse `config.json`
+  #     Caused by: invalid type: null, expected usize at line 51 column 22
+  #
+  # Dòng 51 là `"pad_token_id": null`. Kiểu config Qwen3 của TEI khai trường đó
+  # là `usize` không cho phép null, còn Hugging Face thì cho — nên model tải về
+  # đủ, rồi chết ở bước đọc cấu hình. Không phải lỗi của model, và cũng không
+  # phải thứ sửa được từ phía compose.
+  #
+  # vLLM đọc thẳng `architectures: ["Qwen3Model"]` và phục vụ được. Cái giá là
+  # image lớn hơn nhiều (~20GB so với ~3GB) và khởi động chậm hơn — đắt, nhưng
+  # đây là con đường chạy được.
+  #
+  # Nếu muốn nhẹ hơn và không cần vLLM cho việc khác: `michaelf34/infinity` là
+  # một máy chủ embedding nhỏ cũng phơi `/v1/embeddings`. Chưa kiểm ở đây.
+  #
+  # ## Hai cờ đáng giải thích
+  #
+  # `--runner pooling --convert embed`: `--task embed` đã bị thay bằng cặp cờ
+  # này. vLLM thường tự nhận ra, nhưng "thường" là một từ tồi trong một file mà
+  # người ta đọc khi có sự cố.
+  #
+  # `--gpu-memory-utilization 0.5`: vLLM mặc định chiếm 0.9 VRAM và **giữ suốt
+  # đời tiến trình**. Trên một máy đang chạy cả trình duyệt lẫn IDE, 0.9 nghĩa
+  # là màn hình giật. 0.5 của 12GB vẫn thừa cho một model 0.6B.
+  embeddings:
+    profiles: ["ai"]
+    image: vllm/vllm-openai:${MOW_VLLM_TAG:-v0.28.0}
+    # Ghi đè entrypoint để không phụ thuộc vào việc bản image nào đặt gì làm
+    # mặc định — chuyện đó đã đổi vài lần giữa các bản vLLM.
+    entrypoint: ["vllm", "serve"]
+    command:
+      - ${MOW_EMBED_MODEL:-jinaai/jina-embeddings-v5-text-small-retrieval}
+      - --runner
+      - pooling
+      - --convert
+      - embed
+      # Tên ngắn, ổn định: nó là giá trị đi vào `embedding.model` của config và
+      # vào mọi bản ghi. Đổi đường dẫn repo mà không đổi tên này thì lịch sử
+      # vẫn đọc được.
+      - --served-model-name
+      - jina-embeddings-v5-text-small
+      # Ký ức trong game dài vài trăm token; 32k chỉ để ăn VRAM.
+      - --max-model-len
+      - "8192"
+      - --gpu-memory-utilization
+      - "0.5"
+      - --port
+      - "8000"
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /data
+    ports:
+      - "${MOW_EMBED_PORT:-18080}:8000"
+    volumes:
+      # Trọng số nằm trên volume: tải lại ~1.2GB mỗi lần `down` là một cách rất
+      # tốt để ghét cả quy trình.
+      - hfcache:/data
+    # vLLM dùng bộ nhớ chia sẻ giữa các worker. Mặc định 64MB của Docker làm nó
+    # chết bằng một lỗi trỏ vào `/dev/shm`, không trỏ vào cấu hình này.
+    shm_size: "2gb"
+    healthcheck:
+      # Image vLLM không chắc có `curl`; `python3` thì chắc chắn có.
+      test:
+        - CMD-SHELL
+        - python3 -c "import urllib.request as u; u.urlopen('http://localhost:8000/health')"
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 600s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
 volumes:
+  hfcache:
+  web-node-modules:
+  web-app-node-modules:
+  agent-venv:
   cargo-cache:
   target-cache:
   uv-cache:

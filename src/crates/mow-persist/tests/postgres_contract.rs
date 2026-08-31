@@ -20,7 +20,7 @@
 //!
 //! ```bash
 //! ./mow infra up
-//! MOW_POSTGRES_URL=postgres://mow:mow@localhost:5432/mow \
+//! MOWTEST_POSTGRES_URL=postgres://mow:mow@localhost:15432/mow \
 //!   cargo test -p mow-persist --features postgres -- --ignored --test-threads=1
 //! ```
 //!
@@ -34,15 +34,15 @@ use mow_persist::contract;
 use mow_persist::postgres::PostgresStore;
 
 fn url() -> Option<String> {
-    std::env::var("MOW_POSTGRES_URL").ok()
+    std::env::var("MOWTEST_POSTGRES_URL").ok()
 }
 
 #[test]
-#[ignore = "cần Postgres: ./mow infra up, rồi đặt MOW_POSTGRES_URL"]
+#[ignore = "cần Postgres: ./mow infra up, rồi đặt MOWTEST_POSTGRES_URL"]
 fn hop_dong_store_chay_nguyen_ven_tren_postgres() {
     let Some(u) = url() else {
         panic!(
-            "thiếu MOW_POSTGRES_URL.\n\
+            "thiếu MOWTEST_POSTGRES_URL.\n\
              Bài này được đánh dấu `#[ignore]`, nên nếu bạn thấy dòng này thì bạn \
              đã chạy `--ignored` mà chưa dựng hạ tầng: `./mow infra up`."
         );

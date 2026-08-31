@@ -16,6 +16,8 @@ mow-math = { workspace = true }
 mow-plugin = { workspace = true }
 mow-scenario = { path = "../mow-scenario" }
 mow-devtool = { path = "../mow-devtool" }
+mow-config = { path = "../mow-config" }
+mow-llm = { path = "../mow-llm" }
 serde_json = { workspace = true }
 
 [dev-dependencies]

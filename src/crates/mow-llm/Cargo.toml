@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+# `ureq` chu khong phai `reqwest`: `ModelClient` la trait dong bo, va keo
+# `tokio` vao de phuc vu mot trait dong bo la keo ca runtime cho mot loi goi
+# request-response. Cung lap luan voi `mow-vector::qdrant`.
+ureq = "3"
 mow-core = { workspace = true }
 mow-math = { workspace = true }
 serde = { workspace = true }

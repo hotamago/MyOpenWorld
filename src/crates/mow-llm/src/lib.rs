@@ -3,6 +3,9 @@
 //! Hai phan, va phan thu hai moi la phan quan trong:
 //!
 //! - [`client`] — bon che do goi (`LIVE`/`RECORD`/`REPLAY`/`STUB`).
+//! - [`provider`] — provider that: `OpenRouter` va moi endpoint cung luoc do
+//!   `OpenAI`. Truoc no, `LIVE` va `RECORD` chi tra ve `NoProvider`.
+//! - [`embed`] — sinh vector cho chi muc ky uc. Co mot ban khong can mang.
 //! - [`admission`] — **thoi diem ap ket qua**. Mot the the nghi o tick `T` thi
 //!   hanh dong o tick `T + D`, bat ke mo hinh tra loi nhanh hay cham. Khong co
 //!   phan nay, hai lan chay tu cung mot seed se cho hai the gioi khac nhau chi
@@ -25,6 +28,10 @@
 
 pub mod admission;
 pub mod client;
+pub mod embed;
+pub mod provider;
 
 pub use admission::{AdmissionError, AdmissionLedger, Admitted, Call, CallState};
 pub use client::{Gateway, LlmError, LlmResult, Mode, ModelClient, Request, Response};
+pub use embed::{EmbedRole, Embedder, HashingEmbedder, HttpEmbedder};
+pub use provider::{Attribution, HttpReply, OpenAiCompatClient, Transport, UreqTransport};

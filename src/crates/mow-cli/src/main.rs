@@ -6,6 +6,8 @@
 //! - `determinism --runs N` — chạy lại nhiều lần rồi so state hash, bisect nếu lệch.
 //! - `debug-session` — phiên NDJSON cho `mow-mcp` (`§P7.2`).
 //! - `pack validate <thư mục>` — kiểm content pack.
+//! - `config check` / `llm ping` / `embed probe` — ba mức kiểm cấu hình mô
+//!   hình, từ "file có hợp lệ không" tới "khóa có thật sự gọi được không".
 //!
 //! Binary này **không có trong bản phát hành**. Xem `deploy/docker/server.Dockerfile`.
 
@@ -14,6 +16,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 mod debug_session;
+mod doctor;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,6 +36,9 @@ fn main() -> ExitCode {
         ["determinism", rest @ ..] => determinism(rest),
         ["soak", rest @ ..] => soak(rest),
         ["budget", rest @ ..] => budget(rest),
+        ["config", "check", rest @ ..] => doctor::config_check(rest),
+        ["llm", "ping", rest @ ..] => doctor::llm_ping(rest),
+        ["embed", "probe", rest @ ..] => doctor::embed_probe(rest),
         khac => {
             eprintln!("không hiểu lệnh: {khac:?}");
             in_tro_giup();
@@ -53,7 +59,11 @@ fn in_tro_giup() {
          mow-cli pack test <thư mục>        chạy kịch bản pack khai trong manifest\n\
          mow-cli pack watch <thư mục>       kế hoạch nạp nóng (chỉ dev build)\n\
          mow-cli soak --years N --worlds M  chạy dài, xuất World Health Report\n\
-         mow-cli budget --phase F           áp bảng ngân sách hiệu năng §P8.1\n"
+         mow-cli budget --phase F           áp bảng ngân sách hiệu năng §P8.1\n\
+         \n\
+         mow-cli config check [--env E]     nạp .env + config, in tóm tắt (không mạng)\n\
+         mow-cli llm ping     [--env E]     một lời gọi thật tới nhà cung cấp\n\
+         mow-cli embed probe  [--env E]     mã hóa thử, in số chiều và tương đồng\n"
     );
 }
 

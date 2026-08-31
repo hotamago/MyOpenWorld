@@ -66,15 +66,30 @@ RUN curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | \
 RUN rustup component add rustfmt clippy \
     && rustup target add wasm32-unknown-unknown
 
+# ── PATH cho shell đăng nhập ─────────────────────────────────────────────────
+# `./mow exec` chạy `bash -lc`, và `bash -l` nạp `/etc/profile`. Bản Debian của
+# file đó **gán đè** PATH chứ không nối thêm, nên mọi thứ `ENV PATH` dựng ở trên
+# biến mất và `cargo` thành "command not found" — trong một image rõ ràng có
+# cargo. Lỗi không xuất hiện lúc build (mỗi `RUN` là shell KHÔNG đăng nhập),
+# nó xuất hiện ở lệnh đầu tiên người dùng gõ.
+#
+# `profile.d` được nạp *sau* phần gán đè đó, nên đây là chỗ đúng để dựng lại.
+RUN echo 'export PATH=/cache/cargo/bin:/cache/pnpm:/usr/local/cargo/bin:$PATH' > /etc/profile.d/10-mow-path.sh && chmod 0644 /etc/profile.d/10-mow-path.sh
+
 # ── Người dùng không phải root ───────────────────────────────────────────────
 # Không có bước này, mọi file do container tạo ra sẽ thuộc về root trên máy
 # thật, và bạn sẽ phải `sudo rm` cả thư mục target.
 ARG UID=1000
 ARG GID=1000
+# `/venv` phai ton tai VA thuoc ve user truoc khi mot named volume gan vao
+# no. Docker khoi tao volume rong theo quyen cua thu muc tuong ung trong
+# image; thu muc chua co thi volume ra doi voi chu la root, va tien trinh
+# chay duoi UID 1000 nhan "Permission denied" o file dau tien no ghi --
+# `uv` chet o `/venv/CACHEDIR.TAG`.
 RUN groupadd -g ${GID} mow 2>/dev/null || true \
     && useradd -m -u ${UID} -g ${GID} -s /bin/bash mow 2>/dev/null || true \
-    && mkdir -p /cache/cargo /cache/target /cache/uv /cache/pnpm \
-    && chown -R ${UID}:${GID} /cache
+    && mkdir -p /cache/cargo /cache/target /cache/uv /cache/pnpm /venv \
+    && chown -R ${UID}:${GID} /cache /venv
 
 USER ${UID}:${GID}
 WORKDIR /workspace
@@ -83,5 +98,9 @@ WORKDIR /workspace
 # image hỏng, và ta biết ngay lúc build chứ không phải lúc CI chạy nửa chừng.
 RUN rustc --version && cargo --version && node --version \
     && pnpm --version && uv --version && protoc --version && sqlite3 --version
+
+# Và kiểm lại qua **shell đăng nhập** — đó là shell mà `./mow exec` dùng, và là
+# shell duy nhất PATH có thể bị gán đè. Kiểm bằng shell thường không bắt được.
+RUN bash -lc 'cargo --version && pnpm --version && uv --version && protoc --version'
 
 CMD ["bash"]

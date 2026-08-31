@@ -1,0 +1,27 @@
+# Moi truong `live`: mo hinh THAT, tren may cua ban.
+#
+#     ./mow ai up                       # may chu embedding cuc bo (vLLM)
+#     cp .env.example .env              # roi dien OPENROUTER_API_KEY
+#     cargo run -p mow-cli -- config check --env live
+#
+# Vi sao la mot moi truong rieng chu khong phai sua `dev.yaml`:
+#
+#   `dev` phai chay duoc offline, mien phi va xac dinh. Do la moi truong ma
+#   `cargo test` va vong lap sua-chay hang ngay dung, va mot bien doi lang le
+#   sang LIVE o do nghia la moi lan chay test deu ton token — phat hien bang
+#   hoa don, khong bang test do.
+#
+# Khac `prod.yaml`: `prod` la trien khai that (log JSON, DSN tu moi truong).
+# `live` la may cua ban, log doc duoc bang mat, model that.
+
+env: live
+
+llm:
+  mode: LIVE
+
+embedding:
+  mode: LIVE
+
+observability:
+  log_level: "debug"
+  log_format: pretty

@@ -259,6 +259,12 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 > Mỗi checkpoint thêm **một dòng**, dạng `YYYY-MM-DD — <việc đã xong hoặc quyết định> — <ID liên quan>`.
 > Giữ tối đa **20 dòng gần nhất**; vượt thì xóa dòng cũ nhất. Đây không phải nơi kể chuyện.
 
+- 2026-08-31 — Cấu hình mô hình thật: OpenRouter (`deepseek-v4-flash-0731`) + embedding cục bộ (`jina-embeddings-v5-text-small` trên vLLM). `.env` chỉ chứa bí mật; `config check`/`llm ping`/`embed probe` là ba mức kiểm — ngoài `progress.md`
+- 2026-08-31 — `MOW_*` là tiền tố của lớp cấu hình, nên đặt khóa vào `MOW_EMBEDDING_API_KEY` làm figment đọc nó thành field và chết bằng `unknown field`. Thành một luật trong `validate` — ngoài `progress.md`
+- 2026-08-31 — **Ba bộ test hợp đồng hạ tầng chạy thật lần đầu** (Postgres/NATS/Qdrant). Qdrant lộ `cutoff` `u64::MAX as i64 = -1`: truy xuất trả rỗng, không lỗi — cùng lớp lỗi đã sửa ở `mow-persist`, sống sót vì bài test chưa từng chạy — PC-20
+- 2026-08-31 — `docker-compose.yml` nằm ở `src/deploy/compose/` nên `../..` là `src/`, không phải gốc repo: `working_dir` trỏ vào thư mục không tồn tại (Docker tự tạo `src/src/`), và `.dockerignore` ở gốc chưa bao giờ được áp — ngoài `progress.md`
+- 2026-08-31 — Cổng 5xxxx nằm trong dải Hyper-V đặt trước trên Windows và khối đó **đổi sau mỗi lần khởi động**; dời toàn bộ xuống 1xxxx — ngoài `progress.md`
+- 2026-08-31 — `server.Dockerfile` build `mow-server`/`mow-worker`, hai binary **không tồn tại**: `plan.md §P3.1` mô tả chúng nhưng `progress.md` chưa bao giờ có task dựng — ngoài `progress.md`
 - 2026-08-31 — **Cổng Giai đoạn F xanh**: pack bên thứ ba không đổi hash world không dùng nó; rewind giữ nguyên nhánh cũ; biên niên sử chỉ dùng event có thật — PF-GATE
 - 2026-08-31 — `read_events` với cận trên `u64::MAX` trả về **rỗng**: ép `u64`→`i64` cho ra `-1`. Chặn ở `i64::MAX` ở cả hai backend — PF-GATE
 - 2026-08-31 — Đóng gói: sidecar Python có giao thức sẵn sàng (Rust và Python cùng một hằng số, có test đọc chéo), `externalBin` tách sang config bundle để smoke build không cần sidecar — PF-12
@@ -273,9 +279,3 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 - 2026-08-31 — Ngăn S/E/I/R cần số dư mang theo: `1/2000` người mỗi tick làm tròn về 0 nên dịch **đứng im**, cùng lớp lỗi với tỉ lệ đột biến — PB-06
 - 2026-08-31 — `mow-life` + `mow-effect`: tích phân đóng, bộ gen 24 byte, Gompertz, modifier pipeline, chuỗi ward — PB-01..06, PB-22
 - 2026-08-31 — **Cổng Giai đoạn A xanh**: 5/5 điều kiện `§P9`; 207 Rust + 89 web + 29 Python test — PA-GATE
-- 2026-08-31 — Đo lại luật bảng màu: trần "3 định danh" không có cơ sở; Okabe–Ito giữ ΔE₀₀ 10.9 tới 8 màu. Đổi sang **sàn ΔE₀₀ ≥ 10 qua mọi dạng mù màu**, sửa cả `idea.md §18.6.2` — PA-13
-- 2026-08-31 — ΔE phải là CIEDE2000: cùng cặp màu ra 24.2 ở CIE76 và 9.6 dưới deuteranopia; ràng buộc thật nằm ở mù màu — PA-13
-- 2026-08-31 — Tương phản WCAG chỉ áp cho **dấu hiệu vẽ lên** nền; mảng lấp đầy nền và thang overlay dùng luật khác — PA-13
-- 2026-08-31 — Tauri build thật trên Windows; `mow-desktop` để ngoài workspace để `cargo test --workspace` không kéo 400 crate — PA-09
-- 2026-08-31 — **Cổng Giai đoạn 0 xanh**: 7/7 điều kiện `§P9`; 150 test Rust + 29 Python — P0-GATE
-- 2026-08-31 — Harness đủ vòng: MCP vào world → 1000 tick → invariant; determinism bisect O(log n); repro bundle chụp-chạy-cùng-hash — P0-11/12/13/14/15/16

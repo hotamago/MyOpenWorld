@@ -46,10 +46,114 @@
       },
       "type": "object"
     },
+    "EmbeddingConfig": {
+      "additionalProperties": false,
+      "description": "Cấu hình sinh vector cho chỉ mục ký ức.\n\n**Số chiều không nằm ở đây** — nó là [`VectorConfig::dimension`]. Hai chỗ khai cùng một con số là hai chỗ để chúng lệch nhau, và khi chúng lệch thì triệu chứng là một chỉ mục im lặng trả về kết quả sai chứ không phải một lỗi.",
+      "properties": {
+        "api_key_env": {
+          "default": "EMBEDDINGS_API_KEY",
+          "description": "*Tên biến môi trường** chứa API key. Xem [`LlmConfig::api_key_env`].",
+          "type": "string"
+        },
+        "base_url": {
+          "default": "",
+          "description": "Gốc API, **không** kèm `/embeddings`.\n\nMáy chủ cục bộ dựng bằng `./mow ai up`: `http://localhost:18080/v1`.",
+          "type": "string"
+        },
+        "batch_size": {
+          "default": 32,
+          "description": "Số văn bản mỗi lời gọi.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "document_prefix": {
+          "default": "",
+          "description": "Tiền tố cho văn bản đóng vai **tài liệu**. Xem [`EmbeddingConfig::query_prefix`].",
+          "type": "string"
+        },
+        "mode": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/EmbeddingMode"
+            }
+          ],
+          "default": "STUB",
+          "description": "Chế độ."
+        },
+        "model": {
+          "default": "",
+          "description": "Tên model như máy chủ công bố.",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "description": "Nhãn nhà cung cấp, cho log và thông báo lỗi.",
+          "type": "string"
+        },
+        "query_prefix": {
+          "default": "",
+          "description": "Tiền tố cho văn bản đóng vai **truy vấn**.\n\nModel truy xuất hiện đại được huấn luyện bất đối xứng: câu hỏi mã hóa một kiểu, đoạn văn mã hóa kiểu khác. Để trống nếu máy chủ tự áp tiền tố (`jina-embeddings-v5-*-retrieval` đã gộp adapter cho việc đó).\n\nDùng nhầm không làm hỏng gì ra mặt — nó chỉ làm chất lượng truy xuất tụt vài phần trăm, mãi mãi, và không bài test nào đỏ.",
+          "type": "string"
+        },
+        "send_dimensions": {
+          "default": true,
+          "description": "Có gửi trường `dimensions` hay không.\n\nBật là đúng với model Matryoshka — `jina-embeddings-v5` cắt được về 32/64/128/256/512/768/1024 chiều. Tắt khi máy chủ từ chối trường này.",
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "default": 30000,
+          "description": "Thời gian chờ mỗi lời gọi, mili giây.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "EmbeddingMode": {
+      "description": "Chế độ sinh vector.\n\nChỉ hai giá trị, và việc **không** có `RECORD`/`REPLAY` ở đây là có chủ ý. `§P6.3` nói chỉ mục ký ức là thứ **dựng lại được**, không phải nguồn sự thật — nên một bộ ghi embedding không mua thêm gì so với [`EmbeddingMode::Stub`], vốn đã xác định tuyệt đối và không cần mạng.",
+      "oneOf": [
+        {
+          "description": "Băm đặc trưng chạy tại chỗ: xác định, không mạng, không khóa.\n\nCho tương đồng **từ vựng**, không phải ngữ nghĩa. Đủ để toàn bộ đường ống ký ức chạy và replay được trước khi có bất kỳ khóa API nào.",
+          "enum": [
+            "STUB"
+          ],
+          "type": "string"
+        },
+        {
+          "description": "Gọi một máy chủ embedding thật.",
+          "enum": [
+            "LIVE"
+          ],
+          "type": "string"
+        }
+      ]
+    },
     "LlmConfig": {
       "additionalProperties": false,
       "description": "Cấu hình mô hình ngôn ngữ.",
       "properties": {
+        "api_key_env": {
+          "default": "OPENROUTER_API_KEY",
+          "description": "**Tên biến môi trường** chứa API key — không phải key.\n\nĐây là chỗ dễ hiểu sai nhất trong cả file, nên nói thẳng: giá trị đúng là `OPENROUTER_API_KEY`, không phải `sk-or-v1-...`. File này được commit (`§P10.6`), và [`AppConfig::validate`] từ chối khởi động khi giá trị ở đây trông giống một khóa thật.",
+          "type": "string"
+        },
+        "app_title": {
+          "default": "",
+          "description": "Tên ứng dụng gửi kèm để ghi công (`OpenRouter`: `X-Title`).",
+          "type": "string"
+        },
+        "app_url": {
+          "default": "",
+          "description": "URL ứng dụng gửi kèm để ghi công (`OpenRouter`: `HTTP-Referer`).",
+          "type": "string"
+        },
+        "base_url": {
+          "default": "",
+          "description": "Gốc API, **không** kèm `/chat/completions`.\n\n`OpenRouter`: `https://openrouter.ai/api/v1`.",
+          "type": "string"
+        },
         "cassette_dir": {
           "default": "llm-cassettes",
           "description": "Thư mục chứa bản ghi cho chế độ `RECORD`/`REPLAY`.",
@@ -59,6 +163,13 @@
           "default": 10,
           "description": "**Độ trễ nhận thức cố định `D`, tính bằng tick** (`§20.2.2`).\n\nĐây là trường quan trọng nhất trong cả file config, và lý do nó tồn tại đáng đọc kỹ: một thực thể suy nghĩ ở tick `T` sẽ hành động ở tick `T+D`, **bất kể mô hình trả lời nhanh hay chậm**. Không có nó, một mô hình trả lời trong 500ms và một mô hình trả lời trong 3 giây sẽ tạo ra hai thế giới khác nhau từ cùng một seed, và replay trở thành vô nghĩa.\n\nMuốn nhân vật phản ứng nhanh hơn thì tăng `cognition_rate` của nó — đó là thuộc tính của thế giới. Đường truyền nhanh không phải là một thuộc tính của thế giới.",
           "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "max_output_tokens": {
+          "default": 1024,
+          "description": "Trần token đầu ra mỗi lời gọi.\n\nQuá nhỏ thì mô hình bị cắt giữa chừng và trả về một chuỗi rỗng kèm `finish_reason: \"length\"` — thứ trông y hệt \"mô hình không có gì để nói\", và dẫn tới một lần fallback không ai giải thích được.",
+          "format": "uint32",
           "minimum": 0.0,
           "type": "integer"
         },
@@ -73,13 +184,20 @@
         },
         "model": {
           "default": "",
-          "description": "Mô hình mặc định.",
+          "description": "Mô hình mặc định, ví dụ `deepseek/deepseek-v4-flash-0731`.",
           "type": "string"
         },
         "provider": {
           "default": "",
-          "description": "Nhà cung cấp, ví dụ `anthropic`, `openai`.",
+          "description": "Nhà cung cấp, ví dụ `openrouter`, `openai`.\n\nChỉ là nhãn cho thông báo lỗi và cho log. Thứ thật sự quyết định gọi đi đâu là [`LlmConfig::base_url`] — mọi endpoint theo lược đồ `OpenAI` đều dùng chung một client, nên khóa vào tên nhà cung cấp không mua được gì.",
           "type": "string"
+        },
+        "temperature_milli": {
+          "default": 0,
+          "description": "Nhiệt độ lấy mẫu, **tính theo phần nghìn** (`0` = tham lam).\n\nSố nguyên chứ không phải số thực, và đó không phải sự cầu kỳ: cấu hình ảnh hưởng mô phỏng phải ghi được vào event log (`§8.4`), và một `f32` trong event log là một giá trị có thể tuần tự hóa khác nhau giữa hai bản build (`§P10.2.1`).\n\nMặc định 0 cũng là một phát biểu: sự đa dạng của thế giới phải đến từ seed, không từ bộ lấy mẫu — vì đa dạng của bộ lấy mẫu không phát lại được.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
         },
         "timeout_ms": {
           "default": 30000,
@@ -264,9 +382,29 @@
       },
       "description": "Content pack."
     },
+    "embedding": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/EmbeddingConfig"
+        }
+      ],
+      "default": {
+        "api_key_env": "EMBEDDINGS_API_KEY",
+        "base_url": "",
+        "batch_size": 32,
+        "document_prefix": "",
+        "mode": "STUB",
+        "model": "",
+        "provider": "",
+        "query_prefix": "",
+        "send_dimensions": true,
+        "timeout_ms": 30000
+      },
+      "description": "Sinh vector cho chỉ mục ký ức."
+    },
     "env": {
       "default": "dev",
-      "description": "Tên môi trường, để đối chiếu với file đã nạp.",
+      "description": "Tên môi trường đã thật sự được nạp.\n\n**Dẫn xuất, không phải cấu hình.** [`crate::load`] ghi đè trường này bằng tên môi trường nó vừa nạp, nên giá trị trong YAML chỉ có tác dụng làm tài liệu và `MOW_ENV` không sửa được nó. Xem `load` để biết vì sao.",
       "type": "string"
     },
     "llm": {
@@ -276,11 +414,17 @@
         }
       ],
       "default": {
+        "api_key_env": "OPENROUTER_API_KEY",
+        "app_title": "",
+        "app_url": "",
+        "base_url": "",
         "cassette_dir": "llm-cassettes",
         "cognitive_latency_ticks": 10,
+        "max_output_tokens": 1024,
         "mode": "STUB",
         "model": "",
         "provider": "",
+        "temperature_milli": 0,
         "timeout_ms": 30000
       },
       "description": "Mô hình ngôn ngữ."

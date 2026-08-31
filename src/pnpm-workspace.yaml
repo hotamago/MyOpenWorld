@@ -1,13 +1,16 @@
 packages:
   - "web"
 
-allowBuilds:
-  esbuild: set this to true or false
-  vue-demi: set this to true or false
-
 # esbuild va vue-demi can chay script cai dat. pnpm 11 chan mac dinh, va do la
-# mac dinh dung — nhung ba goi nay la phu thuoc truc tiep cua Vite/Pinia va
-# khong chay duoc neu thieu binary.
-onlyBuiltDependencies:
-  - esbuild
-  - vue-demi
+# mac dinh dung — nhung hai goi nay la phu thuoc truc tiep cua Vite/Pinia va
+# khong chay duoc neu thieu binary: esbuild chon binary theo nen tang trong
+# postinstall, va thieu buoc do thi `vite` chet bang "You installed esbuild for
+# another platform".
+#
+# Ban truoc de nguyen doan stub ma pnpm tu ghi vao ("set this to true or
+# false"), nen pnpm van bo qua ca hai va chi in mot canh bao. Canh bao do khong
+# lam `pnpm install` do, nen no song sot cho toi khi co ai cai moi tren mot may
+# trang — o day la container Linux.
+allowBuilds:
+  esbuild: true
+  vue-demi: true

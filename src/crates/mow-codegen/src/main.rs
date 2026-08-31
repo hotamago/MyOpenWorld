@@ -323,14 +323,25 @@ fn so_thu_muc(a: &Path, b: &Path) -> Vec<String> {
     lech
 }
 
+/// Liệt mọi file **do người viết ra**, bỏ qua thứ trình thông dịch tự sinh.
+///
+/// `__pycache__` phải được bỏ qua, và lý do đáng ghi lại: bước so lệch chỉ hỏi
+/// "cây thư mục sinh ra có khớp cây đã commit không". Chạy `pytest` một lần là
+/// đủ để rải `.pyc` vào cây đã commit, và bước kiểm sẽ báo sáu file "thiếu" —
+/// một cảnh báo hoàn toàn sai, và tệ hơn là nó **che mất** lệch thật, vì người
+/// đọc học được rằng lệnh này hay kêu oan.
 fn thu_thap_moi(goc: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for e in entries.flatten() {
         let p = e.path();
+        if p.file_name().and_then(|x| x.to_str()) == Some("__pycache__") {
+            continue;
+        }
         if p.is_dir() {
             thu_thap_moi(goc, &p, out);
+        } else if p.extension().and_then(|x| x.to_str()) == Some("pyc") {
         } else if let Ok(r) = p.strip_prefix(goc) {
             out.push(r.to_path_buf());
         }

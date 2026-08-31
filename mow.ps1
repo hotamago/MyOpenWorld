@@ -7,7 +7,9 @@
         .\mow.ps1 build              build workspace Rust
         .\mow.ps1 lint               fmt + clippy
         .\mow.ps1 exec <lệnh...>     chạy một lệnh bất kỳ bên trong
+        .\mow.ps1 app up|down|logs   frontend + sidecar nhận thức
         .\mow.ps1 infra up|down      hạ tầng server mode
+        .\mow.ps1 ai up|down|logs    máy chủ embedding cục bộ (TEI, cần GPU)
         .\mow.ps1 down               tắt
         .\mow.ps1 reset              tắt và xóa cả volume
         .\mow.ps1 doctor             kiểm tra máy thật
@@ -130,10 +132,10 @@ switch ($Command) {
         switch ($sub) {
             'up' {
                 Say 'bật Postgres, NATS, Qdrant, Jaeger, MinIO'
-                Invoke-Compose @('--profile', 'infra', 'up', '-d')
-                Say 'Jaeger UI:  http://localhost:56686'
-                Say 'Qdrant UI:  http://localhost:56333/dashboard'
-                Say 'MinIO UI:   http://localhost:59001'
+                Invoke-Compose @('--profile', 'infra', 'up', '-d', 'postgres', 'nats', 'qdrant', 'jaeger', 'minio')
+                Say 'Jaeger UI:  http://localhost:16686'
+                Say 'Qdrant UI:  http://localhost:16333/dashboard'
+                Say 'MinIO UI:   http://localhost:19001'
             }
             'down' { Invoke-Compose @('--profile', 'infra', 'stop', 'postgres', 'nats', 'qdrant', 'jaeger', 'minio') }
             default { Die 'infra up | infra down' }
@@ -147,7 +149,38 @@ switch ($Command) {
         else      { Invoke-Compose @('--profile', 'infra', 'logs', '-f') }
     }
 
-    'ps' { Assert-Docker; Invoke-Compose @('--profile', 'infra', 'ps') }
+    'app' {
+        Assert-Docker
+        $sub = if ($Rest.Count -gt 0) { $Rest[0] } else { 'up' }
+        switch ($sub) {
+            'up' {
+                Say 'bat web + agent (lan dau phai cai phu thuoc, vai phut)'
+                Invoke-Compose @('--profile', 'app', 'up', '-d', 'web', 'agent')
+                Say 'Web:   http://localhost:15173'
+                Say 'Agent: http://localhost:18765/health'
+            }
+            'down' { Invoke-Compose @('--profile', 'app', 'stop', 'web', 'agent') }
+            'logs' { Invoke-Compose @('--profile', 'app', 'logs', '-f', 'web', 'agent') }
+            default { Die 'app up | app down | app logs' }
+        }
+    }
+
+    'ai' {
+        Assert-Docker
+        $sub = if ($Rest.Count -gt 0) { $Rest[0] } else { 'up' }
+        switch ($sub) {
+            'up' {
+                Say 'bat may chu embedding (lan dau phai tai model, vai phut)'
+                Invoke-Compose @('--profile', 'ai', 'up', '-d', 'embeddings')
+                Say "san sang khi health xanh: http://localhost:18080"
+            }
+            'down' { Invoke-Compose @('--profile', 'ai', 'stop', 'embeddings') }
+            'logs' { Invoke-Compose @('--profile', 'ai', 'logs', '-f', 'embeddings') }
+            default { Die 'ai up | ai down | ai logs' }
+        }
+    }
+
+    'ps' { Assert-Docker; Invoke-Compose @('--profile', 'infra', '--profile', 'ai', 'ps') }
 
     'native' {
         if ($Rest.Count -eq 0) { Die 'cần một lệnh: .\mow.ps1 native cargo test -p mow-math' }

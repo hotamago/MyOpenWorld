@@ -51,6 +51,9 @@ schema: ## Sinh lại schemas/config/app_config.v1.json
 
 check: lint test ## lint + test, đúng bộ mà CI chạy
 
+config-check: ## Nạp .env + config, kiểm, in tóm tắt (không chạm mạng)
+	cargo run -q -p mow-cli -- config check
+
 test: test-rust ## Toàn bộ test có thể chạy được hiện tại
 
 test-rust: ## Test Rust

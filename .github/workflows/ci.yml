@@ -117,6 +117,18 @@ jobs:
       - name: pack bên thứ ba nạp được
         run: cargo run -p mow-cli -- pack validate content/core content/example-thirdparty
 
+      # File `config/*.yaml` được commit và ảnh hưởng mô phỏng, nên chúng phải
+      # đi qua đúng bộ kiểm mà lúc khởi động sẽ chạy. Lệnh này KHÔNG chạm mạng:
+      # nó kiểm hình dạng, ràng buộc chéo, và bước quét bí mật.
+      #
+      # `dev` và `test` phải hợp lệ trên một máy KHÔNG có khóa nào — đó chính là
+      # điều kiện mà runner của CI thỏa mãn, nên nếu có ai lỡ đẩy `dev` sang
+      # LIVE thì bước này đỏ ngay.
+      - name: config check (dev, test)
+        run: |
+          cargo run -p mow-cli -- config check --root config --env dev
+          cargo run -p mow-cli -- config check --root config --env test
+
   python:
     name: Python — lint, test
     runs-on: ubuntu-latest

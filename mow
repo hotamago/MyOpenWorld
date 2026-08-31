@@ -8,7 +8,9 @@
 #   ./mow build              build workspace Rust
 #   ./mow lint               fmt + clippy + quét số thực
 #   ./mow exec <lệnh...>     chạy một lệnh bất kỳ bên trong
+#   ./mow app up|down|logs   frontend Vue + sidecar nhận thức Python
 #   ./mow infra up|down      hạ tầng server mode (Postgres/NATS/Qdrant/...)
+#   ./mow ai up|down|logs    máy chủ embedding cục bộ (TEI, cần GPU)
 #   ./mow logs [dịch vụ]     xem log
 #   ./mow down               tắt
 #   ./mow reset              tắt và **xóa cả volume** (mất cache và dữ liệu test)
@@ -24,10 +26,26 @@ COMPOSE_FILE="$REPO_ROOT/src/deploy/compose/docker-compose.yml"
 SERVICE=toolbox
 
 # UID/GID được truyền vào lúc build để file sinh ra trong container thuộc về
-# bạn chứ không thuộc về root. Trên Windows và macOS thì Docker Desktop đã lo
-# việc này, nên giá trị mặc định 1000 là vô hại.
-MOW_UID="$(id -u 2>/dev/null || echo 1000)"
-MOW_GID="$(id -g 2>/dev/null || echo 1000)"
+# bạn chứ không thuộc về root.
+#
+# **Chỉ lấy từ `id -u` trên Linux.** Trên Git Bash của Windows, `id -u` trả về
+# một số dẫn xuất từ SID của Windows — ở máy viết dòng này là `197609` — và số
+# đó không có nghĩa gì trong một container Linux. Hậu quả không hiện ra ngay:
+# image build xong, chạy được, rồi volume cache ra đời thuộc về `197609`. Tới
+# lần build sau bằng `docker compose build` trần (không qua script này, nên
+# `UID` về mặc định 1000) thì tiến trình trong container là `1000` còn cache là
+# `197609`, và `uv` chết bằng `Permission denied` ở một file trong cache —
+# một thông báo không nhắc gì tới UID.
+#
+# Trên Windows và macOS, Docker Desktop đã lo phần ánh xạ quyền cho bind mount,
+# nên `1000` là lựa chọn đúng chứ không phải lựa chọn tạm.
+if [ "$(uname -s 2>/dev/null)" = "Linux" ]; then
+  MOW_UID="$(id -u)"
+  MOW_GID="$(id -g)"
+else
+  MOW_UID=1000
+  MOW_GID=1000
+fi
 export MOW_UID MOW_GID
 
 c_red=$'\033[31m'; c_grn=$'\033[32m'; c_ylw=$'\033[33m'; c_dim=$'\033[2m'; c_off=$'\033[0m'
@@ -76,7 +94,7 @@ case "$cmd" in
 
   down)
     need_docker
-    compose --profile infra down
+    compose --profile infra --profile ai --profile app down
     say "đã tắt (volume vẫn còn — dùng \`./mow reset\` nếu muốn xóa)"
     ;;
 
@@ -85,7 +103,7 @@ case "$cmd" in
     warn "sẽ xóa toàn bộ volume: cache build, dữ liệu Postgres/Qdrant của môi trường test."
     read -r -p "Gõ 'xoa' để xác nhận: " ans
     [ "$ans" = "xoa" ] || die "hủy"
-    compose --profile infra down -v
+    compose --profile infra --profile ai --profile app down -v
     say "đã xóa sạch"
     ;;
 
@@ -140,25 +158,75 @@ case "$cmd" in
     sub="${1:-up}"; shift || true
     case "$sub" in
       up)
+        # Liệt tường minh 5 dịch vụ. `up -d` trần sẽ kéo theo cả `toolbox`
+        # (nó không có profile nên luôn được chọn), và vì `toolbox` chỉ tồn
+        # tại ở local, compose sẽ thử `pull myopenworld/toolbox:local` rồi
+        # báo "pull access denied" — một thông báo trỏ sai hoàn toàn chỗ hỏng.
         say "bật Postgres, NATS, Qdrant, Jaeger, MinIO"
-        compose --profile infra up -d
-        say "Jaeger UI:  http://localhost:${MOW_JAEGER_UI_PORT:-56686}"
-        say "Qdrant UI:  http://localhost:${MOW_QDRANT_PORT:-56333}/dashboard"
-        say "MinIO UI:   http://localhost:${MOW_MINIO_CONSOLE_PORT:-59001}"
+        compose --profile infra up -d postgres nats qdrant jaeger minio
+        say "Jaeger UI:  http://localhost:${MOW_JAEGER_UI_PORT:-16686}"
+        say "Qdrant UI:  http://localhost:${MOW_QDRANT_PORT:-16333}/dashboard"
+        say "MinIO UI:   http://localhost:${MOW_MINIO_CONSOLE_PORT:-19001}"
         ;;
       down) compose --profile infra stop postgres nats qdrant jaeger minio ;;
       *) die "infra up | infra down" ;;
     esac
     ;;
 
+  # Frontend + sidecar nhận thức. Đây là phần chạy được của ứng dụng hôm nay;
+  # chưa có `mow-server` (xem chú thích trong docker-compose.yml).
+  app)
+    need_docker
+    sub="${1:-up}"; shift || true
+    case "$sub" in
+      up)
+        say "bật web + agent (lần đầu phải cài phụ thuộc, vài phút)"
+        compose --profile app up -d web agent
+        say "Web:    http://localhost:${MOW_WEB_PORT:-15173}"
+        say "Agent:  http://localhost:${MOW_AGENT_PORT:-18765}/health"
+        say "Log:    ./mow app logs"
+        ;;
+      down) compose --profile app stop web agent ;;
+      logs) compose --profile app logs -f web agent ;;
+      *) die "app up | app down | app logs" ;;
+    esac
+    ;;
+
+  # Máy chủ embedding cục bộ. Tách khỏi `infra` vì nó tải ~1.2GB trọng số và
+  # giữ VRAM; phần lớn công việc hằng ngày không cần nó.
+  ai)
+    need_docker
+    sub="${1:-up}"; shift || true
+    case "$sub" in
+      up)
+        say "bật máy chủ embedding (lần đầu phải tải model, vài phút)"
+        compose --profile ai up -d embeddings
+        say "chờ model nạp xong..."
+        for _ in $(seq 1 60); do
+          tt="$(docker inspect -f '{{.State.Health.Status}}' \
+                 "$(compose --profile ai ps -q embeddings)" 2>/dev/null || echo unknown)"
+          case "$tt" in
+            healthy) say "sẵn sàng: http://localhost:${MOW_EMBED_PORT:-18080}"; break ;;
+            unhealthy) die "container chạy nhưng không nạp được model — \`./mow ai logs\`" ;;
+          esac
+          sleep 10
+        done
+        [ "${tt:-}" = "healthy" ] || warn "chưa xanh sau 10 phút; xem \`./mow ai logs\`"
+        ;;
+      down) compose --profile ai stop embeddings ;;
+      logs) compose --profile ai logs -f embeddings ;;
+      *) die "ai up | ai down | ai logs" ;;
+    esac
+    ;;
+
   logs)
     need_docker
-    compose --profile infra logs -f "${1:-}"
+    compose --profile infra --profile ai --profile app logs -f "${1:-}"
     ;;
 
   ps)
     need_docker
-    compose --profile infra ps
+    compose --profile infra --profile ai --profile app ps
     ;;
 
   native)
