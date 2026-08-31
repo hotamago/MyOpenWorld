@@ -46,6 +46,7 @@ function batchOf(w: number, h: number, material: string[], opt: BatchOptions = {
     biome: fill(n, "plains"),
     height: opt.height ?? fill(n, 0),
     river: opt.river ?? fill(n, 0),
+    worn: fill(n, 0),
   };
 }
 
@@ -337,6 +338,7 @@ describe("§18.3 — bản đồ thu nhỏ", () => {
       material: ["topsoil"],
       surface: ["topsoil"],
       river: [],
+      worn: [],
       height: [],
     };
     const buf = paintMinimap(batch, PALETTE, 4);

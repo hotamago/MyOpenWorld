@@ -62,6 +62,7 @@ import type { Entity, TileBatch } from "@/api/game";
 import type { BlockPalette } from "./blocks";
 import { ambientSprites, type AmbientSprite } from "./ambient";
 import { drawFigure, figureOf, type FigureSpec } from "./figure";
+import { chimneys, phaseAt, smokePuff, sway } from "./liveliness";
 import { MotionTrack } from "./motion";
 import { type Nameplate, visibleLabels } from "./nameplate";
 import { paintTerrain, skyTint } from "./terrain";
@@ -78,6 +79,15 @@ function stringHash(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
   return h;
+}
+
+/**
+ * `%` giữ dấu toán hạng trái trong JS; các vòng lặp thời gian của lớp sống
+ * động (khe khói, cửa sổ lấp lánh) cần phần dư luôn dương bất kể `nowMs` hay
+ * độ lệch pha âm tới đâu.
+ */
+function safeModWorld(a: number, m: number): number {
+  return ((a % m) + m) % m;
 }
 
 /**
@@ -132,6 +142,44 @@ function figureSpecEqual(a: FigureSpec, b: FigureSpec): boolean {
 }
 
 /**
+ * Cỡ chữ nhãn tên, tính bằng pixel màn hình — **không** theo `tileSize`.
+ *
+ * Nhãn là chữ để đọc, không phải hoạ tiết của ô: nó cần đúng một cỡ vật lý dễ
+ * đọc ở mọi mức phóng, không phải "phóng to theo bản đồ" tới mức chiếm nửa màn
+ * hình hay co lại thành chấm mực. Cố định cỡ còn tránh việc mỗi lần đổi zoom
+ * lại bắt Pixi dựng lại texture chữ của mọi nhãn đang hiện cùng lúc — thứ
+ * `rescale()` vốn đã phải làm cho toàn bộ hình thực thể, không cần thêm nhãn
+ * vào danh sách đó.
+ */
+const LABEL_FONT_SIZE = 12;
+const LABEL_FONT_SIZE_HIGHLIGHT = 13;
+
+/**
+ * Kiểu chữ cho một nhãn tên, theo trạng thái `highlight`.
+ *
+ * ## Viền chữ, không phải nền mờ, để đọc được trên mọi nền
+ *
+ * Một nền mờ phía sau đọc được cũng tốt, nhưng nó đòi thêm một `Graphics` cho
+ * MỖI nhãn — gấp đôi số đối tượng Pixi phải tạo, tái dùng theo `id`, và dọn khi
+ * thực thể biến mất, cho một ích lợi mà `stroke` trong `TextStyle` đã cho sẵn:
+ * một viền tối quanh chữ sáng đọc được trên cả tuyết trắng lẫn đêm đen, bằng
+ * đúng một thuộc tính có sẵn của chính đối tượng `Text` đã cần vẽ.
+ *
+ * Trả một object mới mỗi lần gọi — không phải hai hằng số style dùng chung —
+ * vì `Text.style` sở hữu style của nó (gán một style đang bị `Text` khác dùng
+ * sẽ làm chúng đổi lẫn nhau khi một bên bị dọn).
+ */
+function labelStyle(highlight: boolean): TextStyleOptions {
+  return {
+    fontFamily: "sans-serif",
+    fontSize: highlight ? LABEL_FONT_SIZE_HIGHLIGHT : LABEL_FONT_SIZE,
+    fontWeight: highlight ? "700" : "500",
+    fill: highlight ? 0xffe28a : 0xf2f4f8,
+    stroke: { color: 0x10131a, width: highlight ? 4 : 3 },
+  };
+}
+
+/**
  * Trần số hạt môi trường mỗi khung nhìn.
  *
  * Đo trên khung 87×41: cảnh dày nhất (sa mạc, băng hà) sinh ~250 hạt, cảnh
@@ -139,6 +187,74 @@ function figureSpecEqual(a: FigureSpec, b: FigureSpec): boolean {
  * tỉa nhẹ ở hai chỗ dày nhất.
  */
 const AMBIENT_BUDGET = 240;
+
+const TAU = Math.PI * 2;
+
+/**
+ * Ngưỡng phóng dưới đó mọi chuyển động vi mô (khói, cỏ lay, lấp lánh, nhịp đi,
+ * bóng tiếp xúc) đều tắt hẳn.
+ *
+ * Dùng chung một con số với `redrawAmbient` (`ts < 9`, xem ở đó): dưới ngưỡng
+ * này biên độ vài pixel của các hiệu ứng này còn nhỏ hơn một ô màn hình, nên
+ * chúng không còn đọc được là chuyển động — chỉ còn là nhiễu run rẩy trên một
+ * texture đã đủ nhỏ để mắt gộp các ô lại với nhau.
+ */
+const LIVELINESS_MIN_TILE_SIZE = 9;
+
+/**
+ * Trần cứng tổng số phần tử vi-chuyển-động vẽ mỗi khung hình: tối đa 5 ống
+ * khói × tối đa 5 hạt khói mỗi ống (`SMOKE_SLOTS`) = 25, cộng tối đa 90 tép
+ * lúa/cỏ lay, cộng tối đa 65 vệt lấp lánh mặt nước — 25 + 90 + 65 = 180.
+ *
+ * Ba loại chia sẻ **một** ngân sách chứ không phải ba trần riêng cộng lại vô
+ * điều kiện: một khung nhìn toàn ruộng lúa sát biển vẫn phải dừng ở đúng con
+ * số này, không phải 90 + 65 cộng dồn với bất cứ gì khói bếp cần thêm.
+ */
+const LIVELINESS_BUDGET = 180;
+const CHIMNEY_TILE_LIMIT = 5;
+const CROP_TUFT_LIMIT = 90;
+const WATER_GLINT_LIMIT = 65;
+
+/** Cỏ/lúa: biên độ và chu kỳ khớp đúng buổi tư vấn — xem `liveliness.sway`. */
+const CROP_TUFT_COLOR = 0xcdeaa0;
+
+/**
+ * Khoảng cách giữa hai hạt khói sinh liên tiếp từ cùng một ống khói, cộng số
+ * "khe" xét mỗi khung hình.
+ *
+ * `SMOKE_SLOTS * SMOKE_SPACING_MS` (2 750 ms) lớn hơn `SMOKE_LIFE_MS`
+ * (2 200 ms — xem `liveliness.ts`) một chút: mỗi khe có một quãng nghỉ ngắn
+ * trước khi hạt tiếp theo của chính nó sinh ra, nhưng vì 5 khe lệch pha đều
+ * nhau, tại bất kỳ thời điểm nào luôn có 3–5 hạt của các khe khác nhau đang
+ * sống — đúng hiệu ứng "thỉnh thoảng nhả 3–5 hạt" mà không cần giữ danh sách
+ * hạt đang sống ở đâu cả (mỗi khung hình tính lại từ `performance.now()`).
+ */
+const SMOKE_SLOTS = 5;
+const SMOKE_SPACING_MS = 550;
+const SMOKE_CYCLE_MS = SMOKE_SLOTS * SMOKE_SPACING_MS;
+
+/** Mặt nước lấp lánh: chu kỳ và cửa sổ "đang sáng" của vệt chạy. */
+const WATER_GLINT_PERIOD_MS = 5_000;
+const WATER_GLINT_WINDOW = 0.18;
+
+/** Nhịp bước: một cú nảy nhẹ mỗi nửa chu kỳ (`Math.abs(sin)`), chỉ khi đang trượt ô. */
+const WALK_BOB_PERIOD_MS = 420;
+const WALK_BOB_AMPLITUDE = 1.5;
+const WALK_TILT_DEG = 4;
+
+/**
+ * Hướng đổ bóng, khớp `SUN` của `terrain.ts` (trên–trái, tức `x`/`y` âm).
+ *
+ * Chép tay hai thành phần ngang của `SUN`, chuẩn hoá lại trong mặt phẳng
+ * `(x, y)` — không import được vì `SUN` không export khỏi `terrain.ts` (module
+ * đó thuộc quyền sửa của người khác trong phiên làm việc này). Nếu `terrain.ts`
+ * đổi hướng nắng, hằng số này phải đổi theo tay; `terrain.test.ts` là nơi phát
+ * hiện lệch nếu có ai quên.
+ */
+const SHADOW_DIR_X = -0.663;
+const SHADOW_DIR_Y = -0.748;
+/** Co lại còn ngần này khi nhân vật đang ở giữa bước — "nhấc chân khỏi đất". */
+const SHADOW_STRIDE_SCALE = 0.82;
 
 /**
  * Số ô lấy dư mỗi phía so với khung nhìn.
@@ -152,6 +268,7 @@ const BATCH_MARGIN = 8;
 
 /** Các mức phóng, tính bằng pixel một ô. Rời rạc để lưới luôn khớp pixel. */
 export const ZOOM_STEPS = [4, 6, 9, 12, 18, 26, 36] as const;
+
 
 export interface TileCoord {
   x: number;
@@ -175,6 +292,24 @@ export class WorldView {
   private pathLayer = new Container();
   /** Hạt môi trường. Dưới thực thể để không che nhân vật. */
   private ambientLayer = new Container();
+  /**
+   * Chuyển động vi mô của "sự sống": khói bếp, cỏ/lúa lay, mặt nước lấp lánh.
+   * Tách khỏi `ambientLayer` dù cùng vẽ bằng một `Graphics` mỗi khung — xem lời
+   * giải "vì sao module này tồn tại tách khỏi ambient.ts" ở `liveliness.ts`:
+   * lớp này chạy theo đồng hồ thật mỗi khung hình (`onTick`), còn `ambientLayer`
+   * chỉ vẽ lại theo nhịp `tick` (mỗi lần `retint`/`setTerrain`).
+   */
+  private livelinessLayer = new Container();
+  /**
+   * Bóng tiếp xúc của thực thể, lệch theo hướng nắng và co lại giữa bước chân.
+   * Nằm ngay dưới `entityLayer` để nhân vật luôn "đứng trên" bóng của chính nó.
+   * Vẽ riêng khỏi bóng cố định đã có trong `drawFigure` (`figure.ts`) vì module
+   * này không được sửa `figure.ts` — hai bóng cộng lại đọc ra như một bóng mềm
+   * có phần lõi đậm (bóng tiếp đất cũ) và phần đổ dài theo nắng (bóng mới),
+   * không phải hai vật thể tách rời, miễn là bóng mới nhạt và lệch ít.
+   */
+  private shadowLayer = new Container();
+  private shadowGraphics = new Graphics();
   private overlayLayer = new Container();
   private overlaySprite: Sprite | null = null;
   private overlayTexture: Texture | null = null;
@@ -182,6 +317,13 @@ export class WorldView {
   private diffLayer = new Container();
   private diffChanges: DiffChange[] = [];
   private entityLayer = new Container();
+  /**
+   * Nhãn tên. Trên `entityLayer` để chữ không bị nhân vật che, dưới `diffLayer`
+   * vì diff xem trước là thứ khẩn cấp hơn cần đọc ngay (xem lời giải ở
+   * `diffLayer`) — hai lớp không tranh nhau vì chúng hiếm khi cùng dày đặc một
+   * lúc: diff chỉ có khi đang xem trước một ý chỉ.
+   */
+  private labelLayer = new Container();
   /**
    * Vị trí ở lần vẽ trước của từng thực thể, theo `id` — dùng suy `facing`
    * trong `figureOf`. Dọn trong `setEntities` mỗi khi một `id` không còn xuất
@@ -211,6 +353,32 @@ export class WorldView {
    * phóng to là một câu hỏi về khung nhìn, không phải về thế giới.
    */
   private lastEntities: Entity[] = [];
+  /**
+   * Một `Text` mỗi nhãn đang hiện, tái dùng theo `id` — cùng khuôn với
+   * `entityGraphics`. Chỉ những nhãn `visibleLabels` chọn mới có mặt ở đây;
+   * phần còn lại của `lastLabels` không tốn một đối tượng Pixi nào.
+   */
+  private labelObjects = new Map<string, Text>();
+  /** Nội dung + `highlight` đã áp cho mỗi `Text` — để biết khi nào phải viết lại, thay vì viết lại mỗi lần gọi. */
+  private labelCache = new Map<string, { text: string; highlight: boolean }>();
+  /**
+   * Toàn bộ nhãn `setLabels` nhận được gần nhất, **trước khi** lọc.
+   *
+   * Giữ lại để `reposition()` — chạy mỗi khi camera hoặc `tileSize` đổi — có
+   * thể tính lại `visibleLabels` mà không phải đợi `App.vue` gọi `setLabels`
+   * lần nữa: nhãn nào lọt qua ngưỡng ẩn hay khung nhìn là một câu hỏi về
+   * *camera*, không phải về dữ liệu, nên nó phải phản ứng ngay khi camera đổi.
+   */
+  private lastLabels: Nameplate[] = [];
+  /**
+   * Độ phân giải canvas của mọi nhãn tên, chốt một lần khi `attach()` — không
+   * đổi theo `tileSize` hay theo từng lần vẽ. `Text` mặc định tự dò lại độ
+   * phân giải mỗi khi style đổi; cố định nó ở đây tránh việc bật/tắt highlight
+   * (đổi `fontSize`, xem `labelStyle`) vô tình kéo theo một lần dò lại không
+   * liên quan, và khớp đúng tinh thần "resolution cố định" mà `Application`
+   * cũng áp cho canvas chính (xem `attach`).
+   */
+  private readonly labelResolution = globalThis.devicePixelRatio ?? 1;
   private plannedPath: [number, number][] = [];
   private terrainSprite: Sprite | null = null;
   private terrainTexture: Texture | null = null;
@@ -224,13 +392,52 @@ export class WorldView {
   private centerY = 0;
   private zoomIndex = 4;
   /**
-   * Đặt lại vị trí sprite thực thể theo `MotionTrack` mỗi khung hình. Gắn vào
-   * `app.ticker` (nó vốn đã chạy để render) thay vì tự mở một
-   * `requestAnimationFrame` riêng — một vòng lặp thời gian thực cho cùng một
-   * component là đủ.
+   * `tick` thế giới của lần `setTerrain`/`retint` gần nhất — `onTick` chạy mỗi
+   * khung hình và cần biết đêm hay ngày (`chimneys` phụ thuộc `tick`) mà không
+   * đợi lần hỏi server kế tiếp truyền lại con số này.
+   */
+  private currentTick = 0;
+  /**
+   * Đặt lại vị trí sprite thực thể theo `MotionTrack`, rồi cắt (cull) hai lớp
+   * đông đối tượng — thực thể và nhãn — mỗi khung hình. Gắn vào `app.ticker`
+   * (nó vốn đã chạy để render) thay vì tự mở một `requestAnimationFrame`
+   * riêng — một vòng lặp thời gian thực cho cùng một component là đủ.
+   *
+   * ## Vì sao gọi `Culler` tay ở đây, không đăng ký `CullerPlugin`
+   *
+   * Pixi có sẵn `CullerPlugin` tự cắt **toàn bộ** `app.stage` trước mỗi lần
+   * render, nhưng bật nó đòi `extensions.add(CullerPlugin)` — một đăng ký
+   * **toàn cục**, áp dụng cho mọi `Application` được tạo sau đó trong tiến
+   * trình, không riêng gì `WorldView`. Gọi thẳng `Culler.shared.cull(...)` ở
+   * đây cắt đúng hai lớp cần cắt (`entityLayer`, `labelLayer` — những lớp có
+   * thể có hàng chục đối tượng ngoài khung nhìn cùng lúc) mà không đụng tới
+   * `terrainLayer`/`pathLayer`/`diffLayer`, vốn chỉ có một `Graphics`/`Sprite`
+   * mỗi lớp nên cắt chúng không tiết kiệm được gì, chỉ thêm một lần tính bounds
+   * toàn cục vô ích.
+   *
+   * Thứ tự chạy đúng vì `app.ticker` gọi các listener theo `priority`:
+   * `TickerPlugin` của Pixi tự đăng ký lệnh render ở mức `UPDATE_PRIORITY.LOW`
+   * (`-25`), còn `onTick` đăng ký không kèm priority — tức `NORMAL` (`0`),
+   * cao hơn `LOW`. `onTick` luôn chạy xong, đặt cờ `culled` cho khung hình này,
+   * rồi renderer mới đọc cờ đó — không có cách nào cờ bị đọc trước khi được
+   * đặt trong cùng một khung hình.
    */
   private readonly onTick = (): void => {
-    this.syncEntityPositions(performance.now());
+    const now = performance.now();
+    this.syncEntityPositions(now);
+    // Vẽ lại khói/cỏ lay/lấp lánh mỗi khung hình, không đợi `retint`/
+    // `setTerrain` (những hàm đó chỉ chạy theo nhịp hỏi server ~400ms) — xem
+    // lời giải "vì sao module này tồn tại tách khỏi ambient.ts" ở
+    // `liveliness.ts`. Đây vẫn là `app.ticker` đã có, không phải một
+    // `requestAnimationFrame` thứ hai.
+    this.redrawLiveliness(now);
+    const app = this.app;
+    if (!app) return;
+    // `renderer.screen` là khung nhìn tính bằng pixel **logic** (đã chia cho
+    // `resolution`) — cùng đơn vị với toạ độ toàn cục của mọi sprite trong
+    // stage, vì `reposition()` cũng đặt vị trí layer bằng đúng đơn vị đó.
+    Culler.shared.cull(this.entityLayer, app.renderer.screen);
+    Culler.shared.cull(this.labelLayer, app.renderer.screen);
   };
 
   constructor(private palette: BlockPalette) {}
@@ -252,9 +459,20 @@ export class WorldView {
     app.stage.addChild(this.terrainLayer);
     app.stage.addChild(this.overlayLayer);
     app.stage.addChild(this.ambientLayer);
+    app.stage.addChild(this.livelinessLayer);
     app.stage.addChild(this.pathLayer);
+    app.stage.addChild(this.shadowLayer);
+    this.shadowLayer.addChild(this.shadowGraphics);
     app.stage.addChild(this.entityLayer);
+    app.stage.addChild(this.labelLayer);
     app.stage.addChild(this.diffLayer);
+    // `cullableChildren` cho phép `Culler` đi xuống từng con để đọc cờ
+    // `cullable` của chính nó (mặc định `false` trên mọi đối tượng, xem
+    // `cullingMixin` của Pixi) — đặt trên container thôi thì con vẫn luôn vẽ.
+    // Từng `Graphics`/`Text` được bật `cullable = true` khi tạo, trong
+    // `setEntities`/`redrawLabels`.
+    this.entityLayer.cullableChildren = true;
+    this.labelLayer.cullableChildren = true;
     this.app = app;
     // Chỉ đặt lại toạ độ sprite theo `MotionTrack` — không dựng lại `Graphics`.
     // Dựng lại mỗi khung hình là đổi lỗi "giật vì đứng yên 400ms" lấy lỗi
@@ -297,6 +515,7 @@ export class WorldView {
    * giá bốn nghìn ô cho một thay đổi mà GPU làm được miễn phí.
    */
   retint(tick: number): void {
+    this.currentTick = tick;
     if (this.terrainSprite) this.terrainSprite.tint = skyTint(tick);
     this.redrawAmbient(tick);
   }
@@ -308,6 +527,11 @@ export class WorldView {
       this.terrainSprite.width = b.w * this.tileSize;
       this.terrainSprite.height = b.h * this.tileSize;
     }
+    // Đổi mức phóng là đúng lúc `nearest`/`linear` phải đổi theo — xem
+    // chế độ lọc. Gọi ở đây, không đợi lần `setTerrain` kế
+    // tiếp, để hết răng cưa ngay trên khung hình vừa lăn chuột, không phải sau
+    // vòng hỏi server 400ms kế tiếp.
+    this.applyTerrainFilter();
     if (b && this.overlaySprite) {
       this.overlaySprite.width = b.w * this.tileSize;
       this.overlaySprite.height = b.h * this.tileSize;
@@ -368,6 +592,7 @@ export class WorldView {
    */
   setTerrain(batch: TileBatch, tick: number): void {
     this.batch = batch;
+    this.currentTick = tick;
 
     const fp = fingerprintOf(batch);
     if (fp !== this.terrainFingerprint) {
@@ -413,7 +638,18 @@ export class WorldView {
       // đúng như bản cũ làm cho *mọi* lần gọi.
       this.terrainTexture?.destroy(true);
       this.terrainTexture = Texture.from(this.terrainCanvas);
-      this.terrainTexture.source.scaleMode = "nearest";
+      // `autoGenerateMipmaps`: mỗi lần `source.update()` báo nội dung đổi (vài
+      // dòng dưới), Pixi tự tính lại các mip level qua GPU — không cần tự gọi
+      // `updateMipmaps()`. Đặt cờ này một lần ở đây là đủ cho suốt vòng đời
+      // texture; `applyTerrainFilter()` sau đó chỉ còn việc chọn `scaleMode`
+      // theo mức phóng.
+      // **Không** bật mipmap cho texture nền, và điều đó không phải một thiếu
+      // sót. Texture này có đúng **một texel mỗi ô**, và cỡ ô nhỏ nhất là 4 px
+      // (`ZOOM_STEPS`) — nên nó luôn được **phóng to**, chưa bao giờ thu nhỏ.
+      // Mipmap chỉ giúp khi thu nhỏ; ở đây nó là bộ nhớ và một tầng lấy mẫu
+      // thừa, cộng một cách để hình bị nhòe mà không ai giải thích được.
+      this.terrainTexture.source.autoGenerateMipmaps = false;
+      this.applyTerrainFilter();
     }
 
     const ctx = this.terrainCtx;
@@ -430,6 +666,9 @@ export class WorldView {
 
     // Cập nhật tại chỗ: không tạo texture mới, không tải lại toàn bộ pipeline
     // ràng buộc GPU (bind group, v.v.) như một `Texture.from` mới sẽ kéo theo.
+    // Vì `autoGenerateMipmaps` đã bật, lệnh này cũng kéo theo việc GPU tính
+    // lại mip level cho đúng nội dung mới — ảnh cũ không bị "bóng ma" ở các
+    // mip xa sau khi khắc một ô.
     this.terrainTexture.source.update();
 
     if (!this.terrainSprite) {
@@ -438,6 +677,25 @@ export class WorldView {
     } else if (this.terrainSprite.texture !== this.terrainTexture) {
       this.terrainSprite.texture = this.terrainTexture;
     }
+  }
+
+  /**
+   * Chọn `nearest` hay `linear` cho texture nền theo mức phóng hiện tại — xem
+   * đánh đổi đầy đủ ở `TERRAIN_LINEAR_MAX_TILE_SIZE`.
+   *
+   * Gọi lại mỗi khi `tileSize` đổi (`rescale()`), không chỉ một lần lúc tạo
+   * texture: người chơi lăn chuột qua lại giữa các mức phóng suốt phiên chơi,
+   * và bộ lọc phải theo kịp chứ không đứng yên ở trạng thái lúc tải trang.
+   */
+  private applyTerrainFilter(): void {
+    const source = this.terrainTexture?.source;
+    if (!source) return;
+    // Luôn `nearest`. Mỗi texel là một ô, và ranh giới giữa hai vật liệu là
+    // **thông tin**, không phải răng cưa: nội suy nó ra một màu ở giữa là dựng
+    // lại đúng màu bùn mà `minimap.ts` đã phải tránh, chỉ ở tầng khác. Một
+    // ngưỡng đổi sang `linear` khi thu nhỏ nghe hợp lý nhưng sai ở đây: thứ bị
+    // làm mượt không phải pixel, mà là ranh giới vật liệu.
+    source.scaleMode = "nearest";
   }
 
   /**
@@ -482,6 +740,135 @@ export class WorldView {
       }
     }
     this.ambientLayer.addChild(g);
+  }
+
+  /**
+   * Vẽ lại lớp "sự sống": khói bếp, cỏ/lúa lay, mặt nước lấp lánh.
+   *
+   * Chạy mỗi khung hình (gọi từ `onTick`, xem lời giải ở đó) — khác
+   * `redrawAmbient` vốn chỉ chạy theo nhịp `tick`. `nowMs` là đồng hồ thật,
+   * dùng cho phần hoạt hình mượt (`sway`, `smokePuff` — xem lời giải "vì sao
+   * module này tồn tại tách khỏi ambient.ts" ở `liveliness.ts`); `this.currentTick`
+   * là `tick` thế giới gần nhất, dùng cho phần quyết định trạng thái
+   * ("ống khói nào đang cháy" — một sự thật của thế giới, không phải của đồng
+   * hồ máy người chơi).
+   *
+   * Một `Graphics` duy nhất cho cả ba hiệu ứng, cùng khuôn `redrawAmbient`, và
+   * cùng chia sẻ một trần cứng `LIVELINESS_BUDGET` (xem hằng số) qua biến đếm
+   * `budget` — một khung nhìn toàn ruộng lúa hay toàn mặt hồ đều dừng ở đúng
+   * ngân sách đó, không phải ba trần riêng cộng dồn vô điều kiện.
+   */
+  private redrawLiveliness(nowMs: number): void {
+    for (const c of this.livelinessLayer.removeChildren()) c.destroy();
+    const batch = this.batch;
+    if (!batch) return;
+
+    const ts = this.tileSize;
+    // Cùng ngưỡng và cùng lý do `redrawAmbient` tắt hạt môi trường: dưới đây
+    // biên độ vài pixel nhỏ hơn một ô màn hình và chỉ còn là nhiễu.
+    if (ts < LIVELINESS_MIN_TILE_SIZE) return;
+
+    const g = new Graphics();
+    let budget = LIVELINESS_BUDGET;
+
+    // ── Khói bếp ───────────────────────────────────────────────────────────
+    for (const chim of chimneys(batch, this.currentTick, CHIMNEY_TILE_LIMIT)) {
+      if (budget <= 0) break;
+      // Lệch pha khởi động riêng cho từng ống khói, tái dùng `phaseAt` thay vì
+      // viết thêm một hàm băm mới trong file vẽ — xem lời giải `SMOKE_SLOTS`.
+      const tileOffsetMs = (phaseAt(chim.x, chim.y) / TAU) * SMOKE_CYCLE_MS;
+      for (let k = 0; k < SMOKE_SLOTS; k++) {
+        if (budget <= 0) break;
+        const age = safeModWorld(nowMs - tileOffsetMs - k * SMOKE_SPACING_MS, SMOKE_CYCLE_MS);
+        const seed = (chim.x * 92_821 + chim.y * 68_917 + k * 104_729) | 0;
+        // `null` nghĩa là khe này đang ở quãng nghỉ giữa hai hạt (`age` vượt
+        // `SMOKE_LIFE_MS`, xem `liveliness.smokePuff`) — không phải lỗi.
+        const puff = smokePuff(seed, age);
+        if (!puff) continue;
+        const cx = (chim.x - batch.x + 0.5 + puff.dx) * ts;
+        // 0.1 ô: miệng ống khói nằm gần mép trên của ô mái, không phải giữa ô.
+        const cy = (chim.y - batch.y + 0.1 + puff.dy) * ts;
+        g.circle(cx, cy, Math.max(0.6, puff.r * ts)).fill({ color: 0xd7d2c8, alpha: puff.alpha });
+        budget--;
+      }
+    }
+
+    // ── Lúa/cỏ lay ─────────────────────────────────────────────────────────
+    if (budget > 0) {
+      const candidates: { gx: number; gy: number; off: number; rank: number }[] = [];
+      for (let gy = 0; gy < batch.h; gy++) {
+        for (let gx = 0; gx < batch.w; gx++) {
+          const i = gy * batch.w + gx;
+          const material = batch.material[i] ?? "air";
+          const visible = material !== "air" ? material : (batch.surface[i] ?? "air");
+          if (visible !== "crop_green") continue;
+          const wx = batch.x + gx;
+          const wy = batch.y + gy;
+          // `sway` tự cổng ~15% ô; giá trị đúng bằng 0 nghĩa là ô này chưa từng
+          // được chọn (hoặc đang đúng điểm cân bằng — hai trường hợp không
+          // phân biệt được bằng mắt, xem lời giải ở `liveliness.ts`).
+          const off = sway(wx, wy, nowMs);
+          if (off === 0) continue;
+          candidates.push({ gx, gy, off, rank: phaseAt(wx, wy) });
+        }
+      }
+      if (candidates.length > CROP_TUFT_LIMIT) {
+        // Tỉa theo hạng băm, không theo thứ tự quét — cùng lý do `ambient.ts`
+        // dùng cho hạt môi trường: cắt đuôi mảng sẽ luôn xoá sạch nửa dưới
+        // khung nhìn trước.
+        candidates.sort((a, b) => a.rank - b.rank);
+        candidates.length = CROP_TUFT_LIMIT;
+      }
+      for (const c of candidates) {
+        if (budget <= 0) break;
+        const baseX = (c.gx + 0.5) * ts;
+        const baseY = (c.gy + 0.78) * ts;
+        const topX = baseX + c.off;
+        const topY = (c.gy + 0.35) * ts;
+        g.moveTo(baseX, baseY)
+          .lineTo(topX, topY)
+          .stroke({ width: Math.max(0.6, ts * 0.05), color: CROP_TUFT_COLOR, alpha: 0.55 });
+        budget--;
+      }
+    }
+
+    // ── Mặt nước lấp lánh ──────────────────────────────────────────────────
+    if (budget > 0) {
+      const candidates: { gx: number; gy: number; shine: number; rank: number }[] = [];
+      for (let gy = 0; gy < batch.h; gy++) {
+        for (let gx = 0; gx < batch.w; gx++) {
+          const i = gy * batch.w + gx;
+          const material = batch.material[i] ?? "air";
+          const visible = material !== "air" ? material : (batch.surface[i] ?? "air");
+          const wet = this.palette.isLiquid(visible) || (batch.river[i] ?? 0) === 1;
+          if (!wet) continue;
+          const wx = batch.x + gx;
+          const wy = batch.y + gy;
+          const p = phaseAt(wx, wy) / TAU;
+          // Răng cưa: mỗi ô "sáng" đúng `WATER_GLINT_WINDOW` phần chu kỳ của
+          // nó, lệch pha riêng — kết quả là một dải sáng chạy chậm qua mặt
+          // nước, không phải cả mặt nước nhấp nháy cùng lúc.
+          const cyc = safeModWorld(nowMs / WATER_GLINT_PERIOD_MS + p, 1);
+          if (cyc >= WATER_GLINT_WINDOW) continue;
+          const k = cyc / WATER_GLINT_WINDOW;
+          const shine = Math.sin(Math.PI * k);
+          candidates.push({ gx, gy, shine, rank: p });
+        }
+      }
+      if (candidates.length > WATER_GLINT_LIMIT) {
+        candidates.sort((a, b) => a.rank - b.rank);
+        candidates.length = WATER_GLINT_LIMIT;
+      }
+      for (const c of candidates) {
+        if (budget <= 0) break;
+        const cx = (c.gx + 0.5) * ts;
+        const cy = (c.gy + 0.5) * ts;
+        g.ellipse(cx, cy, ts * 0.3, ts * 0.1).fill({ color: 0xeaf6ff, alpha: 0.35 * c.shine });
+        budget--;
+      }
+    }
+
+    this.livelinessLayer.addChild(g);
   }
 
   /**
@@ -563,7 +950,13 @@ export class WorldView {
       const needsRedraw = !existing || sizeChanged || !cached || !figureSpecEqual(cached, spec);
 
       const g = existing ?? new Graphics();
-      if (!existing) this.entityGraphics.set(e.id, g);
+      if (!existing) {
+        // Bật culling từng thực thể một: xem lời giải "vì sao gọi `Culler` tay"
+        // ở `onTick`. Không set trên `entityLayer` (nó đã đúng bằng cả khung
+        // nhìn hầu hết thời gian, cắt cả container chẳng tiết kiệm được gì).
+        g.cullable = true;
+        this.entityGraphics.set(e.id, g);
+      }
       if (needsRedraw) {
         g.clear();
         // Vẽ quanh gốc cục bộ `(0, 0)`: vị trí thật gán bằng `g.position` ở
@@ -584,21 +977,182 @@ export class WorldView {
   }
 
   /**
-   * Đặt lại `g.position` của mọi sprite thực thể đang hiện theo `MotionTrack`.
+   * Đặt lại `g.position` của mọi sprite thực thể đang hiện theo `MotionTrack`,
+   * thêm nhịp đi khi đang trượt ô, và vẽ lại bóng tiếp xúc của chúng.
    *
    * Chạy mỗi khung hình (`app.ticker`) nhưng KHÔNG đụng tới `Graphics` đã vẽ —
-   * chỉ một phép gán toạ độ mỗi thực thể hiện có trên màn hình, rẻ hơn hẳn
-   * dựng lại hình học 60 lần/giây.
+   * chỉ một phép gán toạ độ/góc xoay mỗi thực thể hiện có trên màn hình, rẻ
+   * hơn hẳn dựng lại hình học 60 lần/giây.
+   *
+   * ## Vì sao nhịp đi và bóng nằm ở đây, không phải trong `figure.ts`
+   *
+   * `figureOf`/`drawFigure` chỉ chạy lại khi `FigureSpec` đổi (đứng yên phần
+   * lớn thời gian, xem `setEntities`) — đúng cho hình dạng, sai cho một hoạt
+   * ảnh phải mượt mỗi khung hình. Nhịp đi và bóng vì vậy là phép biến hình đặt
+   * **lên trên** hình đã vẽ (`g.position`/`g.rotation`, và một `Graphics` bóng
+   * riêng), không phải nội dung của chính hình đó.
+   *
+   * ## "Đang đi" nghĩa là gì khi không có state máy trạng thái
+   *
+   * Không có cờ "đang đi" nào từ server hay từ `MotionTrack`. Nhưng
+   * `MotionTrack.at()` chỉ khác vị trí quyền uy (`Entity.x/y`) đúng lúc đang
+   * trượt giữa hai ô — `ease(1) = 1` nên khi trượt xong, toạ độ nội suy khớp
+   * số nguyên với đích tuyệt đối. So sánh hai số đó là đủ để biết "đang đi" mà
+   * không cần `MotionTrack` phơi thêm state riêng của nó.
    */
   private syncEntityPositions(nowMs: number): void {
     const batch = this.batch;
+    this.shadowGraphics.clear();
     if (!batch) return;
     const ts = this.tileSize;
+    // Dưới ngưỡng phóng, nhịp đi (biên độ tuyệt đối, không theo `tileSize`) và
+    // bóng lệch vài pixel đều nhỏ hơn một ô — tắt hẳn, cùng lý do
+    // `redrawLiveliness` tắt khói/cỏ/lấp lánh ở ngưỡng này.
+    const microFx = ts >= LIVELINESS_MIN_TILE_SIZE;
+    const targets = new Map(this.lastEntities.map((e) => [e.id, e] as const));
+
     for (const [id, g] of this.entityGraphics) {
       if (!g.parent) continue; // ngoài khung nhìn: không hiện, không cần đặt lại vị trí
       const m = this.motion.at(id, nowMs);
       if (!m) continue;
-      g.position.set((m.x - batch.x) * ts + ts / 2, (m.y - batch.y) * ts + ts / 2);
+      const baseX = (m.x - batch.x) * ts + ts / 2;
+      const baseY = (m.y - batch.y) * ts + ts / 2;
+      const target = targets.get(id);
+      const walking = microFx && target !== undefined && (m.x !== target.x || m.y !== target.y);
+
+      if (walking) {
+        // Lệch pha theo `id`, tái dùng `stringHash` đã có cho `fingerprintOf`:
+        // hai thực thể cùng đi một lúc không được nảy cùng nhịp, nếu không cả
+        // đoàn người trông như một đội diễu hành, không phải từng người đi.
+        const idPhase = ((stringHash(id) >>> 0) / 4_294_967_296) * TAU;
+        const wobble = Math.sin((nowMs / WALK_BOB_PERIOD_MS) * TAU + idPhase);
+        const facing = this.entitySpecs.get(id)?.facing ?? "right";
+        const dir = facing === "right" ? 1 : -1;
+        // `Math.abs`: chân nảy lên rồi chạm đất, không lún xuống dưới mặt đất
+        // — hai cú nảy mỗi chu kỳ sin, khớp nhịp hai bước chân trái/phải.
+        g.position.set(baseX, baseY - Math.abs(wobble) * WALK_BOB_AMPLITUDE);
+        g.rotation = (wobble * WALK_TILT_DEG * dir * Math.PI) / 180;
+      } else {
+        g.position.set(baseX, baseY);
+        g.rotation = 0;
+      }
+
+      if (microFx) {
+        // Neo bóng vào đúng điểm `drawFigure` (`figure.ts`) đã đặt bóng tiếp
+        // đất cũ (`cy + ts*0.3`), rồi lệch thêm theo hướng nắng của
+        // `terrain.ts` — hai bóng cộng lại đọc ra một bóng mềm có lõi đậm
+        // (bóng cũ) và phần đổ dài theo nắng (bóng này), xem lời giải ở khai
+        // báo `shadowLayer`.
+        const scale = walking ? SHADOW_STRIDE_SCALE : 1;
+        const sx = baseX + SHADOW_DIR_X * ts * 0.16;
+        const sy = baseY + ts * 0.3 + SHADOW_DIR_Y * ts * 0.16;
+        this.shadowGraphics
+          .ellipse(sx, sy, ts * 0.34 * scale, ts * 0.13 * scale)
+          .fill({ color: 0x000000, alpha: 0.22 });
+      }
+    }
+  }
+
+  /**
+   * Đặt danh sách nhãn tên. `App.vue` gọi hàm này thay cho việc tự tay đặt
+   * `<div>` lên canvas như trước — xem lời giải "Nhãn giờ nằm trong Pixi" ở
+   * đầu file.
+   *
+   * Chỉ lưu **toàn bộ** danh sách rồi giao việc lọc cho `redrawLabels`/
+   * `visibleLabels`: hàm này không tự quyết nhãn nào đáng hiện, để luật đó nằm
+   * đúng một chỗ (`nameplate.ts`) thay vì lặp lại ở đây.
+   */
+  setLabels(list: Nameplate[]): void {
+    this.lastLabels = list;
+    this.redrawLabels();
+  }
+
+  /**
+   * Vẽ lại lớp nhãn tên theo danh sách `lastLabels` đã lọc qua `visibleLabels`.
+   *
+   * ## Vì sao `PIXI.Text`, không phải `BitmapText`
+   *
+   * `BitmapText` nhanh hơn, nhưng đòi cài trước một tập ký tự cố định qua
+   * `BitmapFont.install({ chars: [...] })`. Tên trong thế giới này không phải
+   * chữ La-tinh trần — coi `figure.test.ts` (`"Ai đó"`) hay
+   * `overlays/field.test.ts` (`"táo"`): tiếng Việt có vài chục dấu thanh và
+   * nguyên âm có dấu, và một bộ ký tự liệt kê tay rất dễ bỏ sót một dấu hiếm
+   * gặp — mà khi bỏ sót, ký tự đó không vẽ ra gì cả, lặng lẽ, không có lỗi nào
+   * để bắt. `Text` vẽ qua canvas font hệ thống nên nhận đúng mọi ký tự Unicode
+   * font hệ điều hành có, không cần liệt kê trước.
+   *
+   * Cái giá đổi lại — mỗi chuỗi một texture riêng — không còn là vấn đề ở đây:
+   * `visibleLabels` đã chặn số nhãn ở `DEFAULT_LABEL_LIMIT`, và mỗi `id` chỉ
+   * giữ một `Text` sống suốt vòng đời của nó (`labelObjects`), giống hệt
+   * `entityGraphics`. Số texture tối đa tại một thời điểm có trần, không phụ
+   * thuộc thế giới đông cỡ nào.
+   *
+   * ## Chỉ viết lại `.text`/style khi đổi, luôn viết lại `.position`
+   *
+   * Cùng khuôn với `setEntities`: dựng `Text` (viết `.text` mới) là chỗ đắt,
+   * tốn một lần vẽ canvas + tải texture lên GPU; đặt `.position` là một phép
+   * gán số, gần như miễn phí. Nên `.text` và style chỉ đổi khi nội dung thật
+   * sự khác `labelCache`, còn `.position` được gán lại vô điều kiện mỗi lần
+   * hàm này chạy — kể cả khi tên và trạng thái `highlight` không đổi gì.
+   */
+  private redrawLabels(): void {
+    const batch = this.batch;
+    if (!batch) {
+      for (const t of this.labelLayer.removeChildren()) t.destroy();
+      this.labelObjects.clear();
+      this.labelCache.clear();
+      return;
+    }
+
+    const visible = visibleLabels(this.lastLabels, {
+      tileSize: this.tileSize,
+      viewport: batch,
+      centerX: this.centerX,
+      centerY: this.centerY,
+    });
+
+    const stillHere = new Set(visible.map((l) => l.id));
+    for (const [id, t] of this.labelObjects) {
+      if (!stillHere.has(id)) {
+        t.destroy();
+        this.labelObjects.delete(id);
+        this.labelCache.delete(id);
+      }
+    }
+
+    const ts = this.tileSize;
+    for (const l of visible) {
+      const existing = this.labelObjects.get(l.id);
+      const cached = this.labelCache.get(l.id);
+      const t =
+        existing ??
+        new Text({
+          text: l.text,
+          style: labelStyle(l.highlight),
+          resolution: this.labelResolution,
+          // Neo giữa theo chiều ngang, đáy theo chiều dọc: `.position` dưới
+          // đây đặt đúng điểm ngay trên đầu ô, chữ mọc lên từ đó.
+          anchor: { x: 0.5, y: 1 },
+        });
+
+      if (!existing) {
+        t.cullable = true; // xem lời giải "vì sao gọi `Culler` tay" ở `onTick`.
+        this.labelObjects.set(l.id, t);
+      } else {
+        if (!cached || cached.text !== l.text) t.text = l.text;
+        if (!cached || cached.highlight !== l.highlight) t.style = labelStyle(l.highlight);
+      }
+      this.labelCache.set(l.id, { text: l.text, highlight: l.highlight });
+      // `addChild` trên một con đã thuộc đúng container này chỉ dời nó lên
+      // cuối danh sách vẽ — cùng lý do dùng nó ở `setEntities`: vừa đảm bảo có
+      // mặt (trường hợp mới tạo, hoặc vừa quay lại sau khi `visibleLabels`
+      // từng loại nó ra) vừa giữ thứ tự vẽ ổn định.
+      this.labelLayer.addChild(t);
+
+      // Cùng công thức `screenOf` từng dùng cho nhãn HTML: giữa ô theo chiều
+      // ngang, nhô lên trên đầu nhân vật theo chiều dọc — giữ nguyên cảm giác
+      // hình ảnh cũ dù nhãn giờ sống trong Pixi.
+      t.position.set((l.x - batch.x) * ts + ts / 2, (l.y - batch.y) * ts - ts * 0.45);
     }
   }
 
@@ -797,7 +1351,17 @@ export class WorldView {
     this.overlaySprite.height = batch.h * this.tileSize;
   }
 
-  /** Đặt hai lớp sao cho ô tâm nằm giữa màn hình. */
+  /**
+   * Đặt mọi lớp sao cho ô tâm nằm giữa màn hình, rồi vẽ lại nhãn tên.
+   *
+   * `redrawLabels()` đứng ở cuối hàm này — không phải trong `setLabels` — vì
+   * "nhãn nào đáng hiện" phụ thuộc `tileSize` và khung nhìn hiện tại
+   * (`visibleLabels`), và cả hai thứ đó đổi đúng những lúc `reposition()`
+   * chạy: kéo camera (`setCenter`), phóng to/nhỏ (`rescale`), nạp lô mới
+   * (`setTerrain`). Đặt nó ở đây nghĩa là zoom ra tới ngưỡng ẩn nhãn có tác
+   * dụng ngay trên khung hình kế tiếp, không phải đợi `App.vue` gọi lại
+   * `setLabels` ở lần hỏi server sau.
+   */
   private reposition(): void {
     const app = this.app;
     const batch = this.batch;
@@ -812,9 +1376,13 @@ export class WorldView {
     this.terrainLayer.position.set(x, y);
     this.overlayLayer.position.set(x, y);
     this.ambientLayer.position.set(x, y);
+    this.livelinessLayer.position.set(x, y);
     this.pathLayer.position.set(x, y);
+    this.shadowLayer.position.set(x, y);
     this.entityLayer.position.set(x, y);
+    this.labelLayer.position.set(x, y);
     this.diffLayer.position.set(x, y);
+    this.redrawLabels();
   }
 
   destroy(): void {

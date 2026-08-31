@@ -467,7 +467,10 @@ fn song_khong_phu_kin_ban_do() {
             "seed {seed}: {ti_le}% ô cạn là sông — cờ này không còn nói lên điều gì"
         );
     }
-    assert!(xet > 0, "không seed nào có đất cạn để xét — bài này đã thành vô nghĩa");
+    assert!(
+        xet > 0,
+        "không seed nào có đất cạn để xét — bài này đã thành vô nghĩa"
+    );
 }
 
 /// Nhưng cũng không được **không có** con sông nào ở đâu cả.
@@ -485,5 +488,8 @@ fn van_con_song_o_dau_do() {
             }
         }
     }
-    assert!(song > 0, "cả một vùng 600×600 ô mà không có một khúc sông nào");
+    assert!(
+        song > 0,
+        "cả một vùng 600×600 ô mà không có một khúc sông nào"
+    );
 }

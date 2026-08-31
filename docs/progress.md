@@ -304,33 +304,64 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++; if(/^- \[~\]/) n[p
 - [x] **PG-04** Nơi sinh sống được — không sinh người chơi xuống đáy biển; tìm đất khô theo ba mức phân giải khớp thang của trường độ cao. `§7.2`
 - [x] **PG-05** Vật liệu là **dữ liệu**, không phải `enum` — `content/core/blocks/<id>/metadata.yaml`, server phát bảng qua `/api/blocks`, client dựng bảng tra từ đó. Một bài test giữ lời hứa: **mọi vật liệu `mow-worldgen` sinh ra được đều phải có định nghĩa trong pack**, nếu không bản đồ hiện màu tím. `§8.2`, `§19.7`, `§P10.7`
 - [x] **PG-06** Vật phẩm và sự kiện cũng là dữ liệu, cùng bố cục thư mục. Chưa nối vào luồng chơi — mới có bộ nạp và định nghĩa. `§8.5`, `§17`
-- [ ] **PG-07** Overlay dữ liệu — bật/tắt, **loại trừ lẫn nhau**, legend kèm đơn vị thật. `§18.2`, `§18.6`
+- [x] **PG-07** Overlay dữ liệu — cao độ / nước / đi lại được / mật độ người, **một lớp một lúc**, chú giải kèm đơn vị thật và thang màu đã kiểm tương phản. Chuẩn hóa theo min/max **của lô đang xem** chứ không theo hằng số: một vùng đồng bằng phải vẫn đọc được chênh lệch. Ô không có dữ liệu là trong suốt, không phải màu của giá trị 0. `§18.2`, `§18.6`
 - [x] **PG-08** Bản đồ thu nhỏ — gộp theo *mode* của vật liệu, không trung bình RGB. `§18.3` Gộp theo **mode** chứ không trung bình RGB — trung bình biến bờ biển thành một dải bùn. Sông dùng luật `any` vì sông rộng một ô sẽ biến mất hoàn toàn nếu dùng mode. Bấm vào minimap là đi tới đó.
 
 ### G.2 — Điều khiển: chuột là chính
 
 - [x] **PG-09** Bấm chuột để đi — A* 8 hướng, chi phí số nguyên, cấm cắt góc, trần 20k node. Bấm ra giữa biển thì đi tới mép bờ chứ không đứng im. Kế hoạch nằm ở server và mỗi bước vẫn là một `core.walk` riêng, nên luật thế giới vẫn chặn được từng bước (`§22.1`). `§10.7`
-- [x] **PG-10** Bấm để tương tác — bấm vật phẩm là đi tới rồi nhặt, bấm người là đi tới rồi nói. Chuột phải để dừng. WASD đã bỏ. Kiểm chứng bằng cách tự chơi: bấm ổ bánh ở (257,256), nhân vật tự đi 10 ô rồi nhặt. `§P6.9.5`
+- [x] **PG-10** Bấm để tương tác — **viết lại toàn bộ** khi bỏ thân xác người chơi. Bấm trái là *soi xét* (chọn sinh mệnh hoặc ô); kéo là dời cái nhìn; chuột phải là thôi. Mọi thứ đổi thế giới là một **ý chỉ** gửi cho ai đó hoặc cho một ô, không phải một bước chân của thần. `§P6.9.5`
 - [x] **PG-11** Thanh tốc độ thời gian ×0.001 → ×100 và tạm dừng. Kiểm chứng bằng cách chạy thật: ×100 cho **1085 tick trong 3 giây**, tạm dừng cho **0**. Một bài test giữ điều quan trọng hơn: tốc độ **không** đổi `state_hash` ở cùng số tick — tua nhanh không được tạo ra một lịch sử khác. `§18.8`
-- [ ] **PG-12** Con trỏ nói trước khi bấm — ô đích sáng lên, đường đi hiện ra, ô không tới được nói rõ vì sao.
+- [~] **PG-12** Con trỏ nói trước khi bấm — con trỏ đổi hình theo quyền năng đang cầm, đường đi vẽ ra sau khi ra lệnh, ô không tới được nói rõ. **Còn thiếu**: ô đích sáng lên khi rà, và vùng ảnh hưởng của quyền năng hiện ra *trước* cú bấm.
 
 ### G.3 — Ba cách chơi
 
 - [x] **PG-13** Console True God — chọn đối tượng, ban ý chỉ, **diff vẽ lên bản đồ** (vòng hổ phách khi đổi thuộc tính, mũi tên khi dịch chuyển, khung gạch chéo khi biến mất), rồi *Khắc vào thế giới* / *Thu hồi ý chỉ*. Commit **từ chối khi `state_hash` đã trôi** và tự nhìn lại. Tự chơi kiểm chứng: gieo đói lên Aren → `hunger 9000`, event `truegod.intervened` có provenance. `§3.1`, `§16`, `§18.12`
-- [ ] **PG-14** Chế độ quan sát — chọn một thực thể/khu định cư, theo dõi timeline, tua thời gian. `§3.1`, `§18.3`
-- [~] **PG-15** Chuỗi nhân quả — `/api/cause` và panel đã có, **nhưng chuỗi luôn dài đúng 1**: không handler nào gọi `.caused_by(...)`, nên `Event::cause` luôn `None`. Engine có sẵn cạnh nhân quả và `cause_chain`; thứ thiếu là các handler chịu ghi nó lúc tạo sự kiện. `§18.10`
-- [ ] **PG-15b** Handler ghi cạnh nhân quả — mỗi sự kiện phải mang `cause` **lúc tạo**. `§18.10` nói rõ suy ngược sau là bất khả thi, và một chuỗi đoán ra thì tệ hơn không có vì người xem sẽ tin nó.
+- [x] **PG-14** Chế độ quan sát — chọn một cư dân, **bám camera** theo họ (có vùng chết, nên họ nhích một ô thì bản đồ không giật), và đọc **dòng đời** riêng của họ lọc từ nhật ký chung. Bấm một mắt là truy ngược nhân quả. `§3.1`, `§18.3`
+- [x] **PG-15** Chuỗi nhân quả — chuỗi thật, dài hơn một mắt. Kiểm chứng trên server đang chạy: 43/60 sự kiện mang nguyên nhân, và một bước đi truy về đúng cái ý định đã sinh ra nó. `§18.10`
+- [x] **PG-15b** Handler ghi cạnh nhân quả — lệnh mang trường `cause` tùy chọn, `Ctx::emit_caused` chuyển nó vào `EventDraft`. Ý định trở thành một **sự kiện** (`npc.intended`) chứ không chỉ một thuộc tính — điều kiện để nó làm nguyên nhân được, vì `Event::cause` trỏ tới một `EventSeq` còn thuộc tính thì không có số thứ tự. Ý định chỉ ghi khi **đổi**, nếu không nhật ký chìm trong chính nó. `§18.10`
 - [x] **PG-16** Entity mind — quan sát hiện tại, mục tiêu, kế hoạch, belief, ký ức đã truy xuất, **lý do chọn hành động**. `§18.3` Vai và ý định hiện trong panel cư dân — `§18.3` đòi trả lời được *vì sao nó làm thế*, và giờ câu đó đọc thẳng từ state chứ không đoán từ chuyển động.
 - [ ] **PG-17** Chế độ nhận thức lọc **ở server** — hóa thân chỉ nhận thứ avatar biết được; client không nhận rồi ẩn. `§18.9`, `§P6.9.4`
-- [ ] **PG-18** Biên niên sử hai lớp — đã xảy ra, và người ta *tin* là đã xảy ra. `§18.11`
+- [~] **PG-18** Biên niên sử — nhật ký thô gộp thành **chương** đọc được: một trăm bước đi thành một dòng *"Linnea ra đồng"*, can thiệp của thần luôn nổi bật, có dải nhịp hoạt động theo ngày. **Còn thiếu**: lớp thứ hai (*người ta tin là đã xảy ra*) — cần lọc nhận thức ở server, tức `PG-17`. `§18.11`
 
 ### G.4 — Thế giới đáng sống
 
-- [x] **PG-19** Nơi bắt đầu xứng đáng — worldseed sinh một khu định cư có nhà, nghề, kho, gia đình; không phải ba chấm trên một bãi đất. `§7.6`, `§12.9`, `§12.18` Quy hoạch xác định theo seed: 6 nhà + xưởng + kho + giếng + 2 ruộng, ~545 ô, 10 cư dân có tên, vai, nhà và chỗ làm. Nhà chỉ được dựng khi **kéo được đường về quảng trường** — nhà không nối vào làng thì thà đừng dựng.
+- [x] **PG-19** Nơi bắt đầu xứng đáng — quy hoạch xác định theo seed: nhà + xưởng + kho + giếng + ruộng, ~646 ô, cư dân có tên, vai, nhà và chỗ làm, cùng một kho lương nằm **trên đất** quanh quảng trường. Nhà chỉ dựng khi kéo được đường về quảng trường. Ba lỗi đã sửa ở đây, cả ba chỉ lộ ra khi nhìn màn hình: làng từng dựng vắt qua một **vách 64 mét** (chỉ hỏi "có phải nước không", không hỏi độ dốc); thế giới từng bắt đầu lúc **nửa đêm** nên cảnh đầu tiên là mười người đang ngủ; và người chơi từng có một **thân xác** tên "Nguoi Choi" đứng giữa làng. `§7.6`, `§12.9`, `§12.18`
 - [x] **PG-20** NPC sống theo lịch — ăn, ngủ, làm việc, phản ứng với đói và cháy. Đây là điều kiện hoàn thành của **Giai đoạn B** ở `§24`, chưa bao giờ được chứng minh trên màn hình. `mow-society::routine` — lịch theo pha ngày và vai, và **nhu cầu thắng lịch**: đói vượt ngưỡng thì bỏ ruộng đi ăn. Tự chơi kiểm chứng: cùng một lúc cụ già ra quảng trường, thợ rèn làm việc, nông dân và thợ săn ra đồng, trẻ con chơi.
 - [ ] **PG-21** NPC nghĩ bằng LLM theo vai — `action` (nhẹ, gọi nhiều), `npc` (đối thoại, suy nghĩ), `yuu` (trợ lý thông minh). `§20.7`
 - [ ] **PG-22** Đối thoại thật với NPC — có ký ức, có hệ quả, truy được về event nguồn. `§10.11`, `§10.12`
 - [ ] **PG-23** Túi đồ và thẻ vật phẩm — chất lượng, tình trạng, dấu ấn thợ, chuỗi provenance. `§18.15`, `§8.6`, `§8.9`
+
+### G.6 — Vị thần, giao diện, và cảm giác mượt
+
+> Mở sau khi người chơi nói ba câu, và cả ba đều đúng: *"tại sao mặc định true
+> god lại có cơ thể?"*, *"menu vẫn rất sơ sài"*, *"scroll up, down mà cứ lag
+> lag"*.
+
+- [x] **PG-25** True God **không có thân xác** — không avatar, không tọa độ, không nằm trong danh sách thực thể. Người chơi điều khiển một **cái nhìn**: dời nó không sinh sự kiện nào (`§P6.8`), và nó không đi vào `state_hash`. Thế giới thật dựng từ `build_empty_world` chứ không từ thế giới lát cắt — ba thực thể mẫu của bài test đã lọt vào trò chơi suốt từ đầu. `§3.1`
+- [x] **PG-26** Menu thật — màn hình mở đầu có chọn **hạt giống thế giới**, menu tạm dừng, bảng thiết lập (ngôn ngữ, tốc độ mặc định, nhãn, lưới, giảm chuyển động, cỡ chữ), và thư viện tri thức giải thích cơ chế. Thiết lập lưu ở `localStorage` và **từng trường một** rơi về mặc định khi dữ liệu hỏng. `/api/genesis` dựng lại thế giới từ seed người chơi chọn.
+- [x] **PG-27** Bảng quyền năng — 18 quyền năng chia năm nhóm (tầm nhìn, thời gian, đất đai, thân xác, tâm trí), mỗi cái đi qua đúng một trong năm đường: `command`, `preview`, `build`, `guide`, `view`. Quyền năng chưa đủ điều kiện thì mờ đi và **nói vì sao**. `§3.1`, `§16`
+- [x] **PG-28** Bố cục lại HUD — thanh trên (thời gian, tốc độ, sức khỏe khu định cư), thanh công cụ trái, canvas **tràn viền**, ngăn kéo **đè lên** thế giới thay vì thu hẹp nó, khay ngữ cảnh chỉ hiện khi đã chọn thứ gì đó. Cột phải mười panel cuộn dọc là giao diện của một bảng gỡ lỗi, không phải của một trò chơi. `§18.3`
+- [~] **PG-29** Mượt — bốn nguyên nhân của "lag khi scroll" đã chẩn đoán, ba đã sửa: (1) mỗi nấc lăn chuột từng gọi `refresh()`, tức **bốn round-trip HTTP nối đuôi** cộng một lần vẽ lại toàn bộ texture, cho mỗi trong ~20 sự kiện bánh xe mỗi giây; (2) bốn yêu cầu tuần tự giờ chạy song song; (3) lô ô lấy dư 8 ô mỗi phía nên phần lớn cú kéo không tốn một byte nào. **Còn lại**: nhãn tên vẫn là `<span>` HTML gây reflow, và `/api/tiles` vẫn trả mảng chuỗi lặp lại.
+- [ ] **PG-30** WebSocket thay HTTP-poll — một thế giới chạy theo tick phải **đẩy** trạng thái, không để client hỏi lại mỗi 400 ms.
+- [ ] **PG-31** Kinh tế chạm được vào cư dân — kho làng cạn thì người đói, người đói thì bỏ việc; một vị thần phải có thứ để cứu.
+- [x] **PG-33** Lối mòn — đất mòn đi ở chỗ người ta **thật sự** đi qua, và mờ lại ở nơi không còn ai đi. Không ai vẽ con đường từ nhà ra giếng; nó hiện ra sau vài chục ngày trong thế giới. Đo được trên thế giới đang chạy: sau 47 ngày, 138/1800 ô mang vết chân, sâu nhất 180/255, và các vệt hội tụ về quảng trường. Là **sự thật về thế giới** nên nó nằm trong `state_hash`. Nguôi bằng phép **trừ** chứ không phải nhân với một phân số — nhân số nguyên với `15/16` cắt cụt mọi giá trị nhỏ về 0 và một lối mòn nhạt sẽ biến mất sau đúng một đêm. `§7.6`
+- [x] **PG-37** Ruộng đi qua một mùa vụ — đất trống → mầm → xanh → chín, năm ngày một pha, và **lệch pha theo thửa**: cả làng gặt cùng một hôm trông như một cỗ máy, không như một cộng đồng. Số thửa đang chín hiện trên thanh trên — một tin tốt hiếm hoi trong một trò chơi mà phần lớn cảnh báo là tin xấu. `§8.2`, `§19.7`
+- [x] **PG-38** E2E cho **trò chơi**, không chỉ cho trang — `mow-server` phục vụ luôn `web/dist` nên cùng một gốc, không CORS ở giữa, đúng hình dạng người dùng nhận. Bộ e2e cũ chạy với một frontend **không có server**: nó chứng minh trang mount được và không chứng minh được gì về việc trò chơi có chạy. Ba lỗi tệ nhất của dự án này đã lọt qua đúng khoảng đó. `§P7.8`
+- [ ] **PG-34** **Yuu** — trợ lý của True God. `§3.1` nói bước 2 của chế độ True God là *"Hỏi Yuu phân tích nguyên nhân, hậu quả và các phương án can thiệp"*. Mọi câu Yuu nói phải trích dẫn một sự kiện có thật; câu nào không truy được thì **bị cắt**, không để người chơi tự đánh giá.
+- [ ] **PG-35** Tri thức cục bộ — cư dân quan sát nhau, nhớ, và có quan hệ suy ra từ ký ức. `§1.2.2` nói *"một cá thể chỉ biết điều nó cảm nhận, được dạy, suy luận hoặc nghe kể"*; hiện chưa ai để ý tới ai. Đây là ba mắt còn thiếu của vòng lặp câu chuyện ở `§3.2`.
+- [ ] **PG-36** Thế giới thở — khói bếp, lúa lay, nhịp bước, bóng theo hướng nắng. Lệch pha theo toạ độ ô chứ không bằng `Math.random()`: cùng một thế giới phải trông giống nhau ở hai lần mở.
+- [x] **PG-32** Sông là **lòng sông**, không phải cả lưu vực — `is_river` từng đúng ở **mọi** ô (nước tích lũy xấp xỉ bằng quãng đường đã đi trong ô lưu vực, nên gần như ô nào cũng vượt ngưỡng). Tầng vẽ trung thành tô lam mọi ô "sông" và cả thế giới hiện ra xanh lét. Không bài test nào bắt được: `true` ở mọi nơi vẫn là một giá trị hợp lệ. `§7.4`
+
+### G.7 — Nợ kỹ thuật đã biết
+
+> Ghi ra chứ không giấu. Mỗi dòng ở đây là một thứ **đang chạy đúng** nhưng sẽ
+> cắn về sau, và biết trước rẻ hơn phát hiện muộn.
+
+- [ ] **PD-01** Bốn catalog chữ song song — `i18n/index.ts` là bản chính, nhưng `app/menu/strings.ts`, `app/powers/strings.ts` và `app/chronicle/strings.ts` giữ khóa riêng. Cả ba đọc chung `locale()` nên **không** lệch ngôn ngữ, nhưng bốn nguồn sự thật là bốn chỗ để một khóa thiếu bản dịch mà không ai đỏ. Gộp về một.
+- [ ] **PD-02** `/api/tiles` vẫn là JSON. Bảng chỉ mục đã giảm ~90%, nhưng định dạng nhị phân (palette + `ArrayBuffer`) còn giảm tiếp và bỏ hẳn chi phí `JSON.parse`.
+- [ ] **PD-03** Hai lệnh commit của sub-agent (`843c1b2`, `6adb3ef`) gom cả công việc dở dang của agent khác; `6adb3ef` từng commit một `main.rs` không biên dịch được. Cần dọn lịch sử.
+- [ ] **PD-04** `mow-mind` (nhận thức LLM cho NPC) đã xong và đã kiểm, nhưng **chưa** nối vào vòng chơi — xem `PG-21`.
 
 ### G.5 — Đóng gói
 
@@ -348,6 +379,12 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++; if(/^- \[~\]/) n[p
 - 2026-08-31 — Viết lại `progress.md`: "147/147" đo *module có test*, không đo *có trò chơi*. Thước mới: `[x]` chỉ khi mở game ra và thấy nó. Thật: 34 xong / 117 có module chưa nối — PG
 - 2026-08-31 — Embedding đổi vLLM (28.8 GB) sang llama.cpp (6.98 GB); `--pooling last` là bắt buộc và sai cờ đó **vẫn trả 200 OK** với đúng 1024 chiều — PG
 - 2026-08-31 — `pointerdown` cho cú bấm im lặng không chạy, không test nào đỏ; chỉ lộ ra khi tự vào chơi. Đổi sang `click` — PG-10
+- 2026-08-31 — Bỏ thân xác của người chơi. Câu hỏi đầu tiên khi nhìn màn hình là *"tại sao true god lại có cơ thể?"*, và không có câu trả lời nào — PG-25
+- 2026-08-31 — Làng từng dựng vắt qua vách 64 m: `walkable` chỉ hỏi "có phải nước không". Thêm ngưỡng độ dốc, đo được 2 m → 147 ô, 3 m → 257, 4 m → 646 — PG-19
+- 2026-08-31 — `is_river` đúng ở **mọi** ô nên cả bản đồ hiện ra xanh lét. Một cờ luôn đúng là một cờ không mang thông tin, và không test nào bắt được — PG-32
+- 2026-08-31 — Server chưa từng trả lời preflight CORS, nên **mọi** `POST` từ trình duyệt chết bằng `TypeError: Failed to fetch`. `curl` không hỏi trước nên không test nào thấy — PG-26
+- 2026-08-31 — Lối mòn hiện ra sau 47 ngày trong thế giới: không ai vẽ con đường từ nhà ra giếng, nó mòn thành đường vì người ta đi qua đó mỗi ngày — PG-33
+- 2026-08-31 — "Lag khi scroll": mỗi nấc lăn chuột gọi `refresh()` = 4 round-trip HTTP + vẽ lại texture, ~20 lần mỗi giây. Phóng to là phép biến hình của khung nhìn, không phải câu hỏi về thế giới — PG-29
 - 2026-08-31 — Cấu hình mô hình thật: OpenRouter (`deepseek-v4-flash-0731`) + embedding cục bộ (`jina-embeddings-v5-text-small` trên vLLM). `.env` chỉ chứa bí mật; `config check`/`llm ping`/`embed probe` là ba mức kiểm — ngoài `progress.md`
 - 2026-08-31 — `MOW_*` là tiền tố của lớp cấu hình, nên đặt khóa vào `MOW_EMBEDDING_API_KEY` làm figment đọc nó thành field và chết bằng `unknown field`. Thành một luật trong `validate` — ngoài `progress.md`
 - 2026-08-31 — **Ba bộ test hợp đồng hạ tầng chạy thật lần đầu** (Postgres/NATS/Qdrant). Qdrant lộ `cutoff` `u64::MAX as i64 = -1`: truy xuất trả rỗng, không lỗi — cùng lớp lỗi đã sửa ở `mow-persist`, sống sót vì bài test chưa từng chạy — PC-20

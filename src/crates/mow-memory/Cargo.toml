@@ -1,0 +1,13 @@
+[package]
+name = "mow-memory"
+description = "Ky uc ca nhan (chung kien, nghe ke, mo dan) va quan he suy tu ky uc."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+mow-core = { workspace = true }
+mow-math = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }

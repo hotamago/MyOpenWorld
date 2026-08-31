@@ -1,0 +1,13 @@
+# Hạt vừa nảy. Xanh nhạt và thưa — nhìn từ trên xuống, ruộng vừa gieo
+# gần như vẫn là màu đất.
+id: "crop_sprout"
+name:
+  vi: "Mầm non"
+  en: "Sprouts"
+color: "#5c7038"
+hardness: 1
+liquid: false
+opaque: false
+walkable: true
+tags: [built, farm, crop]
+script: null

@@ -145,7 +145,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (state_tx, state_rx) = watch::channel::<Option<String>>(None);
     let (ack_tx, ack_rx) = mpsc::channel::<String>(32);
 
-    let pusher = tokio::spawn(push_loop(Arc::clone(&state.game), state.push_ms, cursor0, state_tx));
+    let pusher = tokio::spawn(push_loop(
+        Arc::clone(&state.game),
+        state.push_ms,
+        cursor0,
+        state_tx,
+    ));
     let writer = tokio::spawn(write_loop(tx, state_rx, ack_rx));
 
     // Vòng đọc chạy ngay tại đây, không `spawn`: khi nó kết thúc (client đóng,
@@ -284,7 +289,11 @@ async fn write_loop(
 }
 
 /// Đọc lệnh từ client cho tới khi kết nối đóng.
-async fn read_loop(rx: &mut SplitStream<WebSocket>, game: Arc<Mutex<Game>>, ack_tx: mpsc::Sender<String>) {
+async fn read_loop(
+    rx: &mut SplitStream<WebSocket>,
+    game: Arc<Mutex<Game>>,
+    ack_tx: mpsc::Sender<String>,
+) {
     while let Some(msg) = rx.next().await {
         let msg = match msg {
             Ok(m) => m,
@@ -386,7 +395,9 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("bind vào cổng 0 luôn thành công trên loopback");
-        let addr = listener.local_addr().expect("socket vừa bind phải có địa chỉ");
+        let addr = listener
+            .local_addr()
+            .expect("socket vừa bind phải có địa chỉ");
         tokio::spawn(async move {
             let _ = axum::serve(listener, app).await;
         });
@@ -466,9 +477,19 @@ mod tests {
             .await
             .expect("gửi cmd phải thành công");
 
-        let ack: J = match ws.next().await {
-            Some(Ok(WsMsg::Text(t))) => serde_json::from_str(&t).expect("ack phải là JSON"),
-            other => panic!("mong chờ ack, nhận {other:?}"),
+        // Cùng lý do với bài test trên: nhịp đẩy trạng thái 20ms của server
+        // test này có thể chen một khung `state` vào trước khi `ack` tới —
+        // bỏ qua nó thay vì coi khung **tiếp theo** luôn là `ack`.
+        let ack: J = loop {
+            match ws.next().await {
+                Some(Ok(WsMsg::Text(t))) => {
+                    let v: J = serde_json::from_str(&t).expect("khung phải là JSON");
+                    if v["t"] == "ack" {
+                        break v;
+                    }
+                }
+                other => panic!("mất kết nối trước khi thấy ack: {other:?}"),
+            }
         };
         assert_eq!(ack["t"], "ack");
         assert_eq!(ack["ok"], false);

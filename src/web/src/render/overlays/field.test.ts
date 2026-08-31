@@ -39,6 +39,7 @@ function batchOf(w: number, h: number, opt: BatchOptions = {}): TileBatch {
     biome: fill(n, "plains"),
     height: opt.height ?? fill(n, 0),
     river: opt.river ?? fill(n, 0),
+    worn: fill(n, 0),
   };
 }
 

@@ -27,6 +27,7 @@ function batchOf(w: number, h: number, built: Array<[number, number]>): TileBatc
     biome: Array.from({ length: n }, () => "grassland"),
     height: Array.from({ length: n }, () => 0),
     river: Array.from({ length: n }, () => 0),
+    worn: Array.from({ length: n }, () => 0),
   };
   for (const [x, y] of built) {
     b.built[y * w + x] = 1;
@@ -130,6 +131,7 @@ describe("paintTerrain — vách đá vẫn đọc được", () => {
         return gx < W / 2 ? 90 : 90 - (gx - W / 2) * 6;
       }),
       river: Array.from({ length: n }, () => 0),
+      worn: Array.from({ length: n }, () => 0),
     };
     const px = paintTerrain(b, new BlockPalette());
     const vals = Array.from({ length: n }, (_, i) => lum(px, i));
@@ -139,5 +141,59 @@ describe("paintTerrain — vách đá vẫn đọc được", () => {
     // phẳng hết thì mất luôn hình khối của địa hình, tức là đổi một lỗi này
     // lấy một lỗi khác.
     expect(Math.max(...vals) - Math.min(...vals)).toBeGreaterThan(20);
+  });
+});
+
+describe("paintTerrain — lối mòn", () => {
+  const W = 8;
+
+  function withWear(wear: number[]): TileBatch {
+    const n = W * W;
+    return {
+      x: 0,
+      y: 0,
+      w: W,
+      h: W,
+      z: 0,
+      material: Array.from({ length: n }, () => "air"),
+      surface: Array.from({ length: n }, () => "topsoil"),
+      drop: Array.from({ length: n }, () => 0),
+      built: Array.from({ length: n }, () => 0),
+      biome: Array.from({ length: n }, () => "grassland"),
+      height: Array.from({ length: n }, () => 0),
+      river: Array.from({ length: n }, () => 0),
+      worn: wear,
+    };
+  }
+
+  it("ô bị giẫm nhiều ngả về màu đất nện, khác ô chưa ai đi", () => {
+    const n = W * W;
+    const wear = Array.from({ length: n }, () => 0);
+    wear[3 * W + 3] = 255;
+    const px = paintTerrain(withWear(wear), new BlockPalette());
+    const trodden = px[(3 * W + 3) * 4] ?? 0;
+    const fresh = px[(3 * W + 6) * 4] ?? 0;
+    expect(trodden).not.toBe(fresh);
+  });
+
+  it("không ai đi thì không đổi gì cả", () => {
+    // Một lớp phủ luôn bật là một lớp phủ không mang thông tin.
+    const n = W * W;
+    const a = paintTerrain(withWear(Array.from({ length: n }, () => 0)), new BlockPalette());
+    const b = paintTerrain(withWear(Array.from({ length: n }, () => 0)), new BlockPalette());
+    expect(Array.from(a)).toEqual(Array.from(b));
+  });
+
+  it("mòn nhiều hơn thì ngả về đất nện nhiều hơn, đơn điệu", () => {
+    // Đơn điệu là điều kiện để mắt đọc được "chỗ này đi nhiều hơn chỗ kia".
+    const n = W * W;
+    const read = (w: number): number => {
+      const wear = Array.from({ length: n }, () => 0);
+      wear[2 * W + 2] = w;
+      const px = paintTerrain(withWear(wear), new BlockPalette());
+      return px[(2 * W + 2) * 4 + 2] ?? 0; // kênh lam: đất nện lam hơn topsoil
+    };
+    expect(read(120)).toBeGreaterThan(read(0));
+    expect(read(255)).toBeGreaterThan(read(120));
   });
 });

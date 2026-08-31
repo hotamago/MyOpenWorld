@@ -221,6 +221,26 @@ export function paintTerrain(batch: TileBatch, palette: BlockPalette): Uint8Clam
         if (rightDiff || downDiff) light *= 0.9;
       }
 
+      // ── Lối mòn ────────────────────────────────────────────────────────
+      //
+      // Đất mòn đi ở chỗ người ta thật sự đi qua. Không ai vẽ con đường từ nhà
+      // thợ rèn ra giếng: nó hiện ra vì hai mươi ngày nay ngày nào cũng có
+      // người đi, và nó mờ đi ở nơi không còn ai đi nữa. Đây là thứ rẻ nhất
+      // biến một bản đồ **đúng** thành một bản đồ **có người sống**.
+      //
+      // Trộn về màu đất nện chứ không tối đi: một lối mòn tối hơn nền trông
+      // như một cái bóng, còn một lối mòn ngả nâu xám trông như đất bị giẫm.
+      // Trần 0.62 để vật liệu bên dưới không bao giờ biến mất hẳn — `§18.5`
+      // nói màu nền mang **vật liệu**, và lối mòn là một lớp phủ, không phải
+      // một vật liệu mới.
+      const wear = batch.worn[i] ?? 0;
+      if (wear > 0 && material === "air") {
+        const k = Math.min(0.62, wear / 255) ;
+        r = r * (1 - k) + 0x82 * k;
+        g = g * (1 - k) + 0x6b * k;
+        b = b * (1 - k) + 0x48 * k;
+      }
+
       // Lòng sông: sáng và lệch lam, đủ để lần theo bằng mắt. Đây là **overlay
       // riêng**, không phải đổi màu vật liệu — sông vẫn nằm trên đất.
       if ((batch.river[i] ?? 0) === 1) {

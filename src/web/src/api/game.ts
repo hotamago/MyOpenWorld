@@ -16,7 +16,7 @@
  */
 
 /** Địa chỉ server. Cùng origin khi server phục vụ luôn giao diện. */
-const ORIGIN =
+export const ORIGIN =
   (import.meta as { env?: Record<string, string> }).env?.["VITE_MOW_SERVER"] ??
   (globalThis.location?.port === "5173" ? "http://localhost:17777" : "");
 
@@ -40,6 +40,8 @@ export interface WorldMeta {
   /** Tốc độ thời gian, phần nghìn. `1000` là ×1, `0` là tạm dừng. */
   speed_milli: number;
   max_speed_milli: number;
+  /** Số thửa ruộng đang chín — thứ báo trước một ngày no đủ. */
+  ripe_fields: number;
   /** Tổng số bước còn lại của mọi kế hoạch đi đang chạy. */
   steps_remaining: number;
 }
@@ -73,6 +75,14 @@ export interface TileBatch {
   biome: string[];
   height: number[];
   river: number[];
+  /**
+   * Độ mòn của lối đi, `0..=255`.
+   *
+   * Không phải trang trí: nó đếm số bàn chân đã đặt xuống ô này, và nó nằm
+   * trong `state_hash`. Con đường giữa nhà và ruộng không do ai vẽ — nó hiện
+   * ra vì người ta đi qua đó mỗi ngày, và nó mờ đi ở nơi không còn ai đi.
+   */
+  worn: number[];
 }
 
 /**
@@ -96,6 +106,7 @@ interface TileBatchWire {
   built: number[];
   height: number[];
   river: number[];
+  worn?: number[];
 }
 
 /**
@@ -173,7 +184,53 @@ export function decodeTiles(raw: unknown): TileBatch {
     built: batch.built,
     height: batch.height,
     river: batch.river,
+    // Server cũ chưa gửi `worn`. Mảng 0 chứ không phải `undefined`: tầng vẽ
+    // đọc nó trong vòng lặp nóng, và một lần kiểm `undefined` mỗi ô là chi phí
+    // trả cho một tình huống chỉ xảy ra lúc phát triển.
+    worn: batch.worn ?? new Array<number>(batch.material.length).fill(0),
   };
+}
+
+/**
+ * Một câu Yuu nói, **kèm** những sự kiện chứng minh nó.
+ *
+ * `cites` không phải trang trí. Server đã cắt bỏ mọi câu không truy được về một
+ * sự kiện có thật trước khi gửi xuống — nên một câu tới được đây là một câu đã
+ * đứng được trên bằng chứng. Giao diện biến mỗi số thành một nút mở đúng mắt
+ * xích đó trong chuỗi nhân quả.
+ */
+export interface YuuLine {
+  text: string;
+  cites: number[];
+}
+
+/** Một phương án can thiệp Yuu đề xuất, ánh xạ về một quyền năng có thật. */
+export interface YuuProposal {
+  power: string;
+  why: string;
+  cites: number[];
+}
+
+/**
+ * Một câu **đã bị cắt**, và lý do.
+ *
+ * Hiện ra chứ không giấu: một hệ thống lặng lẽ cắt bỏ là một hệ thống không ai
+ * gỡ lỗi được, và người chơi có quyền biết Yuu vừa định nói gì mà không chứng
+ * minh được.
+ */
+export interface YuuStripped {
+  text: string;
+  reason: string;
+}
+
+export interface YuuAnswer {
+  lines: YuuLine[];
+  proposals: YuuProposal[];
+  stripped: YuuStripped[];
+  /** Câu trả lời này có model đứng sau, hay chỉ là đồ thị nhân quả đọc thẳng. */
+  grounded: boolean;
+  /** Trạng thái thế giới lúc phân tích — câu trả lời chỉ đúng với nó. */
+  base_hash: string;
 }
 
 /** Một vật liệu như content pack khai. */
@@ -371,6 +428,19 @@ export const api = {
     postJson<{ seed: string; state_hash: string; content_error?: string }>("/api/genesis", {
       seed,
     }),
+
+  /**
+   * Hỏi Yuu.
+   *
+   * Không đổi thế giới: Yuu **đọc** đồ thị nhân quả và các con số, rồi nói lại.
+   * Mọi phương án nó đề xuất vẫn phải đi qua `preview` rồi `commit` như một ý
+   * chỉ bình thường — `§1.2.4` nói LLM là tầng nhận thức, không phải engine.
+   */
+  yuu: (question: string, entity?: string) =>
+    postJson<YuuAnswer>("/api/yuu", entity ? { question, entity } : { question }),
+
+  /** Câu hỏi đặt sẵn, để giao diện hiện thành nút. */
+  yuuPrompts: () => getJson<{ questions: string[] }>("/api/yuu/prompts"),
 
   /** Đổi lát `z`. Là **query**, không ghi vào thế giới (`§P6.8`). */
   setLayer: (z: number) => postJson<{ z: number; state_hash: string }>("/api/view", { z }),

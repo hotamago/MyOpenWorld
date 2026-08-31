@@ -51,16 +51,44 @@ export default defineConfig({
       testMatch: /desktop\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      // Trò chơi **thật**: giao diện đã build được chính `mow-server` phục vụ,
+      // nên không có CORS ở giữa và hình dạng đúng bằng hình dạng người dùng
+      // nhận. Hai project trên chạy với một frontend **không có server** —
+      // chúng kiểm được rằng trang mount, và không kiểm được rằng trò chơi
+      // chạy. Bộ này lấp đúng khoảng đó.
+      name: "game",
+      testMatch: /game\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:17781" },
+    },
   ],
 
-  webServer: {
-    // `--host 127.0.0.1` là bắt buộc, không phải trang trí: mặc định `vite
-    // preview` bind `localhost`, và trên Windows `localhost` giải ra `::1`
-    // trước — nên một `url` viết `127.0.0.1` sẽ chờ tới hết giờ trong khi
-    // server đã sẵn sàng từ lâu.
-    command: "pnpm exec vite preview --port 4173 --strictPort --host 127.0.0.1",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      // `--host 127.0.0.1` là bắt buộc, không phải trang trí: mặc định `vite
+      // preview` bind `localhost`, và trên Windows `localhost` giải ra `::1`
+      // trước — nên một `url` viết `127.0.0.1` sẽ chờ tới hết giờ trong khi
+      // server đã sẵn sàng từ lâu.
+      command: "pnpm exec vite preview --port 4173 --strictPort --host 127.0.0.1",
+      url: "http://127.0.0.1:4173",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // Server thật, phục vụ luôn `web/dist` nên **cùng một gốc** với trang.
+      //
+      // Cùng gốc là có chủ ý: không có `--dev`, không có CORS, và vì thế bộ này
+      // kiểm đúng hình dạng người dùng nhận. Một cổng riêng (17781) để không
+      // giành với server đang chạy tay ở 17777.
+      //
+      // `cargo run` tự build trước, nên không cần một bước build riêng — nhưng
+      // lần chạy đầu có thể lâu, vì thế trần thời gian rộng.
+      command:
+        "cargo run -q -p mow-server -- --port 17781 --seed 42 --web web/dist --tick-ms 60",
+      cwd: "..",
+      url: "http://127.0.0.1:17781/api/meta",
+      reuseExistingServer: !process.env.CI,
+      timeout: 600_000,
+    },
+  ],
 });

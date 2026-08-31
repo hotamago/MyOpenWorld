@@ -135,6 +135,8 @@ pub fn route(g: &mut Game, method: &str, path: &str, query: &str, body: &str) ->
         ("POST", "/api/goto") => goto(g, body),
         ("POST", "/api/look") => look(g, body),
         ("POST", "/api/genesis") => genesis(g, body),
+        ("GET", "/api/yuu/prompts") => yuu_prompts(),
+        ("POST", "/api/yuu") => yuu(g, body),
         ("POST", "/api/preview") => preview(g, body),
         ("POST", "/api/commit") => commit(g, body),
         ("POST", "/api/build") => build(g, body),
@@ -167,6 +169,9 @@ fn meta(g: &Game) -> Reply {
         // Độ dài lịch sử: xem trước phát lại toàn bộ nhật ký, nên con số này
         // là thứ báo trước khi console True God bắt đầu chậm.
         "built_cells": g.built_cells(),
+        // Số thửa ruộng đang chín. Một con số nhỏ nhưng nó là thứ báo trước một
+        // ngày no đủ — và là lý do người chơi ngước lên nhìn đồng ruộng.
+        "ripe_fields": g.ripe_fields(),
         "history_len": g.journal_len(),
         "history_limit": crate::game::PREVIEW_JOURNAL_LIMIT,
         "max_speed_milli": crate::game::MAX_SPEED_MILLI,
@@ -254,6 +259,7 @@ fn tiles(g: &mut Game, query: &str) -> Reply {
     let mut biome = Vec::with_capacity(n);
     let mut height = Vec::with_capacity(n);
     let mut river = Vec::with_capacity(n);
+    let mut worn = Vec::with_capacity(n);
 
     for dy in 0..h {
         for dx in 0..w {
@@ -265,6 +271,10 @@ fn tiles(g: &mut Game, query: &str) -> Reply {
             biome.push(names.intern(t.biome));
             height.push(J::from(t.height));
             river.push(J::from(u8::from(t.river)));
+            // Lối mòn: `0..=255`. Không phải một lớp phủ trang trí — nó là dấu
+            // vết của việc người ta thật sự đã đi qua đây, và nó ở trong
+            // `state_hash`.
+            worn.push(J::from(g.trample_at(x0 + dx, y0 + dy)));
         }
     }
 
@@ -280,6 +290,7 @@ fn tiles(g: &mut Game, query: &str) -> Reply {
         "biome": biome,
         "height": height,
         "river": river,
+        "worn": worn,
     }))
 }
 
@@ -603,6 +614,52 @@ fn parse_entity(s: &str) -> Option<EntityId> {
     s.parse::<u64>().ok().filter(|v| *v != 0).map(EntityId::new)
 }
 
+/// Câu hỏi đặt sẵn cho Yuu.
+fn yuu_prompts() -> Reply {
+    Reply::ok(&json!({ "questions": mow_yuu::suggested_questions() }))
+}
+
+/// Số sự kiện gần nhất đưa vào hồ sơ của Yuu.
+///
+/// Đủ để một chuỗi nhân quả nhiều mắt nằm trọn trong đó, đủ ít để hồ sơ không
+/// thành một bãi rác mà mọi câu trả lời đều tìm được một trích dẫn hờ hững.
+const YUU_WINDOW: usize = 80;
+
+/// Hỏi Yuu.
+///
+/// Hiện chạy **không có model**: `mow_yuu::without_model` đọc thẳng đồ thị nhân
+/// quả thành câu. Đó không phải một chỗ tạm bợ — nó là **đáy** mà mọi câu trả
+/// lời của Yuu phải đứng trên, và là thứ giữ lời hứa "không bao giờ một màn
+/// hình trống" khi provider hỏng, hết hạn mức, hoặc chưa cấu hình.
+///
+/// Khi nối model vào (`§20.7`, vai `yuu`), chỗ này đổi thành `Yuu::ask`, và
+/// `read_answer` vẫn cắt mọi câu không truy được — hợp đồng không đổi.
+fn yuu(g: &mut Game, body: &str) -> Reply {
+    let j: J = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(e) => return Reply::loi(400, &format!("thân không phải JSON: {e}")),
+    };
+    let Some(q) = j.get("question").and_then(J::as_str) else {
+        return Reply::loi(400, "thiếu `question`");
+    };
+    let d = g.dossier(YUU_WINDOW);
+    let a = mow_yuu::without_model(&d, q);
+    Reply::ok(&json!({
+        "lines": a.lines.iter().map(|l| json!({ "text": l.text, "cites": l.cites })).collect::<Vec<_>>(),
+        "proposals": a.proposals.iter()
+            .map(|p| json!({ "power": p.power, "why": p.why, "cites": p.cites }))
+            .collect::<Vec<_>>(),
+        "stripped": a.stripped.iter()
+            .map(|s| json!({ "text": s.text, "reason": format!("{:?}", s.reason) }))
+            .collect::<Vec<_>>(),
+        // Nói thẳng rằng chưa có model đứng sau. Giấu điều đó là để người chơi
+        // tưởng mình đang nói chuyện với một trí tuệ trong khi đang đọc một
+        // bản tóm tắt máy móc.
+        "grounded": false,
+        "base_hash": g.state_hash().to_hex(),
+    }))
+}
+
 /// Khởi nguyên một thế giới mới từ seed người chơi chọn.
 ///
 /// Thay **toàn bộ** `Game` chứ không cố gột rửa cái cũ: thế giới là hàm thuần
@@ -763,6 +820,63 @@ mod tests {
         // mang seed mới nhưng còn sót trạng thái của ván trước.
         let sach = Game::new(777);
         assert_eq!(sau["state_hash"], sach.state_hash().to_hex());
+    }
+
+    #[test]
+    fn yuu_tra_loi_duoc_ba_cau_goi_y() {
+        // `without_model` là **đáy** mà mọi câu trả lời của Yuu phải đứng trên.
+        // Nếu nó không trả lời nổi chính ba câu mà giao diện hiện thành nút thì
+        // thiết kế sai, không phải model sai.
+        let mut g = g();
+        for _ in 0..600 {
+            g.tick_once();
+        }
+        let qs = get(&mut g, "/api/yuu/prompts", "");
+        let qs = qs["questions"].as_array().expect("thiếu `questions`");
+        assert_eq!(qs.len(), 3);
+
+        for q in qs {
+            let body = json!({ "question": q }).to_string();
+            let r = route(&mut g, "POST", "/api/yuu", "", &body);
+            assert_eq!(r.status, 200, "{}", r.body);
+            let v: J = serde_json::from_str(&r.body).unwrap();
+            let lines = v["lines"].as_array().expect("thiếu `lines`");
+            assert!(!lines.is_empty(), "Yuu không nói được gì cho câu {q}");
+            // Mọi câu phải mang ít nhất một trích dẫn — đó là điều kiện để nó
+            // được hiện ra chút nào.
+            for l in lines {
+                let cites = l["cites"].as_array().expect("thiếu `cites`");
+                assert!(!cites.is_empty(), "một câu không có trích dẫn đã lọt qua: {l}");
+            }
+        }
+    }
+
+    #[test]
+    fn moi_trich_dan_cua_yuu_tro_toi_mot_su_kien_co_that() {
+        // Đây là lời hứa cốt lõi: một trích dẫn tới `seq` không tồn tại thì tệ
+        // hơn không có trích dẫn, vì người xem sẽ tin nó.
+        let mut g = g();
+        for _ in 0..600 {
+            g.tick_once();
+        }
+        let that: std::collections::BTreeSet<u64> =
+            g.sim().log().iter().map(|e| e.seq.0).collect();
+        let body = json!({ "question": "Dân làng đang gặp chuyện gì?" }).to_string();
+        let r = route(&mut g, "POST", "/api/yuu", "", &body);
+        let v: J = serde_json::from_str(&r.body).unwrap();
+        for l in v["lines"].as_array().unwrap() {
+            for c in l["cites"].as_array().unwrap() {
+                let seq = c.as_u64().unwrap();
+                assert!(that.contains(&seq), "trích dẫn tới sự kiện không tồn tại: {seq}");
+            }
+        }
+    }
+
+    #[test]
+    fn yuu_thieu_cau_hoi_thi_bao_loi() {
+        let mut g = g();
+        let r = route(&mut g, "POST", "/api/yuu", "", &json!({}).to_string());
+        assert_eq!(r.status, 400, "{}", r.body);
     }
 
     #[test]
@@ -977,6 +1091,9 @@ mod tests {
             "biome": expand("biome"),
             "height": v["height"],
             "river": v["river"],
+            // `worn` cũng có mặt ở cả hai kiểu: bài này so **chuỗi lặp lại với
+            // chỉ mục**, không so xem kiểu nào có nhiều trường hơn.
+            "worn": v["worn"],
         });
         let old_len = old.to_string().len();
 

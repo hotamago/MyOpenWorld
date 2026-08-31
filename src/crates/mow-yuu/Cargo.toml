@@ -10,8 +10,9 @@ license.workspace = true
 mow-core = { workspace = true }
 mow-math = { workspace = true }
 mow-magic = { workspace = true }
+# `mow-llm` chua co trong `[workspace.dependencies]` (giong ly do mow-mind
+# dung path thay vi workspace), nen dung path o day cho dong bo voi mow-mind.
+mow-llm = { path = "../mow-llm" }
 serde = { workspace = true }
-thiserror = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+thiserror = { workspace = true }

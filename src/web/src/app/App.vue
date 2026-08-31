@@ -16,14 +16,16 @@
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import {
   api,
-  entityRef,
   SPEED_STEPS,
   type CauseLink,
   type Entity,
   type Foresight,
   type WorldEvent,
+  type YuuAnswer,
   type WorldMeta,
 } from "@/api/game";
+import { connect, type Socket, type StateFrame } from "@/api/socket";
+import { ORIGIN } from "@/api/game";
 import { WorldView } from "@/render/world";
 import { BlockPalette, paletteFrom } from "@/render/blocks";
 import { dayPhase } from "@/render/terrain";
@@ -41,7 +43,7 @@ import {
   type Settings,
 } from "./menu";
 import { ChroniclePanel } from "./chronicle";
-import { PowerDock, fieldsFor, readiness, tpRaw, type Power } from "./powers";
+import { POWERS, PowerDock, fieldsFor, readiness, tpRaw, type Power } from "./powers";
 import DataOverlay from "./panels/DataOverlay.vue";
 import ObservePanel from "./panels/ObservePanel.vue";
 import { followStep } from "./observe";
@@ -84,9 +86,6 @@ const pendingWill = ref<{ kind: string; fields: Record<string, unknown> } | null
  * người chơi không xem được bản đồ nữa mà không vô tình sai khiến ai.
  */
 const guiding = ref(false);
-/** Vật liệu đang cầm để khắc. `null` là chuột trở lại chế độ soi xét. */
-const brush = ref<string | null>(null);
-/** Vật liệu người xây được — lọc theo thẻ `built` của content pack. */
 const buildable = computed(() =>
   palette.value.ids().filter((id) => palette.value.get(id)?.tags.includes("built")),
 );
@@ -136,6 +135,8 @@ async function enterWorld(seed: number): Promise<void> {
     await applySpeed(settings.value.speedIndex);
     await refresh();
     await refreshMinimap().catch(() => {});
+    yuuAnswer.value = null;
+    yuuPrompts.value = (await api.yuuPrompts().catch(() => ({ questions: [] }))).questions;
   } catch (e) {
     errorText.value = e instanceof Error ? e.message : String(e);
     status.value = t("app.failed");
@@ -162,7 +163,7 @@ const lastBatch = shallowRef<Awaited<ReturnType<typeof api.tiles>> | null>(null)
  * Đè **lên** canvas chứ không thu hẹp nó: một tấm bản đồ bị cắt mất một phần ba
  * mỗi khi người chơi muốn đọc một dòng lịch sử là một tấm bản đồ luôn nhỏ.
  */
-type Drawer = "observe" | "layers" | "chronicle" | "cause";
+type Drawer = "observe" | "layers" | "chronicle" | "cause" | "yuu";
 const drawer = ref<Drawer | null>(null);
 
 /** Các ngăn, theo đúng thứ tự trên thanh công cụ trái. */
@@ -171,6 +172,7 @@ const DRAWERS = [
   { id: "layers", glyph: "🗺", label: "rail.layers" },
   { id: "chronicle", glyph: "📜", label: "rail.chronicle" },
   { id: "cause", glyph: "🜁", label: "rail.cause" },
+  { id: "yuu", glyph: "🕯", label: "rail.yuu" },
 ] as const satisfies readonly { id: Drawer; glyph: string; label: MessageKey }[];
 
 /**
@@ -204,6 +206,39 @@ function toggleDrawer(d: Drawer): void {
   drawer.value = drawer.value === d ? null : d;
 }
 
+// ── Yuu ─────────────────────────────────────────────────────────────────────
+/**
+ * Trợ lý của True God.
+ *
+ * `§3.1` đặt nó ở bước 2 của chế độ True God: *"Hỏi Yuu phân tích nguyên nhân,
+ * hậu quả và các phương án can thiệp"*. Nó **không** phải một chatbot: engine
+ * đã có sự thật, Yuu chỉ đọc đồ thị nhân quả và các con số thành tiếng người.
+ *
+ * Mọi câu nó nói mà không truy được về một sự kiện có thật đều bị server cắt
+ * **trước khi** gửi xuống. Giao diện hiện cả phần bị cắt — giấu nó đi thì không
+ * ai gỡ lỗi được, và người chơi có quyền biết Yuu vừa định nói gì mà không
+ * chứng minh được.
+ */
+const yuuAnswer = ref<YuuAnswer | null>(null);
+const yuuAsking = ref(false);
+const yuuQuestion = ref("");
+const yuuPrompts = ref<string[]>([]);
+
+async function askYuu(q: string): Promise<void> {
+  const question = q.trim();
+  if (!question || yuuAsking.value) return;
+  yuuAsking.value = true;
+  yuuQuestion.value = question;
+  try {
+    const target = godTarget.value?.kind === "being" ? godTarget.value.id : undefined;
+    yuuAnswer.value = await api.yuu(question, target);
+  } catch (e) {
+    errorText.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    yuuAsking.value = false;
+  }
+}
+
 // ── Quyền năng của thần ─────────────────────────────────────────────────────
 /**
  * Quyền năng đang cầm trên tay, hoặc `null`.
@@ -219,11 +254,20 @@ const powerParams = ref<Record<string, string | number>>({});
 /** Ô đang chọn — khác `hovered`, vốn chỉ theo con trỏ. */
 const pickedTile = ref<{ x: number; y: number } | null>(null);
 
+/**
+ * Thứ đang chọn có phải một **sinh mệnh** không.
+ *
+ * Vật phẩm cũng chọn được — kho lương của làng nằm trên đất và bấm được — nhưng
+ * "Ban no đủ" cho một ổ bánh thì không có nghĩa gì. Trước khi tách ra, mọi
+ * quyền năng cần sinh mệnh đều sáng lên khi người chơi bấm vào một ổ bánh.
+ */
+const isBeingSelected = computed(() => godTarget.value?.kind === "being");
+
 /** Quyền năng đang cầm đã đủ điều kiện thi hành chưa. */
 const powerReady = computed(() => {
   const p = activePower.value;
   if (!p) return false;
-  return readiness(p, { being: !!godTarget.value, tile: !!pickedTile.value }).ready;
+  return readiness(p, { being: isBeingSelected.value, tile: !!pickedTile.value }).ready;
 });
 
 /** Tham số còn thiếu của quyền năng đang cầm. */
@@ -249,11 +293,16 @@ function pickPower(p: Power): void {
     if (q.kind === "int" && q.def !== undefined) powerParams.value[q.key] = q.def;
     if (q.kind === "choice" && q.options?.[0]) powerParams.value[q.key] = q.options[0];
   }
-  brush.value = null;
   guiding.value = false;
   godNote.value = "";
   // Quyền năng không cần trỏ vào gì thì thi hành ngay.
   if (p.needs === "none" && !p.params?.length) void castPower();
+}
+
+/** Cầm lấy một quyền năng theo `id` — Yuu đề xuất bằng tên, không bằng đối tượng. */
+function pickPowerById(id: string): void {
+  const p = POWERS.find((q) => q.id === id);
+  if (p) pickPower(p);
 }
 
 function dropPower(): void {
@@ -272,7 +321,7 @@ function dropPower(): void {
 async function castPower(): Promise<void> {
   const p = activePower.value;
   if (!p) return;
-  const r = readiness(p, { being: !!godTarget.value, tile: !!pickedTile.value });
+  const r = readiness(p, { being: isBeingSelected.value, tile: !!pickedTile.value });
   if (!r.ready) {
     godNote.value = tpRaw(`reason.${r.reason}`);
     return;
@@ -360,8 +409,16 @@ watch(
 );
 
 const causeChain = ref<CauseLink[] | null>(null);
-/** Nhãn tên nổi trên canvas — HTML, không phải `PIXI.Text` (`§P6.9.2`). */
-const labels = ref<{ id: string; text: string; left: number; top: number; self: boolean }[]>([]);
+/**
+ * Kênh đẩy trạng thái. `null` khi chưa nối hoặc đã rơi về hỏi lại bằng HTTP.
+ *
+ * Server **đẩy** một khung `state` mỗi khi thế giới đổi, và bỏ qua khung tin
+ * khi `state_hash` không đổi. Nhịp hỏi lại 400 ms cũ vừa quá thưa (màn hình
+ * hiện một quá khứ) vừa quá dày (phần lớn câu trả lời giống hệt câu trước).
+ */
+let socket: Socket | null = null;
+/** Kênh có đang sống không — quyết định có cần vòng hỏi lại dự phòng hay không. */
+const pushing = ref(false);
 
 let cursor = 0;
 /** Lát `z` của lô ô đang giữ — đổi lát thì phải nạp lại dù khung nhìn không dời. */
@@ -386,7 +443,92 @@ const phaseLabel = computed(() => {
   return t(`time.${dayPhase(m.tick)}` as "time.day");
 });
 
+/**
+ * Chỉ **một** vòng hỏi lại được chạy tại một thời điểm.
+ *
+ * `setInterval` không đợi vòng trước xong. Không có chốt này thì lúc mạng chậm
+ * sẽ có nhiều `refresh` cùng sống, và một phản hồi **cũ** có thể về sau một
+ * phản hồi mới rồi ghi đè lên trạng thái mới hơn — thế giới nhảy ngược một
+ * nhịp mà không ai giải thích được.
+ *
+ * Trễ hạn thì **đánh dấu** chứ không mở thêm một yêu cầu: vòng đang chạy sẽ
+ * chạy tiếp một lần nữa ngay khi xong.
+ */
+let refreshing = false;
+let refreshQueued = false;
+
 async function refresh(): Promise<void> {
+  if (refreshing) {
+    refreshQueued = true;
+    return;
+  }
+  refreshing = true;
+  try {
+    await refreshOnce();
+  } finally {
+    refreshing = false;
+  }
+  if (refreshQueued) {
+    refreshQueued = false;
+    await refresh();
+  }
+}
+
+/**
+ * Áp một khung `state` do server đẩy xuống.
+ *
+ * Cùng phần vẽ với `refreshOnce`, nhưng **không** hỏi gì thêm: `meta`,
+ * `entities` và `events` đã nằm trong khung tin. Chỉ lô ô mới có thể phải hỏi
+ * lại, và chỉ khi khung nhìn đã trượt ra khỏi phần đã tải.
+ */
+async function applyFrame(f: StateFrame): Promise<void> {
+  const v = view.value;
+  if (!v || screen.value !== "world") return;
+  meta.value = f.meta;
+  entities.value = f.entities;
+  if (godTarget.value) {
+    godTarget.value = f.entities.find((e) => e.id === godTarget.value?.id) ?? null;
+  }
+  if (f.events.length) events.value = [...f.events, ...events.value].slice(0, 200);
+  await paint(f.meta, f.entities);
+  status.value = t("app.running");
+  errorText.value = "";
+}
+
+/**
+ * Phần vẽ dùng chung cho cả hai đường: đẩy và hỏi lại.
+ *
+ * Tách ra vì đây là chỗ duy nhất được chạm vào tầng vẽ. Hai bản sao của nó là
+ * hai chỗ để chúng lệch nhau, và lệch ở đây nghĩa là màn hình khác nhau tùy
+ * theo hôm đó WebSocket có nối được hay không.
+ */
+async function paint(m: WorldMeta, list: Entity[]): Promise<void> {
+  const v = view.value;
+  if (!v) return;
+
+  const anchor = watched.value;
+  const want = anchor
+    ? { x: anchor.x, y: anchor.y }
+    : (camera.value ?? { x: m.eye[0], y: m.eye[1] });
+  const step = followStep(camera.value ?? want, want);
+  camera.value = { x: step.x, y: step.y };
+
+  if (!v.covers(step.x, step.y) || batchZ !== m.z) {
+    const { w, h } = v.viewportTiles();
+    const batch = await api.tiles(step.x - (w >> 1), step.y - (h >> 1), w, h, m.z);
+    batchZ = m.z;
+    lastBatch.value = batch;
+    v.setTerrain(batch, m.tick);
+  } else {
+    v.retint(m.tick);
+  }
+  v.setCenter(step.x, step.y);
+  v.setEntities(list);
+  refreshLabels(list);
+  if (m.steps_remaining === 0) v.setPath([]);
+}
+
+async function refreshOnce(): Promise<void> {
   const v = view.value;
   if (!v) return;
 
@@ -407,31 +549,7 @@ async function refresh(): Promise<void> {
     godTarget.value = list.find((e) => e.id === godTarget.value?.id) ?? null;
   }
 
-  // Bám theo ai thì lấy người đó làm tâm; không thì lấy chỗ vị thần đang nhìn.
-  // `followStep` có vùng chết, nên mục tiêu nhích một ô không làm bản đồ giật.
-  const anchor = watched.value;
-  const want = anchor ? { x: anchor.x, y: anchor.y } : { x: m.eye[0], y: m.eye[1] };
-  const step = followStep(camera.value ?? want, want);
-  camera.value = { x: step.x, y: step.y };
-  const cx = step.x;
-  const cy = step.y;
-  // Lô ô là thứ đắt nhất trong vòng này (vài nghìn ô, vài trăm KB JSON). Chỉ
-  // hỏi lại khi lô đang có **không còn phủ** khung nhìn, hoặc khi lát `z` đổi.
-  // Vì lô được lấy dư `BATCH_MARGIN` ô mỗi phía, phần lớn cú kéo trượt bên
-  // trong dữ liệu đã có và không tốn một byte nào.
-  if (!v.covers(cx, cy) || batchZ !== m.z) {
-    const { w, h } = v.viewportTiles();
-    const batch = await api.tiles(cx - (w >> 1), cy - (h >> 1), w, h, m.z);
-    batchZ = m.z;
-    lastBatch.value = batch;
-    v.setTerrain(batch, m.tick);
-  } else {
-    v.retint(m.tick);
-  }
-  v.setCenter(cx, cy);
-  v.setEntities(list);
-  refreshLabels(list);
-  if (m.steps_remaining === 0) v.setPath([]);
+  await paint(m, list);
 
   cursor = ev.cursor;
   if (ev.events.length) events.value = [...ev.events, ...events.value].slice(0, 200);
@@ -442,18 +560,34 @@ async function refresh(): Promise<void> {
   errorText.value = "";
 }
 
+/**
+ * Giao nhãn tên cho tầng vẽ.
+ *
+ * Trước đây đây là một mảng `<span>` HTML đặt tuyệt đối lên trên canvas, và mỗi
+ * lần cập nhật trình duyệt phải chạy lại Layout/Style cho hàng chục phần tử —
+ * một đợt reflow DOM ngay giữa lúc người chơi đang kéo bản đồ. Giờ chữ nằm
+ * trong cùng cây hiển thị với thế giới, nên nó trôi theo camera miễn phí.
+ *
+ * Chỉ sinh vật mới có nhãn: một bãi vật phẩm sẽ phủ kín bản đồ bằng chữ.
+ */
 function refreshLabels(list: Entity[]): void {
   const v = view.value;
   if (!v) return;
-  // Chỉ đặt nhãn cho sinh vật: một bãi vật phẩm sẽ phủ kín bản đồ bằng chữ.
-  labels.value = list
-    .filter((e) => e.kind === "being")
-    .flatMap((e) => {
-      const p = v.screenOf(e.x, e.y);
-      return p
-        ? [{ id: e.id, text: e.name, left: p.left, top: p.top, self: e.id === godTarget.value?.id }]
-        : [];
-    });
+  if (!settings.value.showLabels) {
+    v.setLabels([]);
+    return;
+  }
+  v.setLabels(
+    list
+      .filter((e) => e.kind === "being")
+      .map((e) => ({
+        id: e.id,
+        text: e.name,
+        x: e.x,
+        y: e.y,
+        highlight: e.id === godTarget.value?.id,
+      })),
+  );
 }
 
 /** Soạn một ý chỉ rồi nhìn trước ngay — không có bước "bấm xem trước" thừa. */
@@ -499,38 +633,6 @@ function withdraw(): void {
   foresight.value = null;
   pendingWill.value = null;
   view.value?.setDiff([]);
-}
-
-function godAct(kind: "feed" | "starve"): void {
-  const target = godTarget.value;
-  if (!target) return;
-  const value = kind === "feed" ? 0 : 9_000;
-  void foresee("truegod.set_attr", {
-    entity: entityRef(target.id),
-    key: "need.hunger",
-    value,
-  });
-}
-
-/**
- * Khiến người đang chọn nhặt vật phẩm nằm cạnh họ.
- *
- * Vị thần không cúi xuống nhặt gì cả — ngài **bảo** ai đó nhặt. Lệnh vẫn đi qua
- * `core.take`, nên mọi điều kiện tiên quyết của thế giới (phải nằm trên đất,
- * phải trong tầm với) vẫn chặn được như thường: `§10.4` cho engine quyền từ
- * chối, và một vị thần bị từ chối vẫn đúng hơn một vị thần đi vòng qua luật.
- */
-async function bidTake(): Promise<void> {
-  const who = godTarget.value;
-  if (!who) return;
-  const near = entities.value.find(
-    (x) => x.kind === "item" && Math.abs(x.x - who.x) <= 1 && Math.abs(x.y - who.y) <= 1,
-  );
-  if (!near) {
-    godNote.value = t("panel.controls.nothingHere");
-    return;
-  }
-  await send("core.take", { who: entityRef(who.id), what: entityRef(near.id) });
 }
 
 function selectTarget(e: Entity): void {
@@ -582,8 +684,14 @@ async function onMinimapClick(e: MouseEvent): Promise<void> {
  */
 async function lookAt(x: number, y: number): Promise<void> {
   following.value = false;
+  // Đặt camera **trước** khi gọi mạng: cái nhìn là trạng thái khung nhìn, và
+  // client sở hữu nó. Đợi server xác nhận rồi mới dời là một vòng trễ cho một
+  // thứ không cần ai xác nhận (`§P6.8`).
+  camera.value = { x, y };
+  view.value?.setCenter(x, y);
   try {
     await api.look(x, y);
+    if (!view.value?.covers(x, y)) batchZ = Number.NaN;
     await refresh();
   } catch (err) {
     errorText.value = err instanceof Error ? err.message : String(err);
@@ -651,8 +759,7 @@ function onKeyDown(e: KeyboardEvent): void {
     // `Esc` bỏ thứ đang cầm trước; chỉ khi tay đã trống mới mở menu tạm dừng.
     // Ngược lại thì một cú `Esc` để bỏ cây cọ cũng ném người chơi ra khỏi thế
     // giới, và đó là thứ ai cũng bấm nhầm đúng một lần rồi nhớ mãi.
-    if (brush.value || guiding.value || godTarget.value || foresight.value || activePower.value) {
-      brush.value = null;
+    if (guiding.value || godTarget.value || foresight.value || activePower.value) {
       guiding.value = false;
       godTarget.value = null;
       pickedTile.value = null;
@@ -703,14 +810,6 @@ async function onClick(e: MouseEvent): Promise<void> {
   const at = v.tileAt(e.clientX - r.left, e.clientY - r.top);
   if (!at) return;
 
-  // Đang cầm vật liệu thì cú bấm là một nhát khắc.
-  if (brush.value) {
-    const res = await api.build(at.x, at.y, brush.value);
-    if (!res.ok) godNote.value = res.error ?? t("god.impossible");
-    await refresh();
-    return;
-  }
-
   // Đang cầm mệnh lệnh "chỉ đường" thì cú bấm là đích cho người đang chọn.
   if (guiding.value && godTarget.value) {
     await guide(godTarget.value.id, at.x, at.y);
@@ -758,7 +857,6 @@ function onContextMenu(e: MouseEvent): void {
   // Chuột phải là "thôi": bỏ vật liệu đang cầm, bỏ mệnh lệnh đang soạn, thu
   // hồi lệnh đi của người đang chọn. Một nút hủy chung đoán được là thứ người
   // chơi thử trước khi đọc bất kỳ hướng dẫn nào.
-  brush.value = null;
   guiding.value = false;
   dropPower();
   const who = godTarget.value;
@@ -771,8 +869,14 @@ function onContextMenu(e: MouseEvent): void {
 // về phía mình. Làm bằng chuột trái vì đó là nút người ta thử trước; cú bấm chỉ
 // được tính khi con trỏ **không** trượt quá `DRAG_SLOP`.
 
-/** Ngưỡng pixel để một cú nhấn thành một cú kéo, không phải một cú bấm. */
-const DRAG_SLOP = 4;
+/**
+ * Ngưỡng pixel để một cú nhấn thành một cú kéo, không phải một cú bấm.
+ *
+ * Sáu pixel chứ không phải bốn: không ai giữ chuột đứng yên tuyệt đối trong lúc
+ * bấm, và một cú rung tay hai pixel biến một cú bấm chọn thành một cú kéo bản
+ * đồ — người chơi bấm vào một cư dân, bản đồ trôi đi, và không có gì được chọn.
+ */
+const DRAG_SLOP = 6;
 /** Cú kéo đang chạy, hoặc `null`. */
 let dragFrom: { sx: number; sy: number; cx: number; cy: number } | null = null;
 /** Cú nhấn này đã trượt quá ngưỡng chưa. */
@@ -780,7 +884,9 @@ let dragMoved = false;
 
 function onPointerDown(e: PointerEvent): void {
   const m = meta.value;
-  if (!m) return;
+  // Chỉ chuột trái mới kéo. Chuột phải là "thôi", và để nó cũng kéo thì mỗi lần
+  // hủy một ý chỉ, bản đồ lại trôi đi một đoạn.
+  if (!m || e.button !== 0) return;
   const c = camera.value ?? { x: m.eye[0], y: m.eye[1] };
   dragFrom = { sx: e.clientX, sy: e.clientY, cx: c.x, cy: c.y };
   dragMoved = false;
@@ -846,6 +952,13 @@ function onPointerMove(e: PointerEvent): void {
   // phóng, và chia ở đây là chỗ duy nhất biết cỡ ô hiện tại.
   const d = dragFrom;
   if (d) {
+    // Nút trái đã nhả rồi thì cú kéo đã xong, dù `pointerup` có tới hay không:
+    // con trỏ rời khỏi cửa sổ giữa chừng là chuyện thường, và một `dragFrom`
+    // còn sót lại biến mọi cử động chuột sau đó thành một cú kéo bản đồ.
+    if ((e.buttons & 1) === 0) {
+      dragFrom = null;
+      return;
+    }
     const dx = e.clientX - d.sx;
     const dy = e.clientY - d.sy;
     if (!dragMoved && Math.abs(dx) + Math.abs(dy) > DRAG_SLOP) dragMoved = true;
@@ -917,10 +1030,28 @@ onMounted(async () => {
     // trước khi ai kịp nhìn nó.
     // Nhịp hỏi lại chậm hơn nhịp tick của server. Đây là chỗ WebSocket sẽ thay
     // vào khi `§P6.8` được nối đầy đủ.
+    // Kênh đẩy là đường chính. Vòng hỏi lại bên dưới chỉ là **đường lui** cho
+    // trường hợp WebSocket không nối được — một trò chơi không chạy vì một
+    // proxy chặn WebSocket là một trò chơi hỏng vì lý do không liên quan tới nó.
+    socket = connect(ORIGIN, {
+      onState: (f) => {
+        pushing.value = true;
+        void applyFrame(f).catch(() => {});
+      },
+      onUp: () => {
+        pushing.value = true;
+        status.value = t("app.running");
+      },
+      onDown: () => {
+        pushing.value = false;
+      },
+    });
+
     const timer = globalThis.setInterval(() => {
       // Đứng ở màn hình đầu hay đang tạm dừng thì không hỏi lại làm gì: hỏi một
       // thế giới mà không ai đang nhìn là trả giá cho thứ không ai thấy.
-      if (screen.value !== "world") return;
+      // Kênh đẩy đang sống thì cũng không: nó đã gửi mọi thứ rồi.
+      if (screen.value !== "world" || pushing.value) return;
       void refresh().catch(() => {});
     }, 400);
     // Bản đồ thu nhỏ đổi chậm hơn nhiều so với khung nhìn chính, và mỗi lần vẽ
@@ -941,6 +1072,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  socket?.close();
+  socket = null;
   stopPolling?.();
   globalThis.removeEventListener("keydown", onKeyDown);
   view.value?.destroy();
@@ -974,6 +1107,9 @@ onUnmounted(() => {
       <span class="spacer"></span>
 
       <span class="stat">{{ t("hud.souls") }} {{ souls }}</span>
+      <span v-if="meta && meta.ripe_fields > 0" class="stat ripe">
+        {{ t("hud.ripe") }} {{ meta.ripe_fields }}
+      </span>
       <span v-if="meta" class="stat">{{ t("hud.layer") }} {{ meta.z }}</span>
       <span class="status">{{ status }}</span>
       <button class="menubtn" :title="t('menu.open')" @click="go('esc')">☰</button>
@@ -996,7 +1132,7 @@ onUnmounted(() => {
       <main>
         <canvas
           ref="canvasEl"
-          :class="{ shaping: !!brush, guiding: guiding || !!activePower }"
+          :class="{ guiding: guiding || !!activePower }"
           @pointerdown="onPointerDown"
           @pointerup="onPointerUp"
           @pointerleave="onPointerUp"
@@ -1006,17 +1142,6 @@ onUnmounted(() => {
           @contextmenu="onContextMenu"
         ></canvas>
         <div class="vignette"></div>
-
-        <div v-if="settings.showLabels" class="labels">
-          <span
-            v-for="l in labels"
-            :key="l.id"
-            class="label"
-            :class="{ self: l.self }"
-            :style="{ left: `${l.left}px`, top: `${l.top}px` }"
-            >{{ l.text }}</span
-          >
-        </div>
 
         <!-- Thẻ theo con trỏ: ba dòng, ngay cạnh chuột, không làm nhảy layout. -->
         <div v-if="hovered" class="hovercard">
@@ -1051,7 +1176,7 @@ onUnmounted(() => {
         </div>
 
         <PowerDock
-          :selected-being="godTarget?.id ?? null"
+          :selected-being="godTarget?.kind === 'being' ? godTarget.id : null"
           :selected-tile="pickedTile"
           :active="activePower?.id ?? null"
           @pick="pickPower"
@@ -1069,6 +1194,19 @@ onUnmounted(() => {
             >
               <option v-for="o in q.options" :key="o" :value="o">{{ o }}</option>
             </select>
+            <!-- Vật liệu chọn bằng **màu**, không bằng cách gõ đúng mã.
+                 Bắt người chơi nhớ `path_gravel` là bắt họ đọc mã nguồn. -->
+            <div v-else-if="q.key === 'material'" class="swatches">
+              <button
+                v-for="id in buildable"
+                :key="id"
+                class="swatch"
+                :class="{ on: powerParams[q.key] === id }"
+                :style="{ background: `#${palette.color(id).toString(16).padStart(6, '0')}` }"
+                :title="palette.label(id)"
+                @click="powerParams[q.key] = id"
+              ></button>
+            </div>
             <input
               v-else
               :type="q.kind === 'int' ? 'number' : 'text'"
@@ -1134,6 +1272,68 @@ onUnmounted(() => {
         <section v-else-if="drawer === 'chronicle'" class="grow">
           <ChroniclePanel :events="events" :entities="entities" @trace="traceCause" />
         </section>
+
+        <template v-else-if="drawer === 'yuu'">
+          <section>
+            <p class="dim hint">{{ t("yuu.hint") }}</p>
+            <div class="prompts">
+              <button v-for="q in yuuPrompts" :key="q" @click="askYuu(q)">{{ q }}</button>
+            </div>
+            <div class="askrow">
+              <input
+                v-model="yuuQuestion"
+                :placeholder="t('yuu.placeholder')"
+                @keydown.enter="askYuu(yuuQuestion)"
+              />
+              <button :disabled="yuuAsking" @click="askYuu(yuuQuestion)">{{ t("yuu.ask") }}</button>
+            </div>
+            <p v-if="yuuAsking" class="dim">{{ t("yuu.thinking") }}</p>
+          </section>
+
+          <section v-if="yuuAnswer">
+            <p v-if="!yuuAnswer.grounded" class="dim hint">{{ t("yuu.ungrounded") }}</p>
+            <p v-if="!yuuAnswer.lines.length" class="dim">{{ t("yuu.nothing") }}</p>
+            <ul class="list said">
+              <li v-for="(l, i) in yuuAnswer.lines" :key="i">
+                {{ l.text }}
+                <!-- Mỗi trích dẫn là một nút mở đúng mắt xích đó. Đây là thứ
+                     biến "hãy tin tôi" thành "tự xem đi". -->
+                <button
+                  v-for="c in l.cites"
+                  :key="c"
+                  class="cite"
+                  :title="t('yuu.cite')"
+                  @click="traceCause(c)"
+                >
+                  {{ c }}
+                </button>
+              </li>
+            </ul>
+          </section>
+
+          <section v-if="yuuAnswer && yuuAnswer.proposals.length">
+            <h2>{{ t("yuu.proposals") }}</h2>
+            <ul class="list">
+              <li v-for="(pr, i) in yuuAnswer.proposals" :key="i" class="option">
+                <b>{{ tpRaw(`power.${pr.power}.name`) }}</b>
+                <div class="dim">{{ pr.why }}</div>
+                <button class="mini" @click="pickPowerById(pr.power)">
+                  {{ t("god.foresee") }}
+                </button>
+              </li>
+            </ul>
+          </section>
+
+          <section v-if="yuuAnswer && yuuAnswer.stripped.length">
+            <h2>{{ t("yuu.stripped") }}</h2>
+            <ul class="list cut">
+              <li v-for="(st, i) in yuuAnswer.stripped" :key="i">
+                <s>{{ st.text }}</s>
+                <span class="dim"> · {{ st.reason }}</span>
+              </li>
+            </ul>
+          </section>
+        </template>
 
         <section v-else-if="drawer === 'cause'">
           <p v-if="!causeChain" class="dim">{{ t("panel.events.hint") }}</p>
@@ -1233,6 +1433,9 @@ header strong { font-family: ui-sans-serif, system-ui, sans-serif; letter-spacin
 .stat { color: #93a1b5; }
 .spacer { flex: 1; }
 .status { color: #6b7788; }
+/* Ruộng chín là tin tốt hiếm hoi trong một trò chơi mà phần lớn cảnh báo là
+   tin xấu — cho nó màu riêng để mắt bắt được ngay. */
+.ripe { color: #c8b45a; }
 .menubtn { width: 28px; height: 26px; padding: 0; border: 1px solid #2a3441; border-radius: 4px;
   background: #12161e; color: #cfd8e3; font-size: 14px; cursor: pointer; }
 .menubtn:hover { background: #1a1f28; }
@@ -1263,19 +1466,13 @@ main { flex: 1; min-width: 0; position: relative; overflow: hidden; }
    nhầm sẽ sửa thế giới trong khi người chơi tưởng mình đang xem. */
 canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 canvas:active { cursor: grabbing; }
-canvas.shaping, canvas.guiding { cursor: crosshair; }
+canvas.guiding { cursor: crosshair; }
 
 /* Khung tối bốn góc. Một gradient CSS, không tốn draw call nào — nhưng nó là
    thứ tách "đang nhìn xuống một thế giới" khỏi "đang mở một bảng điều khiển". */
 .vignette { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse at center,
     rgb(0 0 0 / 0%) 45%, rgb(0 0 0 / 18%) 78%, rgb(0 0 0 / 42%) 100%); }
-.labels { position: absolute; inset: 0; pointer-events: none; }
-.label { position: absolute; transform: translate(-50%, -100%); white-space: nowrap;
-  padding: 0 4px; border-radius: 3px; background: rgb(8 10 16 / 68%);
-  font: 11px/1.5 ui-sans-serif, system-ui, sans-serif; color: #d8dee9;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 80%); }
-.label.self { color: #f0c674; background: rgb(42 36 21 / 82%); }
 
 /* Thẻ theo con trỏ: cố định một góc chứ không bám chuột. Bám chuột thì nó che
    mất chính thứ người chơi đang nhìn. */
@@ -1283,11 +1480,11 @@ canvas.shaping, canvas.guiding { cursor: crosshair; }
   padding: 5px 9px; border: 1px solid #232833; border-radius: 5px;
   background: rgb(11 14 20 / 88%); font-size: 12px; pointer-events: none; }
 
-.error { position: absolute; left: 1rem; bottom: 5.5rem; margin: 0; padding: 0.5rem 0.75rem;
+.error { position: absolute; left: 1rem; bottom: 9rem; margin: 0; padding: 0.5rem 0.75rem;
   background: #45161a; border: 1px solid #7d2b32; border-radius: 4px; color: #ffd7d7; }
 
 /* ── Bản đồ thu nhỏ ở góc ──────────────────────────────────────────────── */
-.minicorner { position: absolute; right: 10px; bottom: 92px; width: 168px;
+.minicorner { position: absolute; right: 10px; bottom: 112px; width: 168px;
   border: 1px solid #232833; border-radius: 6px; background: rgb(11 14 20 / 92%);
   padding: 4px; }
 .minicorner.folded { width: auto; }
@@ -1316,10 +1513,15 @@ section.grow { flex: 1; min-height: 0; overflow-y: auto; }
 h2 { margin: 0 0 0.45rem; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
   color: #7f8ea3; font-weight: 600; }
 
-/* ── Khay ngữ cảnh dưới cùng ───────────────────────────────────────────── */
-.tray { flex: none; display: flex; align-items: center; gap: 0.8rem;
-  padding: 0.45rem 0.8rem; border-top: 1px solid #232833; background: #0b0e14;
-  font-size: 12px; }
+/* ── Khay ngữ cảnh ─────────────────────────────────────────────────────────
+   Nổi **trên** thế giới, không phải một hàng trong bố cục. Một hàng thì mỗi lần
+   người chơi chọn hay bỏ chọn một cư dân, canvas lại đổi chiều cao — và Pixi
+   phải dựng lại toàn bộ khung nhìn cho một thao tác chỉ là "để mắt tới ai đó".
+   Đó cũng là lý do bản đầu đẩy khay xuống dưới đáy màn hình và không ai thấy. */
+.tray { position: fixed; left: 52px; right: 0; bottom: 100px; z-index: 6;
+  display: flex; align-items: center; gap: 0.8rem;
+  padding: 0.45rem 0.8rem; border-top: 1px solid #232833;
+  background: rgb(11 14 20 / 95%); font-size: 12px; }
 .tray .who { display: flex; align-items: center; gap: 0.55rem; }
 .tray .foresight { display: flex; align-items: center; gap: 0.7rem; }
 .tray .list { display: flex; gap: 0.7rem; }
@@ -1345,12 +1547,18 @@ h2 { margin: 0 0 0.45rem; font-size: 11px; text-transform: uppercase; letter-spa
 /* Ô nhập tham số nổi ngay trên thanh quyền năng: người chơi vừa chọn quyền
    năng ở đó, nên thứ hỏi thêm phải xuất hiện cạnh tay họ, không phải ở cột bên
    kia màn hình. */
-.paramform { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%);
+.paramform { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.8rem;
   border: 1px solid #2a3441; border-radius: 6px; background: rgb(12 15 21 / 96%);
   box-shadow: 0 8px 24px rgb(0 0 0 / 45%); min-width: 220px; }
 .paramform label { display: flex; align-items: center; gap: 0.5rem; font-size: 12px; }
 .paramform label span { color: #7f8ea3; min-width: 4.5rem; }
+.swatches { display: flex; gap: 4px; flex-wrap: wrap; max-width: 190px; }
+/* Ô màu vuông, viền dày khi đang cầm: người chơi phải biết cú bấm tiếp theo sẽ
+   làm gì trước khi bấm. */
+.swatch { width: 22px; height: 22px; padding: 0; border: 2px solid #2a3441;
+  border-radius: 3px; cursor: pointer; }
+.swatch.on { border-color: #f0c674; box-shadow: 0 0 0 2px rgb(240 198 116 / 25%); }
 .paramform input, .paramform select { flex: 1; padding: 3px 6px; border: 1px solid #333c4a;
   border-radius: 3px; background: #171b22; color: #e6e9ef; font: inherit; font-size: 12px; }
 
@@ -1359,6 +1567,27 @@ h2 { margin: 0 0 0.45rem; font-size: 11px; text-transform: uppercase; letter-spa
 .chain { list-style: none; margin: 0; padding: 0; }
 .chain li { padding: 2px 0 2px 10px; border-left: 2px solid #2a3441; margin-left: 3px; }
 .chain .sum { font: 11px ui-monospace, monospace; }
+.prompts { display: flex; flex-direction: column; gap: 4px; margin-bottom: 0.5rem; }
+.prompts button { text-align: left; padding: 5px 8px; border: 1px solid #2a3441;
+  border-radius: 4px; background: #12161e; color: #cfd8e3; font: inherit; font-size: 12px;
+  cursor: pointer; }
+.prompts button:hover { background: #1a1f28; border-color: #3a4553; }
+.askrow { display: flex; gap: 4px; }
+.askrow input { flex: 1; padding: 4px 7px; border: 1px solid #333c4a; border-radius: 3px;
+  background: #171b22; color: #e6e9ef; font: inherit; font-size: 12px; }
+.askrow button { padding: 4px 10px; border: 1px solid #6a5426; border-radius: 3px;
+  background: #2a2415; color: #f0c674; font: inherit; font-size: 12px; cursor: pointer; }
+.said li { padding: 3px 0; line-height: 1.55; }
+/* Trích dẫn là một nút nhỏ mang số thứ tự sự kiện. Nó phải nhìn ra là **bấm
+   được**: một con số trong ngoặc trông như chú thích, và không ai bấm chú
+   thích. */
+.cite { margin-left: 4px; padding: 0 5px; border: 1px solid #3a4553; border-radius: 8px;
+  background: #1a1f28; color: #9ec1ff; font: 10px ui-monospace, monospace; cursor: pointer; }
+.cite:hover { border-color: #4b83c4; color: #cfe0ff; }
+.option { padding: 5px 0; border-bottom: 1px solid #1b2029; }
+.mini { margin-top: 3px; padding: 2px 8px; border: 1px solid #6a5426; border-radius: 3px;
+  background: #2a2415; color: #f0c674; font: inherit; font-size: 11px; cursor: pointer; }
+.cut li { padding: 2px 0; color: #7f6a55; font-size: 11px; }
 .pick { cursor: pointer; }
 .pick:hover { color: #cfd8e3; }
 .pick.sel { color: #f0c674; }

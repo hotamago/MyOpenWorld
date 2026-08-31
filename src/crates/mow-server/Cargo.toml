@@ -16,11 +16,11 @@ path = "src/main.rs"
 # chuyen tang van chuyen). `axum` duoc chon vi no dung ngay tren `tokio` +
 # `hyper` da on dinh, co san `extract::ws` — khong phai tu viet WebSocket
 # handshake (RFC 6455) chi de lam lai thu thu vien da lam dung.
-axum = { version = "0.8.7", features = ["ws"] }
+axum = { version = "0.8.9", features = ["ws"] }
 # Runtime da luong: luong tick van la mot `std::thread` rieng (xem `main.rs`),
 # nhung tang mang can `tokio` de chay nhieu ket noi WebSocket dong thoi ma
 # khong moi ket noi la mot he thread rieng.
-tokio = { version = "1.48.0", features = [
+tokio = { version = "1.53.1", features = [
     "rt-multi-thread",
     "macros",
     "net",
@@ -31,10 +31,10 @@ tokio = { version = "1.48.0", features = [
 # CORS va phuc vu file tinh (`ServeDir`/`ServeFile`): hai thu tower-http da
 # lam dung va co test rieng, khong co ly do chep lai — dac biet la chan
 # duong dan `..`, thu ban dau ta phai tu tay chan trong `gui_tinh` cu.
-tower-http = { version = "0.6.6", features = ["cors", "fs"] }
+tower-http = { version = "0.6.11", features = ["cors", "fs"] }
 # `WebSocket` cua axum la mot `Stream`/`Sink`; `.split()` thanh doc rieng ghi
 # rieng can trait tu `futures-util` — khong phai code lai logic ghep kenh.
-futures-util = { version = "0.3.31", default-features = false, features = [
+futures-util = { version = "0.3.34", default-features = false, features = [
     "std",
     "sink",
 ] }
@@ -46,6 +46,11 @@ mow-scenario = { path = "../mow-scenario" }
 mow-society = { workspace = true }
 mow-settle = { workspace = true }
 mow-content = { workspace = true }
+# Mo phong kinh te lang: kho, luc luong lao dong, bao cao ngay (Stock,
+# Workforce, DayReport trong `village.rs`). Da co san va da kiem chung o
+# mow-econ, viec cua mow-server chi la noi no vao `tick_once`.
+mow-econ = { workspace = true }
+mow-yuu = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

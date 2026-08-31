@@ -1850,6 +1850,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mow-memory"
+version = "0.1.0"
+dependencies = [
+ "mow-core",
+ "mow-math",
+ "rand 0.8.8",
+ "serde",
+]
+
+[[package]]
 name = "mow-mind"
 version = "0.1.0"
 dependencies = [
@@ -1970,12 +1980,14 @@ dependencies = [
  "futures-util",
  "mow-content",
  "mow-core",
+ "mow-econ",
  "mow-math",
  "mow-scenario",
  "mow-settle",
  "mow-society",
  "mow-spatial",
  "mow-worldgen",
+ "mow-yuu",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -2060,6 +2072,7 @@ name = "mow-yuu"
 version = "0.1.0"
 dependencies = [
  "mow-core",
+ "mow-llm",
  "mow-magic",
  "mow-math",
  "serde",

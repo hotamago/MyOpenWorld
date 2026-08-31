@@ -45,6 +45,7 @@ function batchOf(
     biome: new Array<string>(n).fill("temperate"),
     height: new Array<number>(n).fill(12),
     river: riverCol,
+    worn: new Array<number>(n).fill(0),
   };
 }
 
@@ -334,6 +335,7 @@ describe("hạt môi trường — biên", () => {
       biome: [],
       height: [],
       river: [],
+      worn: [],
     };
     expect(() => ambientSprites(broken, PALETTE, 5, 100)).not.toThrow();
     expect(ambientSprites(broken, PALETTE, 5, 100)).toEqual([]);

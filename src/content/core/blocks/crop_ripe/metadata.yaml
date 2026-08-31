@@ -1,0 +1,13 @@
+# Lúa đã chín, chờ gặt. Vàng ngà chứ không vàng rực: một mảng bão hòa
+# giữa nền đất xỉn sẽ nổi lên như một miếng dán.
+id: "crop_ripe"
+name:
+  vi: "Lúa chín"
+  en: "Ripe grain"
+color: "#9a8340"
+hardness: 1
+liquid: false
+opaque: false
+walkable: true
+tags: [built, farm, crop]
+script: null

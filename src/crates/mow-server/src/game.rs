@@ -34,11 +34,15 @@
 
 use crate::preview::{compare, snapshot, Diff, JournalEntry, Refusal};
 use mow_content::{load_pack, PackContent};
-use mow_core::{Command, CommandResult, EntityId, EventSeq, Sim, Tick, Value, WorldId};
+use mow_core::{
+    BranchId, Clock, Command, CommandResult, EntityId, EventDraft, EventSeq, Sim, SimConfig, Tick,
+    Value, WorldId,
+};
+use mow_econ::village::{run_day, tools_sufficient, DayReport, Shortage, Stock, Workforce};
 use mow_math::{StateHash, StateHasher, WorldSeed};
 use mow_scenario::slice::{self, WORLD};
 use mow_settle::{Role as SettleRole, SettleRequest};
-use mow_society::routine::{decide, Intent, Place, Role, Situation};
+use mow_society::routine::{decide, Intent, Place, Role, Situation, HUNGER_STARVING};
 use mow_spatial::pathfind::{find_path, PathOutcome, PathRequest};
 use mow_worldgen::strata::material_at;
 use mow_worldgen::{BaseCell, GenerationProfile, Worldgen};
@@ -104,17 +108,44 @@ pub struct Game {
     /// không có nhu cầu, và biến nó thành entity chỉ để có tọa độ sẽ làm mọi
     /// vòng lặp qua thực thể phải học cách bỏ qua nó.
     landmarks: BTreeMap<Place, (i64, i64)>,
-    /// Nhớ tạm địa hình gốc: `(x, y)` → `(cao độ mét, có nước không)`.
+    /// Nhớ tạm địa hình gốc: `(x, y)` → cả ô worldgen.
     ///
-    /// `Worldgen::base_cell` chạy cả chuỗi tầng nhiễu cho mỗi ô, và ba chỗ hỏi
-    /// nó nhiều nhất đều hỏi **cùng những ô đó** nhiều lần: tìm đường (A* xét
-    /// mỗi ô tới tám lần), quy hoạch làng, và bộ chấm điểm đất bằng. Không có
-    /// bảng nhớ này, riêng việc chọn chỗ đặt làng đã mất bảy mươi giây.
+    /// `Worldgen::base_cell` chạy cả chuỗi tầng nhiễu cho mỗi ô, và **bốn** chỗ
+    /// hỏi nó nhiều nhất đều hỏi cùng những ô đó nhiều lần: tìm đường (A* xét
+    /// mỗi ô tới tám lần), quy hoạch làng, bộ chấm điểm đất bằng, và
+    /// [`Game::tile`] — thứ mà mỗi lô ô gọi hàng nghìn lần.
+    ///
+    /// Bản đầu chỉ nhớ `(cao độ, có nước không)`, đủ cho ba chỗ trên và **không**
+    /// đủ cho `tile`. Hậu quả đo được: bản đồ thu nhỏ hỏi 128×128 = 16.384 ô mỗi
+    /// 2,5 giây, mỗi ô chạy lại toàn bộ worldgen **trong khi đang giữ khóa thế
+    /// giới** — và luồng tick tụt từ 4.480 xuống 120 nhịp mỗi giây ngay khi có
+    /// một trình duyệt nối vào. `§P6.8` quy tắc 2 nói luồng tick không bao giờ
+    /// chờ client; điều đó chỉ đúng khi việc phục vụ client cũng rẻ.
+    ///
+    /// Không có bảng nhớ này, riêng việc chọn chỗ đặt làng đã mất bảy mươi giây.
     ///
     /// `RefCell` chứ không phải `&mut`: đây là nhớ tạm, không phải state. Nó
     /// **không** đi vào `state_hash`, và xóa nó đi không đổi một hạt nào của
     /// thế giới — nó chỉ là một cách hỏi lại nhanh hơn.
-    terrain: RefCell<BTreeMap<(i64, i64), (i64, bool)>>,
+    terrain: RefCell<BTreeMap<(i64, i64), BaseCell>>,
+    /// Ruộng: `(x, y)` → pha sinh trưởng `0..CROP_STAGES.len()`.
+    ///
+    /// Ruộng đứng im quanh năm là thứ nói cho người chơi biết thế giới này chỉ
+    /// giả vờ sống. Một mảnh ruộng đi qua đất trống → mầm → xanh → chín → bị
+    /// gặt là **cùng một cơ chế** với kinh tế đã có: ngày gặt là ngày kho lương
+    /// được cộng thêm. Nhìn thấy ruộng chín là nhìn thấy trước ngày mai no đủ.
+    crops: BTreeMap<(i64, i64), u8>,
+    /// Vết chân đã tích trên mỗi ô: `(x, y)` → độ mòn `0..=TRAMPLE_MAX`.
+    ///
+    /// Đây là thứ rẻ nhất biến một bản đồ đúng thành một bản đồ **có người
+    /// sống**. Không ai vẽ con đường từ nhà thợ rèn ra giếng; nó hiện ra vì
+    /// người ta đi qua đó mỗi ngày, và nó mờ đi ở nơi không còn ai đi. Một
+    /// người chơi quay lại sau ba mươi ngày đọc được ngay làng này bận rộn ở
+    /// đâu — mà không cần một bảng số nào.
+    ///
+    /// Là **sự thật về thế giới**, nên nó vào `state_hash`: hai thế giới cùng
+    /// seed cùng số tick phải mòn giống hệt nhau.
+    trample: BTreeMap<(i64, i64), u32>,
     /// Ô đã bị ghi đè: `(x, y)` → vật liệu.
     ///
     /// Địa hình là hàm thuần của seed (`§7.2`), nên **chỉ** những ô ai đó đã
@@ -152,6 +183,32 @@ pub struct Game {
     /// ra cùng `state_hash`, nghĩa là có gì đó đã đổi thế giới ngoài đường
     /// ghi — và preview sẽ nói ra điều đó thay vì giấu đi.
     journal: Vec<JournalEntry>,
+    /// Kho của làng: bốn vòng kinh tế từ `mow_econ::village`, đã kiểm chứng
+    /// sẵn ở đó bằng 18 test.
+    ///
+    /// Nằm ở `Game`, không phải một biến bên lề: đây chính là điều nhiệm vụ
+    /// này tồn tại để sửa. Một kho không phải state — không đi vào
+    /// `state_hash`, không sống sót qua save/load, không ai chứng minh được
+    /// nó không lệch giữa hai bản chạy — thì không khác gì không có kho. Xem
+    /// `Game::mix` để biết kho được trộn vào hash thế nào, và
+    /// `run_economy_day` để biết nó được cập nhật khi nào.
+    stock: Stock,
+    /// Lực lượng lao động, suy ra từ cư dân **thật** (đếm theo `npc.role`),
+    /// không phải một hằng số hay một con số nhớ tạm cho khớp bản thiết kế.
+    ///
+    /// Đo lại mỗi ngày kinh tế (xem `compute_workforce`), nên cư dân chết hay
+    /// đổi vai thì con số này đổi theo ở đúng ranh giới ngày kế tiếp — không
+    /// tức thời, vì `mow_econ::village::run_day` cũng chỉ nhận một
+    /// `Workforce` cho *cả* một ngày, không phải cho từng tick.
+    work: Workforce,
+    /// Báo cáo của ngày kinh tế gần nhất, để lớp gọi (API, sau này) đọc lại
+    /// mà không phải đợi đúng khoảnh khắc ranh giới ngày.
+    ///
+    /// **Không** đi vào `state_hash`: nó là một bản chụp lại của `stock` và
+    /// `work` tại một mốc đã qua, suy ra được hoàn toàn từ hai trường đó cộng
+    /// lịch sử tick, giống hệt lý do `terrain` (bảng nhớ tạm địa hình) đứng
+    /// ngoài — đưa nó vào hash chỉ ghi trùng một sự thật đã có ở nơi khác.
+    last_day_report: Option<DayReport>,
 }
 
 /// Trần độ dài nhật ký cho một lần preview.
@@ -218,7 +275,7 @@ pub struct Tile {
 impl Game {
     /// Dựng thế giới mới từ seed.
     pub fn new(seed: u64) -> Game {
-        let sim = slice::build_empty_world(seed);
+        let sim = build_world(seed);
         let gen = Worldgen::new(WorldSeed(seed), GenerationProfile::default());
         // Chỗ ở được: `§P2` nói thế giới sinh ra từ seed, và seed không hứa
         // rằng gốc tọa độ nằm trên cạn. Với seed 42, ô `(0, 0)` nằm **dưới mực
@@ -234,11 +291,19 @@ impl Game {
             plans: BTreeMap::new(),
             plan_cause: BTreeMap::new(),
             landmarks: BTreeMap::new(),
+            crops: BTreeMap::new(),
+            trample: BTreeMap::new(),
             terrain: RefCell::new(BTreeMap::new()),
             overrides: BTreeMap::new(),
             content: None,
             content_dir: None,
             journal: Vec::new(),
+            // Kho khởi điểm của làng chuẩn (`§mow_econ::village::Stock`). Lực
+            // lượng lao động thật thì chưa đo được — làng chưa dựng — nên bắt
+            // đầu ở `default()` rồi đo lại ngay dưới đây, sau `raise_village`.
+            stock: Stock::starting_village(),
+            work: Workforce::default(),
+            last_day_report: None,
         };
 
         // Trung tâm làng là khoảnh đất **bằng** gần chỗ ở được nhất, không phải
@@ -246,6 +311,10 @@ impl Game {
         // một mỏm đá dựng đứng thì vẫn khô ráo.
         let (vx, vy) = g.flattest_near(sx, sy);
         g.raise_village(vx, vy);
+        // Đo lực lượng lao động **sau khi** làng đã dựng: `raise_village` vừa
+        // gán vai cho từng cư dân, và đo trước đó sẽ luôn ra một làng rỗng
+        // người, kể cả khi mười cư dân đã đứng sẵn trên bản đồ.
+        g.work = g.compute_workforce();
 
         // Cái nhìn mở ra ở quảng trường, không ở gốc tọa độ và không ở một chỗ
         // ngẫu nhiên: cảnh đầu tiên phải là ngôi làng đang sống, không phải một
@@ -338,6 +407,14 @@ impl Game {
 
         for (x, y, m) in &plan.cells {
             self.overrides.insert((*x, *y), (*m).to_owned());
+            // Ô nào bộ quy hoạch đánh dấu là ruộng thì vào vòng đời cây trồng.
+            // Lệch pha theo toạ độ: cả làng gặt cùng một ngày trông như một cỗ
+            // máy, không như một cộng đồng nơi mỗi thửa gieo một hôm khác nhau.
+            if CROP_STAGES.contains(m) {
+                let skew = u8::try_from((x.rem_euclid(3) + y.rem_euclid(2)) as u64).unwrap_or(0);
+                self.crops
+                    .insert((*x, *y), skew % (CROP_STAGES.len() as u8));
+            }
         }
 
         // Giếng là công trình đầu tiên, và quảng trường là ô cửa của nó.
@@ -573,15 +650,44 @@ impl Game {
     /// Nó không đi. Chú thích sai còn nguy hơn thiếu chú thích, vì người đọc
     /// tin nó và thôi kiểm tra.
     pub fn state_hash(&self) -> StateHash {
-        Self::mix(self.sim.state_hash(), &self.overrides)
+        Self::mix(
+            self.sim.state_hash(),
+            &self.overrides,
+            &self.stock,
+            &self.work,
+            &self.trample,
+        )
     }
 
-    /// Trộn hash của ECS với hash của địa hình đã sửa.
-    fn mix(sim: StateHash, overrides: &BTreeMap<(i64, i64), String>) -> StateHash {
-        if overrides.is_empty() {
-            // Không có gì sửa thì hash đúng bằng hash của `Sim`. Giữ được điều
-            // này nghĩa là mọi bài test và mọi công cụ đã so hash từ trước vẫn
-            // đúng nguyên.
+    /// Trộn hash của ECS với địa hình đã sửa và với kho + lực lượng lao động
+    /// của làng.
+    ///
+    /// `stock`/`work` **không** nằm trong ECS — chúng là state riêng của
+    /// `Game`, đúng vị trí mà `overrides` (địa hình ghi đè) đã từng đứng một
+    /// mình ở đây. Không trộn chúng vào thì hai thế giới cùng seed, cùng số
+    /// tick, nhưng có kho khác nhau — vì một đường ghi nào đó sau này sửa
+    /// thẳng `stock` mà bỏ qua `run_day` — vẫn ra cùng `state_hash`. Đó đúng
+    /// là loại lỗi im lặng mà bản đầu của `overrides` từng mắc (xem chú thích
+    /// cũ trên `set_cell` nói dối rằng ô ghi đè đã vào hash), và nhiệm vụ này
+    /// tồn tại một phần để không lặp lại nó ở một trường mới.
+    fn mix(
+        sim: StateHash,
+        overrides: &BTreeMap<(i64, i64), String>,
+        stock: &Stock,
+        work: &Workforce,
+        trample: &BTreeMap<(i64, i64), u32>,
+    ) -> StateHash {
+        if overrides.is_empty()
+            && trample.is_empty()
+            && *stock == Stock::default()
+            && *work == Workforce::default()
+        {
+            // Không có gì sửa và kinh tế ở trạng thái trung tính (rỗng) thì
+            // hash đúng bằng hash của `Sim`. Trong một thế giới thật điều
+            // kiện này gần như không bao giờ đúng — mọi làng đều có kho khác
+            // `Stock::default()` — nhưng giữ nó nghĩa là công cụ nào đã so
+            // hash từ trước khi có `overrides` vẫn đúng nguyên cho một `Sim`
+            // rỗng hoàn toàn.
             return sim;
         }
         let mut h = StateHasher::with_domain("mow.server.world.v1");
@@ -593,6 +699,29 @@ impl Game {
             h.write_i64(*y);
             h.write_str(m);
         }
+        // Lối mòn cũng là sự thật về thế giới: hai thế giới cùng seed cùng số
+        // tick phải mòn giống hệt nhau, nếu không thì "xác định" chỉ đúng với
+        // phần thế giới mà ta nhớ đưa vào hash.
+        for ((x, y), v) in trample {
+            h.write_i64(*x);
+            h.write_i64(*y);
+            h.write_u64(u64::from(*v));
+        }
+        // Sáu trường của `Stock`, viết tay từng trường thay vì dựa vào
+        // `CanonicalHash` (kiểu này không có, và không nên có: `mow-econ`
+        // không cần biết gì về hashing của `mow-core`, xem tài liệu module
+        // của nó — "không biết gì về `Sim`, HTTP hay ECS").
+        h.write_i64(stock.food);
+        h.write_i64(stock.water);
+        h.write_i64(stock.wood);
+        h.write_i64(stock.tools);
+        h.write_i64(stock.seed_grain);
+        h.write_i64(stock.soil_fertility);
+        h.write_u64(u64::from(work.farmers));
+        h.write_u64(u64::from(work.hunters));
+        h.write_u64(u64::from(work.smiths));
+        h.write_u64(u64::from(work.elders));
+        h.write_u64(u64::from(work.children));
         h.finish()
     }
 
@@ -608,32 +737,9 @@ impl Game {
 
     /// Ô địa hình tại `(x, y)` ở lát `z` đang xem.
     pub fn tile(&self, x: i64, y: i64) -> Tile {
-        let c: BaseCell = self.gen.base_cell(x, y).unwrap_or_else(|_| BaseCell {
-            elevation: mow_worldgen::Elevation {
-                height_m: 0,
-                slope: 0,
-                submerged: false,
-            },
-            climate: self
-                .gen
-                .base_cell(0, 0)
-                .map_or_else(|_| unreachable!("ô gốc luôn sinh được"), |b| b.climate),
-            flow: mow_worldgen::Flow {
-                dx: 0,
-                dy: 0,
-                accumulation: 0,
-                is_river: false,
-                is_water_body: false,
-            },
-            strata: mow_worldgen::Strata {
-                surface: mow_worldgen::Material::Igneous,
-                soil_depth_m: 0,
-                bedrock_depth_m: 0,
-                ore_present: false,
-                cave: false,
-            },
-            biome: mow_worldgen::Biome::Alpine,
-        });
+        // Qua bảng nhớ, không gọi thẳng worldgen: một lô ô gọi hàm này hàng
+        // nghìn lần, và bản đồ thu nhỏ gọi nó 16.384 lần mỗi 2,5 giây.
+        let c: BaseCell = self.cell(x, y);
 
         let sea = self.gen.profile().sea_level_m;
         // Ô đã xây đè lên địa hình, nhưng **chỉ ở mặt đất**: nhìn xuống lát sâu
@@ -749,23 +855,18 @@ impl Game {
         !self.ground(x, y).1
     }
 
-    /// Cao độ và "có nước không" của một ô, qua bảng nhớ tạm.
+    /// Một ô worldgen, qua bảng nhớ tạm.
     ///
-    /// Ô ngoài thế giới trả về `(0, true)` — coi như nước: không đi vào được và
-    /// không dựng được, đúng thứ ta muốn ở rìa bản đồ.
-    fn ground(&self, x: i64, y: i64) -> (i64, bool) {
+    /// Ô ngoài thế giới trả về một ô thay thế **chìm dưới nước**: không đi vào
+    /// được và không dựng được, đúng thứ ta muốn ở rìa bản đồ.
+    fn cell(&self, x: i64, y: i64) -> BaseCell {
+        // `BaseCell` không `Copy` (nó mang `Strata`, `Climate`, `Flow`), nên
+        // nhân bản chứ không sao chép — vẫn rẻ hơn nhiều so với chạy lại cả
+        // chuỗi tầng nhiễu, vốn là toàn bộ lý do bảng nhớ này tồn tại.
         if let Some(v) = self.terrain.borrow().get(&(x, y)) {
-            return *v;
+            return v.clone();
         }
-        let v = self.gen.base_cell(x, y).map_or((0, true), |c| {
-            let wet = c.elevation.submerged
-                || c.flow.is_water_body
-                || matches!(
-                    c.strata.surface,
-                    mow_worldgen::Material::Water | mow_worldgen::Material::Magma
-                );
-            (c.elevation.height_m, wet)
-        });
+        let v = self.gen.base_cell(x, y).unwrap_or_else(|_| edge_cell(&self.gen));
         let mut cache = self.terrain.borrow_mut();
         // Trần để một ván dài không biến bảng nhớ thành chỗ rò bộ nhớ. Xóa sạch
         // chứ không đuổi từng ô: không có thứ tự truy cập nào để dựa vào, và
@@ -773,8 +874,129 @@ impl Game {
         if cache.len() >= TERRAIN_CACHE_CAP {
             cache.clear();
         }
-        cache.insert((x, y), v);
+        cache.insert((x, y), v.clone());
         v
+    }
+
+    /// Cao độ và "có nước không" của một ô.
+    fn ground(&self, x: i64, y: i64) -> (i64, bool) {
+        let c = self.cell(x, y);
+        let wet = c.elevation.submerged
+            || c.flow.is_water_body
+            || matches!(
+                c.strata.surface,
+                mow_worldgen::Material::Water | mow_worldgen::Material::Magma
+            );
+        (c.elevation.height_m, wet)
+    }
+
+    /// Ruộng lớn thêm một pha, nếu tới ngày.
+    ///
+    /// Chỉ đổi **vật liệu bị ghi đè**, không đụng tới worldgen: một mùa vụ là
+    /// thứ người ta làm ra trên mặt đất, không phải một thay đổi của mặt đất.
+    fn grow_crops(&mut self, day: u64) {
+        if !day.is_multiple_of(CROP_DAYS_PER_STAGE) {
+            return;
+        }
+        let updates: Vec<((i64, i64), u8)> = self
+            .crops
+            .iter()
+            .map(|(k, v)| (*k, (*v + 1) % (CROP_STAGES.len() as u8)))
+            .collect();
+        for (at, stage) in updates {
+            self.crops.insert(at, stage);
+            if let Some(m) = CROP_STAGES.get(stage as usize) {
+                self.overrides.insert(at, (*m).to_owned());
+            }
+        }
+    }
+
+    /// Dựng hồ sơ cho Yuu: **chỉ** những gì engine đã biết.
+    ///
+    /// Đây là chỗ giữ lời hứa chống nói dối. Yuu không được đọc thế giới; nó
+    /// đọc **cái này**. Mọi câu nó nói phải trích dẫn một `seq` có trong đây,
+    /// nếu không thì bị cắt (`mow_yuu::read_answer`). Nên hồ sơ hẹp bao nhiêu
+    /// thì Yuu nói ít bấy nhiêu — và nói ít mà đúng thì hơn nói nhiều mà đoán.
+    pub fn dossier(&self, recent: usize) -> mow_yuu::Dossier {
+        let s = self.sim.store();
+        let folk = s
+            .with_attr("npc.role")
+            .map(|id| mow_yuu::FolkBrief {
+                id: id.get(),
+                name: s.attr_text(id, "core.name").unwrap_or("?").to_owned(),
+                role: s.attr_text(id, "npc.role").unwrap_or("?").to_owned(),
+                intent: s.attr_text(id, "npc.intent").unwrap_or("idle").to_owned(),
+                hunger: s.attr_int(id, "need.hunger").unwrap_or(0) / 100,
+            })
+            .collect();
+
+        // Lấy `recent` sự kiện **mới nhất**, nhưng giữ thứ tự thời gian tăng
+        // dần: một chuỗi nhân quả đọc xuôi thì hiểu được, đọc ngược thì không.
+        let all: Vec<&mow_core::Event> = self.sim.log().iter().collect();
+        let start = all.len().saturating_sub(recent);
+        let events = all[start..]
+            .iter()
+            .map(|e| mow_yuu::EventBrief {
+                seq: e.seq.0,
+                tick: e.tick.0,
+                kind: e.kind.0.clone(),
+                actor: e.actor.map(EntityId::get),
+                cause: e.cause.map(|c| c.0),
+                summary: crate::preview::summarize(&e.kind.0, &e.payload),
+            })
+            .collect();
+
+        mow_yuu::Dossier {
+            tick: self.sim.clock().local().0,
+            stock: vec![
+                ("food".to_owned(), self.stock.food),
+                ("water".to_owned(), self.stock.water),
+                ("wood".to_owned(), self.stock.wood),
+                ("tools".to_owned(), self.stock.tools),
+                ("seed_grain".to_owned(), self.stock.seed_grain),
+                ("soil_fertility".to_owned(), self.stock.soil_fertility),
+            ],
+            folk,
+            events,
+        }
+    }
+
+    /// Số thửa ruộng đang chín — thứ báo trước một ngày no đủ.
+    pub fn ripe_fields(&self) -> usize {
+        let ripe = (CROP_STAGES.len() - 1) as u8;
+        self.crops.values().filter(|v| **v == ripe).count()
+    }
+
+    /// Một bàn chân đặt xuống ô `(x, y)`.
+    fn tread(&mut self, x: i64, y: i64) {
+        let e = self.trample.entry((x, y)).or_insert(0);
+        *e = (*e + TRAMPLE_PER_STEP).min(TRAMPLE_MAX);
+        if self.trample.len() > TRAMPLE_CAP {
+            self.prune_trample();
+        }
+    }
+
+    /// Bỏ những lối mòn nhạt nhất khi bảng đã quá đầy.
+    fn prune_trample(&mut self) {
+        let mut faint: Vec<((i64, i64), u32)> =
+            self.trample.iter().map(|(k, v)| (*k, *v)).collect();
+        faint.sort_by_key(|(_, v)| *v);
+        for (k, _) in faint.into_iter().take(TRAMPLE_CAP / 4) {
+            self.trample.remove(&k);
+        }
+    }
+
+    /// Cả làng nguôi đi một chút sau mỗi ngày.
+    fn fade_trample(&mut self) {
+        self.trample.retain(|_, v| {
+            *v = v.saturating_sub(TRAMPLE_DECAY_PER_DAY);
+            *v > 0
+        });
+    }
+
+    /// Độ mòn của một ô, `0..=TRAMPLE_MAX`.
+    pub fn trample_at(&self, x: i64, y: i64) -> u32 {
+        self.trample.get(&(x, y)).copied().unwrap_or(0)
     }
 
     /// Chênh cao lớn nhất giữa một ô và bốn ô kề nó, tính bằng mét.
@@ -905,7 +1127,17 @@ impl Game {
             fields.push(("cause".to_owned(), Value::Uint(c.0)));
         }
         let cmd = Command::new("core.walk", WORLD, Value::Map(fields.into_iter().collect()));
-        self.apply(&cmd)
+        let r = self.apply(&cmd);
+        if r.is_ok() {
+            // Ghi vết ở ô **vừa tới**, không phải ô vừa rời: lối mòn là nơi bàn
+            // chân đặt xuống.
+            let (x, y) = (
+                self.attr_int(who, "core.pos.x"),
+                self.attr_int(who, "core.pos.y"),
+            );
+            self.tread(x, y);
+        }
+        r
     }
 
     /// Áp một lệnh. Đây là **đường ghi duy nhất** (`§22.1`).
@@ -937,7 +1169,11 @@ impl Game {
         if self.journal.len() > PREVIEW_JOURNAL_LIMIT {
             return None;
         }
-        let mut copy = slice::build_empty_world(self.seed);
+        // `build_world`, không `slice::build_empty_world`: nhật ký có thể
+        // chứa lệnh `econ.day`/`econ.shortage`, và bản sao phải có đúng
+        // handler cho chúng — nếu không, phát lại một thế giới đã qua ít nhất
+        // một ngày sẽ hỏng ở đúng lệnh kinh tế đầu tiên với `UnknownCommand`.
+        let mut copy = build_world(self.seed);
         for e in &self.journal {
             // Đưa bản sao tới đúng tick của lệnh **trước khi** áp nó. Không có
             // bước này thì mọi lệnh rơi vào tick 0 và `state_hash` lệch, vì sự
@@ -973,7 +1209,14 @@ impl Game {
         // đã đổi thế giới ngoài đường ghi (`§22.1`), và một preview dựng trên
         // một thế giới khác thì vô giá trị — nên nói thẳng thay vì đưa ra những
         // con số đúng về một vũ trụ không tồn tại.
-        if Self::mix(copy.state_hash(), &self.overrides) != base_hash {
+        if Self::mix(
+            copy.state_hash(),
+            &self.overrides,
+            &self.stock,
+            &self.work,
+            &self.trample,
+        ) != base_hash
+        {
             return Err("phát lại lịch sử không dựng lại được thế giới hiện tại — \
                  có thay đổi nằm ngoài nhật ký lệnh"
                 .to_owned());
@@ -1005,7 +1248,13 @@ impl Game {
         Ok(Diff {
             command: cmd.kind.0.clone(),
             base_hash,
-            after_hash: Self::mix(copy.state_hash(), &self.overrides),
+            after_hash: Self::mix(
+                copy.state_hash(),
+                &self.overrides,
+                &self.stock,
+                &self.work,
+                &self.trample,
+            ),
             error,
             events,
             changes: compare(&before, &after),
@@ -1089,6 +1338,19 @@ impl Game {
     /// của người chơi.
     pub fn tick_once(&mut self) {
         let t = self.sim.clock().local().0;
+
+        // Ranh giới ngày kinh tế. `t` là tick **trước khi** advance ở cuối
+        // hàm, và `tick_once` luôn được gọi đúng một lần cho mỗi tick bất kể
+        // tốc độ (xem tài liệu `speed_milli`) — nên kiểm tra bằng chia hết ở
+        // đây thấy đúng một lần mỗi `TICKS_PER_DAY` tick, không phụ thuộc
+        // nhanh hay chậm. Bỏ qua `t == 0`: chưa trôi ngày nào thì chưa có gì
+        // để chạy `run_day`.
+        if t > 0 && t.is_multiple_of(TICKS_PER_DAY) {
+            let day = t / TICKS_PER_DAY;
+            self.run_economy_day(day);
+            self.grow_crops(day);
+            self.fade_trample();
+        }
 
         // Kế hoạch đi chạy **mỗi tick**, không phải mỗi 4 tick như NPC lang
         // thang: người chơi vừa bấm chuột và đang nhìn nhân vật đứng yên thì
@@ -1271,6 +1533,157 @@ impl Game {
             _ => (0, 0),
         }
     }
+
+    /// Kho của làng, sau ngày kinh tế gần nhất.
+    ///
+    /// Chưa có chỗ gọi nào ngoài test: `/api/village` (`§idea.md`, chưa nối)
+    /// sẽ là chỗ gọi đầu tiên, và nó nối vào `api.rs` — một tệp nhiệm vụ này
+    /// cố tình không đụng tới, vì có agent khác đang sửa nó cùng lúc.
+    #[allow(dead_code)]
+    pub fn stock(&self) -> &Stock {
+        &self.stock
+    }
+
+    /// Lực lượng lao động, đo lần gần nhất — xem tài liệu trường `work`.
+    ///
+    /// Chưa dùng ngoài test, cùng lý do với `stock`.
+    #[allow(dead_code)]
+    pub fn workforce(&self) -> &Workforce {
+        &self.work
+    }
+
+    /// Báo cáo của ngày kinh tế gần nhất, nếu đã có ít nhất một ngày trôi qua.
+    ///
+    /// Chưa dùng ngoài test, cùng lý do với `stock`.
+    #[allow(dead_code)]
+    pub fn last_day_report(&self) -> Option<&DayReport> {
+        self.last_day_report.as_ref()
+    }
+
+    /// Đếm lực lượng lao động từ cư dân **thật** đang sống trong thế giới.
+    ///
+    /// Không nhớ một tổng dân số riêng: `Workforce::population` đã nói lý do
+    /// ở tài liệu của nó — một tổng lưu riêng là một tổng sẽ lệch. Ở đây cùng
+    /// một nguyên tắc áp cho chính `Workforce`: đếm lại từ `npc.role` mỗi lần
+    /// gọi, không tin vào một bản sao cũ.
+    fn compute_workforce(&self) -> Workforce {
+        let mut w = Workforce::default();
+        for id in self.sim.store().with_attr("npc.role") {
+            match self.sim.store().attr_text(id, "npc.role") {
+                Some("smith") => w.smiths += 1,
+                Some("hunter") => w.hunters += 1,
+                Some("elder") => w.elders += 1,
+                Some("child") => w.children += 1,
+                // Tên lạ rơi về Farmer, giống hệt `role_from` bên dưới — một
+                // content pack gán vai server chưa biết vẫn phải đếm được
+                // vào lực lượng lao động, không được lặng lẽ biến mất khỏi
+                // mô hình kinh tế.
+                _ => w.farmers += 1,
+            }
+        }
+        w
+    }
+
+    /// Một ngày của vòng kinh tế: chạy `mow_econ::village::run_day`, áp kết
+    /// quả vào kho, phát sự kiện, rồi cho cư dân **cảm thấy** nó.
+    ///
+    /// Gọi từ `tick_once` mỗi khi đồng hồ vượt một ranh giới `TICKS_PER_DAY`.
+    /// Tách khỏi `tick_once` vì đây là ba việc khác hẳn nhau — cập nhật kho,
+    /// ghi sổ, chạm vào cư dân — và nhét cả ba vào `tick_once` sẽ làm hàm đó
+    /// dài ra đúng chỗ không ai muốn đọc mỗi khi chỉ sửa đường đi.
+    fn run_economy_day(&mut self, day: u64) {
+        // Đo lại lực lượng lao động **mỗi ngày**, không dùng con số của hôm
+        // qua: cư dân có thể đã chết hoặc đổi vai, và một `Workforce` cũ kỹ
+        // là đúng loại "số trong kho mà không ai cảm thấy" — nhiệm vụ này tồn
+        // tại để xóa đúng loại đó.
+        self.work = self.compute_workforce();
+        let tools_ok = tools_sufficient(&self.stock, &self.work);
+        let report = run_day(&self.stock, &self.work, tools_ok);
+        self.stock = report.stock;
+
+        // `econ.day` mang đủ ba con số chính: thu hoạch (`produced`), tiêu
+        // thụ (`consumed`), và tồn kho sau ngày (`stock`). Phát qua
+        // `self.apply` như mọi lệnh khác trong file này — không viết thẳng
+        // vào `self.journal`, để một bản replay còn phát lại được đúng ngày
+        // này thay vì phải tính lại `run_day` (mà tính lại thì hai nơi cùng
+        // giữ logic kinh tế, sớm muộn chúng lệch nhau).
+        let payload = Value::Map(
+            [
+                ("day".to_owned(), Value::Uint(day)),
+                ("produced".to_owned(), stock_value(&report.produced)),
+                ("consumed".to_owned(), stock_value(&report.consumed)),
+                ("stock".to_owned(), stock_value(&self.stock)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let day_cause = self
+            .apply(&Command::new("econ.day", WORLD, payload))
+            .ok()
+            .map(|()| EventSeq(self.sim.log().next_seq().0.saturating_sub(1)));
+
+        // Một `econ.shortage` cho mỗi loại đang thiếu, gắn nguyên nhân về
+        // đúng sự kiện `econ.day` đã báo nó — khuôn giống hệt `walk`/
+        // `follow_routine`: nguyên nhân đi trong payload dưới khóa `cause`,
+        // và handler (đăng ký ở `build_world`) tự gắn nó qua `emit_caused`.
+        for shortage in &report.shortages {
+            let mut fields = vec![(
+                "kind".to_owned(),
+                Value::Text(shortage_key(*shortage).to_owned()),
+            )];
+            if let Some(c) = day_cause {
+                fields.push(("cause".to_owned(), Value::Uint(c.0)));
+            }
+            let cmd = Command::new(
+                "econ.shortage",
+                WORLD,
+                Value::Map(fields.into_iter().collect()),
+            );
+            let _ = self.apply(&cmd);
+        }
+
+        self.last_day_report = Some(report);
+        self.apply_hunger_for_day();
+    }
+
+    /// Cho cư dân **cảm thấy** kho, thay vì để nó là một con số không ai chạm
+    /// tới.
+    ///
+    /// Cố ý nhị phân — kho rỗng hay không — không có một mức "vừa đủ" ở
+    /// giữa: đó đúng là hai trạng thái nhiệm vụ này khai ra, và bịa thêm một
+    /// ngưỡng thứ ba sẽ là một con số không ai đo được ở đâu cả.
+    fn apply_hunger_for_day(&mut self) {
+        let granary_empty = self.stock.food <= 0;
+        let villagers: Vec<EntityId> = self.sim.store().with_attr("npc.role").collect();
+        for who in villagers {
+            let before = self.attr_int(who, "need.hunger");
+            let delta = if granary_empty {
+                HUNGER_GAIN_ON_EMPTY_GRANARY
+            } else {
+                -HUNGER_EASE_PER_DAY
+            };
+            let after = (before + delta).clamp(0, 10_000);
+            if after != before {
+                self.dat(who, "need.hunger", Value::Int(after));
+            }
+
+            // Ngưỡng chết đói dùng chung với bộ lập lịch (`mow_society::routine::HUNGER_STARVING`),
+            // nhân trăm vì `need.hunger` là thang phần trăm của thang đó — xem
+            // `follow_routine`, nơi phép chia ngược lại (`/ 100`) diễn ra.
+            // Không bịa một ngưỡng riêng cho vòng kinh tế: hai ngưỡng khác
+            // nhau cho cùng một khái niệm là hai cơ hội để chúng lệch nhau.
+            let starving = after >= HUNGER_STARVING * 100;
+            if starving != self.attr_bool(who, "npc.starving") {
+                self.dat(who, "npc.starving", Value::Bool(starving));
+            }
+        }
+    }
+
+    /// Thuộc tính dưới dạng cờ đúng/sai. Vắng mặt hoặc sai kiểu đều là `false`
+    /// — cùng quy ước với `attr_int` ngay dưới đây.
+    fn attr_bool(&self, id: EntityId, key: &str) -> bool {
+        matches!(self.sim.store().attr(id, key), Some(Value::Bool(true)))
+    }
 }
 
 /// Số tick một ngày. Khớp `TICKS_PER_DAY` của tầng vẽ.
@@ -1310,8 +1723,182 @@ pub const MAX_BUILD_SLOPE_M: i64 = 4;
 /// Bán kính quét quanh chỗ ở được để tìm khoảnh đất bằng nhất.
 pub const FLAT_SEARCH_RADIUS: i64 = 40;
 
+/// Ô thay thế cho toạ độ ngoài thế giới.
+///
+/// Chìm dưới nước có chủ ý: rìa bản đồ không đi vào được và không dựng được, và
+/// một ô "đất khô mặc định" ở đó sẽ mời người chơi đi ra khỏi thế giới.
+fn edge_cell(gen: &Worldgen) -> BaseCell {
+    BaseCell {
+        elevation: mow_worldgen::Elevation {
+            height_m: 0,
+            slope: 0,
+            submerged: true,
+        },
+        climate: gen
+            .base_cell(0, 0)
+            .map_or_else(|_| unreachable!("ô gốc luôn sinh được"), |b| b.climate),
+        flow: mow_worldgen::Flow {
+            dx: 0,
+            dy: 0,
+            accumulation: 0,
+            is_river: false,
+            is_water_body: true,
+        },
+        strata: mow_worldgen::Strata {
+            surface: mow_worldgen::Material::Water,
+            soil_depth_m: 0,
+            bedrock_depth_m: 0,
+            ore_present: false,
+            cave: false,
+        },
+        biome: mow_worldgen::Biome::Alpine,
+    }
+}
+
+/// Các pha của một mảnh ruộng, theo thứ tự.
+///
+/// Bốn pha chứ không phải hai: một ruộng chỉ có "trống" và "xanh" thì nhấp nháy
+/// giữa hai trạng thái, còn bốn pha đọc ra một **mùa vụ**. Tên vật liệu phải có
+/// thật trong content pack (`§19.7`) — nếu thiếu, bản đồ hiện màu tím và người
+/// chơi sẽ đi báo lỗi cho renderer.
+pub const CROP_STAGES: [&str; 4] = ["farmland", "crop_sprout", "crop_green", "crop_ripe"];
+
+/// Bao nhiêu ngày một pha kéo dài.
+///
+/// Năm ngày mỗi pha ⇒ hai mươi ngày một mùa vụ. Đủ dài để chín là một sự kiện
+/// đáng chờ, đủ ngắn để người chơi ở tốc độ ×25 thấy trọn một vụ trong khoảng
+/// một phút thật.
+pub const CROP_DAYS_PER_STAGE: u64 = 5;
+
+/// Độ mòn tối đa của một ô. Trên mức này thì thêm bước chân cũng không đổi gì.
+pub const TRAMPLE_MAX: u32 = 255;
+
+/// Mỗi bước chân thêm bao nhiêu độ mòn.
+///
+/// Mười hai nghĩa là khoảng hai mươi mốt lần đi qua thì ô chạm trần. Với một
+/// cư dân đi làm mỗi ngày, con đường từ nhà ra ruộng hiện rõ sau khoảng ba
+/// tuần trong thế giới — đủ lâu để nó **có nghĩa**, đủ nhanh để người chơi
+/// nhìn thấy nó hình thành ở tốc độ ×25.
+pub const TRAMPLE_PER_STEP: u32 = 12;
+
+/// Mỗi ngày, mỗi ô mòn nguôi đi bao nhiêu.
+///
+/// Trừ một số cố định chứ **không** nhân với một phân số: nhân số nguyên với
+/// `15/16` sẽ cắt cụt mọi giá trị nhỏ về 0 ngay lập tức, và một lối mòn nhạt
+/// sẽ biến mất sau đúng một đêm thay vì phai dần. Đây cùng loại lỗi với việc
+/// chia trước khi cộng dồn mà dự án này đã dính ba lần.
+pub const TRAMPLE_DECAY_PER_DAY: u32 = 3;
+
+/// Trần số ô giữ trong bảng lối mòn.
+///
+/// Một ván rất dài với người chơi lang thang khắp bản đồ có thể chạm trần này.
+/// Khi đó bỏ những ô **nhạt nhất**: chúng đúng là những ô sắp biến mất sau vài
+/// ngày nữa, nên mất chúng sớm hơn một chút không đổi thứ người chơi thấy.
+pub const TRAMPLE_CAP: usize = 200_000;
+
 /// Trần số ô giữ trong bảng nhớ địa hình. Vượt là xóa sạch và dựng lại.
-pub const TERRAIN_CACHE_CAP: usize = 1_000_000;
+pub const TERRAIN_CACHE_CAP: usize = 250_000;
+
+/// Mỗi ngày no đủ, cư dân bớt đói đi chừng này điểm trên thang `need.hunger`
+/// (0 là no hẳn, càng cao càng đói — xem tài liệu `HUNGER_STARVING`).
+///
+/// Nhỏ hơn nhiều so với [`HUNGER_GAIN_ON_EMPTY_GRANARY`] một cách cố ý: no đủ
+/// là hồi phục **dần**, không phải một cú xóa sạch cơn đói đã tích từ ba ngày
+/// thiếu trước đó.
+pub const HUNGER_EASE_PER_DAY: i64 = 250;
+
+/// Kho lương cạn (`Stock::food <= 0`) thì mỗi ngày cư dân đói thêm chừng này —
+/// mạnh hơn hẳn mức hồi phục bình thường, vì một ngày không có gì để chia
+/// không phải "chưa kịp ăn", nó là một ngày nhịn đói thật.
+///
+/// Chọn `1_500`: từ mức đói khởi điểm (`1_500..=2_700`, xem `spawn_villager`),
+/// một làng mất sạch kho lương sẽ đẩy cư dân đói nhất qua ngưỡng
+/// [`HUNGER_STARVING`] (`8_500` trên cùng thang) trong khoảng bốn đến năm
+/// ngày — cùng cỡ với khoảng ngày mà `mow_econ::village` đã đo cho việc cạn
+/// kho (một làng mất hết Farmer thì cạn kho ở ngày 13, sau khi đã báo trước
+/// từ ngày 9): không chết ngay hôm kho vừa hết, nhưng cũng không phải một
+/// nguy cơ mơ hồ kéo dài hàng tháng mà người chơi không kịp thấy hậu quả.
+pub const HUNGER_GAIN_ON_EMPTY_GRANARY: i64 = 1_500;
+
+/// Dựng thế giới với đúng bộ handler của lát cắt (`mow_scenario::slice`),
+/// cộng hai động từ của vòng kinh tế: `econ.day` và `econ.shortage`.
+///
+/// `slice_handlers()` trả về một `HandlerRegistry` bình thường — có thể thêm
+/// handler vào nó trước khi đưa cho `Sim::new`, không cần sửa `mow-scenario`.
+/// Đây là cách hợp lệ để mở rộng bộ động từ mà vẫn giữ đúng ranh giới sở hữu
+/// crate của nhiệm vụ này.
+///
+/// Cả hai handler đều **không tính toán gì**: mọi con số đã được
+/// `mow_econ::village::run_day` chốt xong trước khi lệnh được gửi (xem
+/// `Game::run_economy_day`), nên handler chỉ việc phát lại đúng payload đã
+/// nhận qua `emit_caused`. Tính lại ở đây sẽ là hai nơi cùng giữ một logic
+/// kinh tế — sớm muộn chúng lệch nhau.
+///
+/// `Game::replay` cũng phải dựng thế giới bằng hàm này, không phải
+/// `slice::build_empty_world`: nếu không, một nhật ký có lệnh kinh tế sẽ
+/// không phát lại được trên bản sao, và preview sẽ báo "thế giới đã lệch" kể
+/// từ ngày đầu tiên có kinh tế.
+fn build_world(seed: u64) -> Sim {
+    let mut handlers = slice::slice_handlers();
+    handlers
+        .on("econ.day", |ctx| {
+            ctx.emit_caused(EventDraft::new("econ.day", ctx.command.payload.clone()));
+            Ok(())
+        })
+        .on("econ.shortage", |ctx| {
+            ctx.emit_caused(EventDraft::new(
+                "econ.shortage",
+                ctx.command.payload.clone(),
+            ));
+            Ok(())
+        });
+
+    Sim::new(
+        SimConfig {
+            world: WORLD,
+            branch: BranchId(1),
+            seed: WorldSeed(seed),
+            clock: Clock::synchronous(),
+        },
+        handlers,
+    )
+}
+
+/// Đóng gói một `Stock` thành payload sự kiện.
+///
+/// Dùng chung cho cả ba trường của `DayReport` (`stock`, `produced`,
+/// `consumed`) vì cả ba đều **cùng kiểu** — đó chính là bất biến cân đối mà
+/// tài liệu `mow_econ::village::DayReport` mô tả.
+fn stock_value(s: &Stock) -> Value {
+    Value::Map(
+        [
+            ("food".to_owned(), Value::Int(s.food)),
+            ("water".to_owned(), Value::Int(s.water)),
+            ("wood".to_owned(), Value::Int(s.wood)),
+            ("tools".to_owned(), Value::Int(s.tools)),
+            ("seed_grain".to_owned(), Value::Int(s.seed_grain)),
+            ("soil_fertility".to_owned(), Value::Int(s.soil_fertility)),
+        ]
+        .into_iter()
+        .collect(),
+    )
+}
+
+/// Khóa ổn định của một loại thiếu hụt, để lưu vào payload sự kiện.
+///
+/// Cùng lý do với `intent_key`: không dùng `format!("{shortage:?}")`, vì
+/// `Debug` đổi theo cách enum được khai báo, không cam kết gì với người đọc
+/// ở đầu kia của một API sau này.
+fn shortage_key(s: Shortage) -> &'static str {
+    match s {
+        Shortage::Food => "food",
+        Shortage::Water => "water",
+        Shortage::Wood => "wood",
+        Shortage::Tools => "tools",
+        Shortage::SeedGrain => "seed_grain",
+        Shortage::Fertility => "fertility",
+    }
+}
 
 /// Đổi vai của bộ quy hoạch sang vai của bộ lập lịch.
 ///
@@ -1469,6 +2056,193 @@ fn scan_rings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "do toc do, chay tay bang --ignored"]
+    fn bench_tick_cost() {
+        let mut g = Game::new(42);
+        for _ in 0..2_400 {
+            g.tick_once();
+        }
+        let t0 = std::time::Instant::now();
+        const N: u32 = 2_000;
+        for _ in 0..N {
+            g.tick_once();
+        }
+        let per = t0.elapsed().as_micros() / u128::from(N);
+        eprintln!("tick: {per} us  => {} tick/s", 1_000_000 / per.max(1));
+
+        let t1 = std::time::Instant::now();
+        for _ in 0..200 {
+            let _ = g.state_hash();
+        }
+        eprintln!("state_hash: {} us", t1.elapsed().as_micros() / 200);
+    }
+
+    #[test]
+    fn asking_for_a_tile_twice_does_not_run_worldgen_twice() {
+        // Đây là bài cho một lỗi đã đo được, không phải một lo xa.
+        //
+        // Bản đồ thu nhỏ hỏi 128×128 = 16.384 ô mỗi 2,5 giây, và `tile` từng gọi
+        // thẳng `Worldgen::base_cell` cho **mỗi** ô — trong khi đang giữ khóa
+        // thế giới. Hệ quả đo trên server đang chạy: luồng tick tụt từ 4.480
+        // xuống **120** nhịp mỗi giây ngay khi một trình duyệt nối vào, tức là
+        // thanh tốc độ ×100 thực ra chạy chậm hơn ×1. Sau khi nhớ cả `BaseCell`:
+        // 4.400 nhịp mỗi giây với đúng cái trình duyệt đó.
+        //
+        // Kiểm **cơ chế**, không kiểm đồng hồ: một bài đo thời gian sẽ đỏ tuỳ
+        // máy, còn "hỏi lần hai không sinh thêm mục nhớ" thì đúng ở mọi máy.
+        let g = Game::new(42);
+        let _ = g.tile(9_000, 9_000);
+        let sau_lan_dau = g.terrain.borrow().len();
+        let _ = g.tile(9_000, 9_000);
+        assert_eq!(
+            g.terrain.borrow().len(),
+            sau_lan_dau,
+            "hỏi lại cùng một ô đã sinh thêm một mục nhớ — tức là đã chạy lại worldgen"
+        );
+    }
+
+    #[test]
+    fn a_repeated_minimap_batch_is_far_cheaper_than_the_first() {
+        // Bản đồ thu nhỏ hỏi **cùng một** lô 128×128 mỗi 2,5 giây. Lần đầu phải
+        // sinh thật và tốn thật; từ lần thứ hai trở đi nó phải gần như miễn phí,
+        // và đó chính là thứ đã đưa luồng tick từ 120 lên 4.400 nhịp mỗi giây.
+        //
+        // So **tỉ lệ** chứ không so một con số tuyệt đối: một trần tính bằng
+        // mili giây sẽ đỏ tuỳ máy và tuỳ bản build, còn "lần hai rẻ hơn nhiều
+        // lần" thì đúng ở mọi nơi. Ghi nhận trung thực: lần **đầu** vẫn đắt
+        // (khoảng một giây ở bản debug), nên kéo bản đồ sang vùng chưa từng
+        // sinh vẫn giữ khóa một lúc — đó là việc còn phải làm, không phải việc
+        // đã xong.
+        let g = Game::new(42);
+        let quet = |g: &Game| {
+            let t0 = std::time::Instant::now();
+            for dy in 0..128 {
+                for dx in 0..128 {
+                    let _ = g.tile(180 + dx, 190 + dy);
+                }
+            }
+            t0.elapsed().as_micros().max(1)
+        };
+        let dau = quet(&g);
+        let sau = quet(&g);
+        assert!(
+            sau * 5 < dau,
+            "lần hai ({sau} us) không rẻ hơn lần đầu ({dau} us) tới năm lần —              bảng nhớ ô worldgen đã hỏng"
+        );
+    }
+
+    #[test]
+    fn fields_go_through_a_season() {
+        // Ruộng đứng im quanh năm là thứ nói cho người chơi biết thế giới này
+        // chỉ giả vờ sống.
+        let mut g = Game::new(42);
+        assert!(!g.crops.is_empty(), "làng không có thửa ruộng nào");
+
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..(TICKS_PER_DAY * CROP_DAYS_PER_STAGE * 5) {
+            g.tick_once();
+            for at in g.crops.keys() {
+                if let Some(m) = g.overrides.get(at) {
+                    seen.insert(m.clone());
+                }
+            }
+        }
+        assert_eq!(
+            seen.len(),
+            CROP_STAGES.len(),
+            "một mùa vụ chỉ đi qua {} pha: {seen:?}",
+            seen.len()
+        );
+    }
+
+    #[test]
+    fn every_crop_stage_is_a_real_material() {
+        // Một pha trỏ tới vật liệu không có trong content pack sẽ hiện màu tím
+        // trên bản đồ, và người chơi sẽ đi báo lỗi cho renderer (`§19.7`).
+        // Đường dẫn tính từ `CARGO_MANIFEST_DIR`, không từ thư mục làm việc:
+        // `cargo test` chạy với cwd là thư mục crate, còn server chạy từ `src/`.
+        // Một bài test phụ thuộc cwd là một bài test đỏ tuỳ chỗ ai gõ lệnh.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../content/core/blocks");
+        for stage in CROP_STAGES {
+            let p = dir.join(stage).join("metadata.yaml");
+            assert!(p.exists(), "pha `{stage}` không có định nghĩa ở {p:?}");
+        }
+    }
+
+    #[test]
+    fn fields_do_not_all_ripen_on_the_same_day() {
+        // Cả làng gặt cùng một hôm trông như một cỗ máy, không như một cộng
+        // đồng nơi mỗi thửa gieo một ngày khác nhau.
+        let g = Game::new(42);
+        let stages: std::collections::BTreeSet<u8> = g.crops.values().copied().collect();
+        assert!(stages.len() > 1, "mọi thửa ruộng khởi đầu ở cùng một pha");
+    }
+
+    #[test]
+    fn walking_wears_a_path_into_the_ground() {
+        // Không ai vẽ con đường từ nhà ra ruộng. Nó hiện ra vì người ta đi qua
+        // đó mỗi ngày — và đó là thứ rẻ nhất biến một bản đồ **đúng** thành một
+        // bản đồ **có người sống**.
+        let mut g = Game::new(42);
+        for _ in 0..400 {
+            g.tick_once();
+        }
+        let worn: usize = g.trample.values().filter(|v| **v > 0).count();
+        assert!(
+            worn > 0,
+            "bốn trăm nhịp mà không một bàn chân nào để lại dấu"
+        );
+
+        // Và nó phải nằm ở chỗ **có người đi**, không rải đều khắp bản đồ.
+        let deepest = g.trample.values().copied().max().unwrap_or(0);
+        assert!(
+            deepest >= TRAMPLE_PER_STEP,
+            "vết mòn sâu nhất chỉ {deepest}"
+        );
+    }
+
+    #[test]
+    fn paths_fade_where_nobody_walks_any_more() {
+        // Trừ một số cố định chứ **không** nhân với một phân số: nhân số nguyên
+        // với `15/16` cắt cụt mọi giá trị nhỏ về 0 ngay, và một lối mòn nhạt sẽ
+        // biến mất sau đúng một đêm thay vì phai dần.
+        let mut g = Game::new(42);
+        g.tread(1_000, 1_000);
+        g.tread(1_000, 1_000);
+        let before = g.trample_at(1_000, 1_000);
+        assert_eq!(before, TRAMPLE_PER_STEP * 2);
+
+        g.fade_trample();
+        let after = g.trample_at(1_000, 1_000);
+        assert_eq!(after, before - TRAMPLE_DECAY_PER_DAY);
+        assert!(after > 0, "một đêm không được xoá sạch một lối mòn");
+
+        // Đủ nhiều đêm thì nó biến mất hẳn, và ô được thu hồi khỏi bảng.
+        for _ in 0..100 {
+            g.fade_trample();
+        }
+        assert_eq!(g.trample_at(1_000, 1_000), 0);
+        assert!(!g.trample.contains_key(&(1_000, 1_000)));
+    }
+
+    #[test]
+    fn worn_paths_are_part_of_the_world_hash() {
+        // Lối mòn là **sự thật về thế giới**. Để nó ngoài `state_hash` nghĩa là
+        // "xác định" chỉ đúng với phần thế giới mà ta nhớ đưa vào hash — đúng
+        // loại lỗi mà `overrides` đã từng mắc.
+        let a = Game::new(42);
+        let mut b = Game::new(42);
+        assert_eq!(a.state_hash(), b.state_hash());
+        b.tread(5, 5);
+        assert_ne!(
+            a.state_hash(),
+            b.state_hash(),
+            "giẫm một bàn chân mà hash không đổi"
+        );
+    }
 
     #[test]
     fn the_true_god_has_no_body() {
@@ -1908,11 +2682,21 @@ mod tests {
         // Giữ tính chất này nghĩa là mọi công cụ đã so hash từ trước vẫn đúng.
         //
         // Không dùng `Game::new` được nữa: từ khi mọi thế giới mọc lên một ngôi
-        // làng, không còn thế giới nào có `overrides` rỗng. Bài test hỏi về
-        // **phép trộn**, nên nó hỏi thẳng phép trộn.
+        // làng, không còn thế giới nào có `overrides` rỗng, và không còn kho
+        // nào bằng `Stock::default()`. Bài test hỏi về **phép trộn**, nên nó
+        // hỏi thẳng phép trộn, với cả ba kênh ở trạng thái trung tính.
         let g = Game::new(42);
         let sim_hash = g.sim().state_hash();
-        assert_eq!(Game::mix(sim_hash, &BTreeMap::new()), sim_hash);
+        assert_eq!(
+            Game::mix(
+                sim_hash,
+                &BTreeMap::new(),
+                &Stock::default(),
+                &Workforce::default(),
+                &BTreeMap::new()
+            ),
+            sim_hash
+        );
     }
 
     #[test]
@@ -2185,5 +2969,202 @@ mod tests {
             !g.placed().contains(&banh),
             "nhặt rồi mà ổ bánh vẫn nằm dưới đất"
         );
+    }
+
+    // ─────────────────────── Vòng kinh tế ───────────────────────
+
+    #[test]
+    fn mot_ngay_troi_qua_thi_kho_doi() {
+        let mut g = Game::new(42);
+        let before = *g.stock();
+        assert!(g.last_day_report().is_none(), "chưa trôi ngày nào");
+
+        let mut steps = 0;
+        while g.last_day_report().is_none() {
+            g.tick_once();
+            steps += 1;
+            assert!(steps < 10_000, "ranh giới ngày kinh tế không bao giờ tới");
+        }
+
+        assert_ne!(*g.stock(), before, "qua một ngày mà kho không đổi gì");
+    }
+
+    #[test]
+    fn workforce_theo_dung_cu_dan_that() {
+        let g = Game::new(42);
+        let dem_lai = g.compute_workforce();
+        assert_eq!(
+            *g.workforce(),
+            dem_lai,
+            "Workforce lưu trong Game lệch với cư dân thật ngay sau khi dựng làng"
+        );
+
+        let dan_so = g.sim().store().with_attr("npc.role").count();
+        assert_eq!(
+            dem_lai.population(),
+            i64::try_from(dan_so).unwrap_or(i64::MAX),
+            "tổng Workforce phải khớp đúng số cư dân có vai trên bản đồ"
+        );
+    }
+
+    #[test]
+    fn doi_vai_cu_dan_thi_workforce_doi_theo_o_ngay_ke_tiep() {
+        // `Workforce` không phải một hằng số hay một bản chụp giữ mãi từ lúc
+        // dựng làng: nó phải đổi theo cư dân thật. Đổi vai là cách kiểm được
+        // điều đó mà không cần một cơ chế "chết" chưa tồn tại ở tầng engine.
+        let mut g = Game::new(42);
+        let mot_nong_dan = g
+            .sim()
+            .store()
+            .with_attr("npc.role")
+            .find(|id| g.sim().store().attr_text(*id, "npc.role") == Some("farmer"))
+            .expect("làng mẫu phải có ít nhất một Farmer");
+        let truoc = g.compute_workforce();
+        assert!(truoc.farmers > 0);
+
+        g.dat(mot_nong_dan, "npc.role", Value::Text("hunter".to_owned()));
+        g.run_economy_day(1);
+
+        let sau = *g.workforce();
+        assert_eq!(
+            sau.farmers,
+            truoc.farmers - 1,
+            "Farmer không giảm sau khi đổi vai"
+        );
+        assert_eq!(
+            sau.hunters,
+            truoc.hunters + 1,
+            "Hunter không tăng sau khi đổi vai"
+        );
+    }
+
+    #[test]
+    fn kho_va_luc_luong_lao_dong_di_vao_state_hash() {
+        let mut g = Game::new(42);
+        let before = g.state_hash();
+
+        g.stock.food += 1;
+        assert_ne!(
+            g.state_hash(),
+            before,
+            "sửa kho tay mà state_hash không đổi — hai thế giới có kho khác \
+             nhau sẽ lặng lẽ trông giống nhau"
+        );
+
+        // Trả kho về cũ, đổi lực lượng lao động thay vào — phải đổi hash độc
+        // lập với kho, không phải "chỉ một trong hai trường thật sự vào hash".
+        g.stock.food -= 1;
+        assert_eq!(g.state_hash(), before, "trả kho về cũ mà hash không về cũ");
+        g.work.farmers += 1;
+        assert_ne!(
+            g.state_hash(),
+            before,
+            "sửa lực lượng lao động mà state_hash không đổi"
+        );
+    }
+
+    #[test]
+    fn ngay_kinh_te_phat_econ_day_va_econ_shortage_co_nguyen_nhan() {
+        let mut g = Game::new(9);
+        // Ép một ngày thiếu ngay lập tức, không phải đợi kho tự cạn qua nhiều
+        // ngày — bài test này hỏi về **sự kiện**, không hỏi về tốc độ cạn kho.
+        g.stock = Stock {
+            food: 0,
+            water: 0,
+            ..g.stock
+        };
+        g.run_economy_day(1);
+
+        let ngay = g
+            .sim()
+            .log()
+            .iter()
+            .find(|e| e.kind.0 == "econ.day")
+            .expect("phải có sự kiện econ.day mỗi ngày");
+        let thieu = g
+            .sim()
+            .log()
+            .iter()
+            .find(|e| e.kind.0 == "econ.shortage")
+            .expect("kho rỗng mà không báo econ.shortage");
+        assert_eq!(
+            thieu.cause,
+            Some(ngay.seq),
+            "econ.shortage phải gắn nguyên nhân về đúng econ.day đã báo nó"
+        );
+    }
+
+    #[test]
+    fn mat_het_farmer_thi_doi_ap_toi_trong_khoang_ngay_hop_ly() {
+        // Đối chứng với `mow_econ::village`, đọc kỹ tài liệu của
+        // `HUNGER_GAIN_ON_EMPTY_GRANARY`: làng mất hết Farmer thì cạn kho
+        // trong một số ngày đo được, và đói phải ập tới **sau đó**, trong một
+        // khoảng ngày cũng đo được — không phải ngay lập tức, không phải một
+        // nguy cơ mơ hồ không bao giờ tới.
+        let mut g = Game::new(42);
+        let farmers: Vec<EntityId> = g
+            .sim()
+            .store()
+            .with_attr("npc.role")
+            .filter(|id| g.sim().store().attr_text(*id, "npc.role") == Some("farmer"))
+            .collect();
+        assert!(
+            !farmers.is_empty(),
+            "làng mẫu phải có Farmer để bài test có ý nghĩa"
+        );
+        for id in farmers {
+            g.dat(id, "npc.role", Value::Text("hunter".to_owned()));
+        }
+
+        let mut kho_can_ngay: Option<u64> = None;
+        let mut doi_ngay: Option<u64> = None;
+        for ngay in 1..=60u64 {
+            g.run_economy_day(ngay);
+            if kho_can_ngay.is_none() && g.stock().food == 0 {
+                kho_can_ngay = Some(ngay);
+            }
+            if doi_ngay.is_none() {
+                let co_ai_doi = g
+                    .sim()
+                    .store()
+                    .with_attr("npc.role")
+                    .any(|id| g.attr_bool(id, "npc.starving"));
+                if co_ai_doi {
+                    doi_ngay = Some(ngay);
+                }
+            }
+        }
+
+        let kho_can_ngay =
+            kho_can_ngay.expect("mất hết Farmer mà kho lương không bao giờ cạn trong 60 ngày");
+        let doi_ngay =
+            doi_ngay.expect("kho đã cạn mà không ai đói tới ngưỡng chết đói trong 60 ngày");
+        assert!(
+            doi_ngay >= kho_can_ngay,
+            "có người đói tới ngưỡng chết trước cả khi kho cạn: đói ngày {doi_ngay}, cạn ngày {kho_can_ngay}"
+        );
+        assert!(
+            doi_ngay - kho_can_ngay <= 10,
+            "kho cạn rồi mà phải đợi tới {} ngày mới có người đói tới ngưỡng chết — \
+             quá lâu để người chơi cảm nhận được hậu quả",
+            doi_ngay - kho_can_ngay
+        );
+    }
+
+    #[test]
+    fn cung_seed_cung_so_tick_cho_cung_state_hash_qua_nhieu_ngay_kinh_te() {
+        // Xác định phải giữ được **qua** ranh giới ngày kinh tế, không chỉ
+        // trong vài chục tick đầu: 40 tick (bài `tick_xac_dinh` ở trên) không
+        // chạm tới `run_economy_day` lần nào.
+        let so_tick = TICKS_PER_DAY * 3 + 50;
+        let mut a = Game::new(123);
+        let mut b = Game::new(123);
+        for _ in 0..so_tick {
+            a.tick_once();
+            b.tick_once();
+        }
+        assert_eq!(a.state_hash(), b.state_hash());
+        assert_eq!(*a.stock(), *b.stock());
+        assert_eq!(*a.workforce(), *b.workforce());
     }
 }

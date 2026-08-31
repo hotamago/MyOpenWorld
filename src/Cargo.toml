@@ -34,6 +34,7 @@ mow-divine = { path = "crates/mow-divine" }
 mow-yuu = { path = "crates/mow-yuu" }
 mow-settle = { path = "crates/mow-settle" }
 mow-mind = { path = "crates/mow-mind" }
+mow-memory = { path = "crates/mow-memory" }
 
 anyhow = "1"
 thiserror = "2"
