@@ -169,6 +169,37 @@ export function paintTerrain(batch: TileBatch, palette: BlockPalette): Uint8Clam
       // chiều ngược nhau tạo một đường viền đọc được ở mọi mức phóng.
       if (onEdge) light *= wet ? 0.78 : 1.14;
 
+      // ── Bóng tiếp đất của công trình ────────────────────────────────────
+      //
+      // Đây là cách sửa cho đúng lời phàn nàn "mái nhà nổi như sticker". Nguyên
+      // nhân không chỉ ở màu: một khối nhà không có bóng thì mắt không có bằng
+      // chứng nào rằng nó **đứng trên** mặt đất chứ không phải dán lên ảnh.
+      //
+      // `SUN` hướng sao cho sườn dốc lên phía `+x`/`+y` thì sáng — tức nắng tới
+      // từ phải và dưới. Vậy bóng đổ về trái và trên, và một ô đất có công
+      // trình ở `(+1, 0)` hoặc `(0, +1)` là ô nằm trong bóng của nó.
+      //
+      // Làm ở đây chứ không phải bằng một sprite bóng riêng vì bóng phải **theo
+      // đúng lưới ô** — một ellipse mờ đặt lên trên sẽ trôi lệch khi phóng to.
+      {
+        const isBuilt = (nx: number, ny: number): boolean =>
+          nx >= 0 && ny >= 0 && nx < w && ny < h && (batch.built[ny * w + nx] ?? 0) === 1;
+        const here = (batch.built[i] ?? 0) === 1;
+        const lit = isBuilt(gx + 1, gy) || isBuilt(gx, gy + 1);
+        const shade = isBuilt(gx - 1, gy) || isBuilt(gx, gy - 1);
+        if (!here && lit) {
+          // Đất ngay sát chân tường phía khuất nắng.
+          light *= 0.82;
+        } else if (here && !lit) {
+          // Mép mái hướng về phía nắng: bắt sáng, và đó là thứ tách mái ra khỏi
+          // mái nhà bên cạnh khi cả dãy cùng một vật liệu.
+          light *= 1.1;
+        } else if (here && shade) {
+          // Mép mái phía khuất: một vạch tối mỏng đọc ra là độ dày của mái.
+          light *= 0.9;
+        }
+      }
+
       // ── Đường đồng mức theo bậc độ sâu ─────────────────────────────────
       // Chỉ vẽ khi đang nhìn từ trên xuống (`material === "air"`): trong lòng
       // đất thì mọi ô cùng bậc, và một lưới đồng mức ở đó chỉ là nhiễu.

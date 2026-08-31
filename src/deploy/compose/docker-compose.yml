@@ -8,7 +8,7 @@
 #     ./mow shell       # vào trong toolbox
 #     ./mow app up      # bật frontend + sidecar nhận thức
 #     ./mow infra up    # bật Postgres/NATS/Qdrant/Jaeger cho server mode
-#     ./mow ai up       # bật máy chủ embedding cục bộ (TEI + GPU)
+#     ./mow ai up       # bật máy chủ embedding cục bộ (llama.cpp + GPU)
 #     ./mow down        # dọn
 #
 # Hai nhóm dịch vụ tách hẳn nhau bằng `profiles`:
@@ -284,79 +284,143 @@ services:
   # `jina-embeddings-v5-text-small-retrieval` — bản đã gộp adapter truy xuất.
   # Nền Qwen3-0.6B-Base, `hidden_size` 1024, ngữ cảnh gốc 32k.
   #
-  # ## Vì sao vLLM chứ không phải TEI
+  # ## Vì sao llama.cpp — và ba máy chủ đã thử trước nó
   #
-  # TEI là lựa chọn đầu tiên và nó **hỏng ở đây**, theo một cách đáng ghi lại:
+  # Số đo trước, lý lẽ sau (`docker images`, cột SIZE trên đĩa / tải về):
+  #
+  #     vllm/vllm-openai:v0.28.0                28.8 GB / 8.63 GB  chạy được
+  #     michaelf34/infinity:latest              14.3 GB / 4.76 GB  KHÔNG nạp được
+  #     ghcr.io/ggml-org/llama.cpp:server-cuda   6.98 GB / 2.59 GB  chạy  ← chọn
+  #     ghcr.io/huggingface/
+  #       text-embeddings-inference:89-1.8       1.74 GB / 612 MB  KHÔNG nạp được
+  #
+  # **TEI** (nhẹ nhất, nên là lựa chọn đầu) chết ở bước đọc cấu hình:
   #
   #     Error: Failed to parse `config.json`
   #     Caused by: invalid type: null, expected usize at line 51 column 22
   #
   # Dòng 51 là `"pad_token_id": null`. Kiểu config Qwen3 của TEI khai trường đó
-  # là `usize` không cho phép null, còn Hugging Face thì cho — nên model tải về
-  # đủ, rồi chết ở bước đọc cấu hình. Không phải lỗi của model, và cũng không
-  # phải thứ sửa được từ phía compose.
+  # là `usize` không cho phép null, còn Hugging Face thì cho — model tải về đủ
+  # rồi chết. Không phải lỗi của model, và không sửa được từ phía compose.
   #
-  # vLLM đọc thẳng `architectures: ["Qwen3Model"]` và phục vụ được. Cái giá là
-  # image lớn hơn nhiều (~20GB so với ~3GB) và khởi động chậm hơn — đắt, nhưng
-  # đây là con đường chạy được.
+  # **Infinity** (`michaelf34/infinity:latest`, tức 0.0.77, bản mới nhất tính
+  # tới 2025-08-22) chết vì ghim `transformers` quá cũ:
   #
-  # Nếu muốn nhẹ hơn và không cần vLLM cho việc khác: `michaelf34/infinity` là
-  # một máy chủ embedding nhỏ cũng phơi `/v1/embeddings`. Chưa kiểm ở đây.
+  #     ValueError: The checkpoint you are trying to load has model type `qwen3`
+  #     but Transformers does not recognize this architecture.
   #
-  # ## Hai cờ đáng giải thích
+  # Trong image là `transformers 4.49.0.dev0`; `qwen3` vào từ 4.51. Không có tag
+  # nào mới hơn để đổi sang, nên đây là ngõ cụt chứ không phải chuyện chỉnh cờ.
   #
-  # `--runner pooling --convert embed`: `--task embed` đã bị thay bằng cặp cờ
-  # này. vLLM thường tự nhận ra, nhưng "thường" là một từ tồi trong một file mà
-  # người ta đọc khi có sự cố.
+  # **llama.cpp** chạy được, và chạy được vì Jina phát hành GGUF chính chủ:
+  # `jinaai/jina-embeddings-v5-text-small-retrieval-GGUF`. Nó phơi đúng
+  # `/v1/embeddings` theo lược đồ OpenAI, nên `mow-llm` không đổi một dòng nào.
   #
-  # `--gpu-memory-utilization 0.5`: vLLM mặc định chiếm 0.9 VRAM và **giữ suốt
-  # đời tiến trình**. Trên một máy đang chạy cả trình duyệt lẫn IDE, 0.9 nghĩa
-  # là màn hình giật. 0.5 của 12GB vẫn thừa cho một model 0.6B.
+  # Cái được so với vLLM, đo trên chính máy này (RTX 4070 SUPER 12GB):
+  #
+  #     image      28.8 GB → 6.98 GB (tải về 8.63 GB → 2.59 GB)
+  #     VRAM       6.0 GB giữ suốt đời tiến trình → ~3.4 GB
+  #     khởi động  llama-server báo "model loaded" sau 2.7 s; container `healthy`
+  #                sau 8 s. Lần đầu cộng ~2m45s tải 1.2GB GGUF vào volume.
+  #     lô 32 văn bản: 0.25 s
+  #
+  # Con số vLLM tương ứng không đo được nữa vì service đã đổi, nhưng bản cũ để
+  # `start_period: 600s` cho healthcheck — đó là ước lượng của người viết nó về
+  # chi phí khởi động, và nó gấp hai chữ số so với 8 giây.
+  #
+  # Cái mất: không có gì đo được. Cùng ba câu của `embed probe`:
+  #
+  #     vLLM       gần 0.8553   xa 0.0597
+  #     llama.cpp  gần 0.8569   xa 0.0596
+  #
+  # GGUF F16 và bf16 của vLLM là cùng một model, nên khác biệt đó là nhiễu số
+  # học chứ không phải khác biệt chất lượng. Đừng đọc bốn chữ số đó quá chặt:
+  # chạy lại `embed probe` nhiều lần trên **cùng** máy chủ này cũng cho 0.8569
+  # rồi 0.8559 — suy ra thứ tự cộng dồn dấu chấm động đổi theo cách máy chủ xếp
+  # lô, và cả hai máy chủ đều thế. Cái này KHÔNG đụng tới `./mow determinism`:
+  # `dev` và `test` chạy `embedding.mode: STUB`, tức `HashingEmbedder` tại chỗ,
+  # xác định tuyệt đối. Chỉ `--env live` mới gọi ra đây.
+  #
+  # ## Bốn cờ đáng giải thích
+  #
+  # `--pooling last`: model dùng **last-token pooling** (xem `1_Pooling/config.
+  # json`: `pooling_mode_lasttoken: true`). Mặc định của llama.cpp là `mean`.
+  # Sai cờ này thì máy chủ vẫn trả 1024 chiều, vẫn `200 OK`, và vector vẫn sai —
+  # đây là kiểu hỏng chỉ lộ ra ở chất lượng truy xuất, nên nó nằm ở đây tường
+  # minh chứ không dựa vào siêu dữ liệu trong file GGUF.
+  #
+  # `--ubatch-size 2048`: đây là cờ chi phối gần hết VRAM, không phải cờ chi
+  # phối độ dài. Đo trên máy này: ub 1024 → 2.9GB, ub 2048 → 3.4GB, ub 8192 →
+  # 7.2GB (tức là để mặc định theo `--batch-size` thì llama.cpp còn ngốn hơn
+  # vLLM).
+  #
+  # Chỗ dễ đọc nhầm: có tài liệu nói pooling bắt cả văn bản nằm gọn trong một
+  # ubatch. Bản này thì không — đã kiểm: một văn bản ~2500 token qua máy chủ
+  # `ub 2048` cho vector cos = 0.999997 so với cùng văn bản qua máy chủ
+  # `ub 8192`. Nó chia ubatch rồi ghép lại đúng.
+  #
+  # Giới hạn thật là `--ctx-size 8192`, và nó hỏng to tiếng chứ không cắt ngầm:
+  #
+  #     400 request (9001 tokens) exceeds the available context size (8192
+  #     tokens), try increasing it
+  #
+  # 8192 giữ đúng bằng `--max-model-len` của bản vLLM cũ, nên không có ký ức
+  # nào đang vừa bỗng thành không vừa. Ký ức trong game dài vài trăm token.
+  #
+  # `--alias`: tên ngắn, ổn định, đi vào `embedding.model` của config và vào mọi
+  # bản ghi. Đổi repo GGUF mà không đổi tên này thì lịch sử vẫn đọc được.
+  #
+  # `LLAMA_CACHE`: llama.cpp KHÔNG đọc `HF_HOME`. Không đặt biến này thì trọng
+  # số rơi vào `/root/.cache` trong container và tải lại 1.2GB sau mỗi `down`.
   embeddings:
     profiles: ["ai"]
-    image: vllm/vllm-openai:${MOW_VLLM_TAG:-v0.28.0}
-    # Ghi đè entrypoint để không phụ thuộc vào việc bản image nào đặt gì làm
-    # mặc định — chuyện đó đã đổi vài lần giữa các bản vLLM.
-    entrypoint: ["vllm", "serve"]
+    image: ghcr.io/ggml-org/llama.cpp:${MOW_LLAMACPP_TAG:-server-cuda}
+    # Entrypoint của image đã là `/app/llama-server`; chỉ cần cờ.
     command:
-      - ${MOW_EMBED_MODEL:-jinaai/jina-embeddings-v5-text-small-retrieval}
-      - --runner
-      - pooling
-      - --convert
-      - embed
-      # Tên ngắn, ổn định: nó là giá trị đi vào `embedding.model` của config và
-      # vào mọi bản ghi. Đổi đường dẫn repo mà không đổi tên này thì lịch sử
-      # vẫn đọc được.
-      - --served-model-name
+      - --hf-repo
+      - ${MOW_EMBED_GGUF_REPO:-jinaai/jina-embeddings-v5-text-small-retrieval-GGUF}
+      # F16 = 1.2GB, đúng bằng trọng số gốc, không mất gì. Các mức lượng tử hóa
+      # có sẵn trong cùng repo (Q8_0 639MB, Q4_K_M 397MB) nếu cần nhường VRAM;
+      # nhưng ở đây 1.2GB không phải thứ đáng tiết kiệm.
+      - --hf-file
+      - ${MOW_EMBED_GGUF_FILE:-v5-small-retrieval-F16.gguf}
+      - --alias
       - jina-embeddings-v5-text-small
-      # Ký ức trong game dài vài trăm token; 32k chỉ để ăn VRAM.
-      - --max-model-len
+      - --embeddings
+      - --pooling
+      - last
+      - --ctx-size
       - "8192"
-      - --gpu-memory-utilization
-      - "0.5"
+      - --batch-size
+      - "8192"
+      - --ubatch-size
+      - "2048"
+      # 99 = "đẩy hết lên GPU". Model 0.6B thì mọi lớp đều vừa.
+      - --n-gpu-layers
+      - "99"
+      # Mặc định của llama-server là 127.0.0.1 — đúng cho một tiến trình desktop,
+      # sai cho một container mà cả mạng compose phải gọi được.
+      - --host
+      - 0.0.0.0
       - --port
       - "8000"
     environment:
       HF_TOKEN: ${HF_TOKEN:-}
-      HF_HOME: /data
+      LLAMA_CACHE: /data/llama.cpp
     ports:
       - "${MOW_EMBED_PORT:-18080}:8000"
     volumes:
       # Trọng số nằm trên volume: tải lại ~1.2GB mỗi lần `down` là một cách rất
       # tốt để ghét cả quy trình.
       - hfcache:/data
-    # vLLM dùng bộ nhớ chia sẻ giữa các worker. Mặc định 64MB của Docker làm nó
-    # chết bằng một lỗi trỏ vào `/dev/shm`, không trỏ vào cấu hình này.
-    shm_size: "2gb"
     healthcheck:
-      # Image vLLM không chắc có `curl`; `python3` thì chắc chắn có.
-      test:
-        - CMD-SHELL
-        - python3 -c "import urllib.request as u; u.urlopen('http://localhost:8000/health')"
-      interval: 15s
+      # Image llama.cpp có `curl` (Ubuntu 24.04), không có `wget`.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 10s
       timeout: 5s
-      retries: 40
-      start_period: 600s
+      retries: 30
+      # Đủ cho lần đầu tải 1.2GB GGUF; những lần sau máy chủ sẵn sàng sau ~3s.
+      start_period: 300s
     deploy:
       resources:
         reservations:

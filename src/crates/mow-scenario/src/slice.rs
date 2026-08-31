@@ -61,7 +61,7 @@ pub fn slice_handlers() -> HandlerRegistry {
         let y = ctx.store.attr_int(who, "core.pos.y").unwrap_or(0) + dy;
         ctx.set(who, "core.pos.x", x);
         ctx.set(who, "core.pos.y", y);
-        ctx.emit(EventDraft::new("core.entity.moved", val! { "x" => x, "y" => y }).by(who));
+        ctx.emit_caused(EventDraft::new("core.entity.moved", val! { "x" => x, "y" => y }).by(who));
         Ok(())
     });
 
@@ -100,7 +100,7 @@ pub fn slice_handlers() -> HandlerRegistry {
             key: "loc.cell".into(),
         });
         ctx.set(what, "loc.inventory", who.get());
-        ctx.emit(
+        ctx.emit_caused(
             EventDraft::new("core.item.taken", Value::map())
                 .by(who)
                 .on(what),
@@ -131,7 +131,7 @@ pub fn slice_handlers() -> HandlerRegistry {
         ctx.set(who, "need.clock_domain", "proper");
         // Ăn xong thì món đồ biến mất — nó **bị tiêu**, không phải bị dời chỗ.
         ctx.mutate(mow_core::Mutation::Despawn { id: what });
-        ctx.emit(
+        ctx.emit_caused(
             EventDraft::new("core.item.eaten", val! { "nutrition" => dinh_duong })
                 .by(who)
                 .on(what),
@@ -148,13 +148,29 @@ pub fn slice_handlers() -> HandlerRegistry {
         // Nó có vị trí, nên ai ở gần thì nghe được và ai ở xa thì không.
         let x = ctx.store.attr_int(who, "core.pos.x").unwrap_or(0);
         let y = ctx.store.attr_int(who, "core.pos.y").unwrap_or(0);
-        ctx.emit(
+        ctx.emit_caused(
             EventDraft::new(
                 "core.speech.uttered",
                 val! { "text" => noi, "x" => x, "y" => y },
             )
             .by(who),
         );
+        Ok(())
+    });
+
+    // ── Ý định ───────────────────────────────────────────────────────────────
+    //
+    // Một ý định là **sự kiện**, không chỉ là thuộc tính. Khác biệt đó không
+    // phải chuyện hình thức: `Event::cause` trỏ tới một `EventSeq`, và một
+    // thuộc tính thì không có số thứ tự để trỏ tới. Không có sự kiện này thì
+    // mọi bước đi của cư dân là nguyên nhân gốc, và panel "vì sao" chỉ trả lời
+    // được *"vì cô ấy đã bước"* — đúng nhưng vô dụng.
+    r.on("npc.intend", |ctx| {
+        let who = ctx.require_entity_field("who")?;
+        ctx.require_entity(who)?;
+        let intent = ctx.require_text("intent")?.to_owned();
+        ctx.set(who, "npc.intent", Value::Text(intent.clone()));
+        ctx.emit_caused(EventDraft::new("npc.intended", val! { "intent" => intent }).by(who));
         Ok(())
     });
 
@@ -173,7 +189,7 @@ pub fn slice_handlers() -> HandlerRegistry {
         ctx.set(who, &key, v.clone());
         // Mọi can thiệp có **provenance** (`§16.4`). Không có nó, một thế giới
         // kỳ lạ sáu tháng sau sẽ không ai biết là do luật hay do có người sửa.
-        ctx.emit(
+        ctx.emit_caused(
             EventDraft::new(
                 "truegod.intervened",
                 val! { "key" => key, "provenance" => "true_god" },

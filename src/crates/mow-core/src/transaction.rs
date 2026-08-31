@@ -170,7 +170,39 @@ impl<'a> Ctx<'a> {
         })
     }
 
-    /// Ghi một sự kiện.
+    /// Nguyên nhân mà chỗ gọi đã khai trong payload, nếu có.
+    ///
+    /// `§18.10` nói cạnh nhân quả phải được ghi **lúc tạo** sự kiện, và suy
+    /// ngược sau đó là bất khả thi. Handler thì không biết vì sao lệnh này được
+    /// gửi — chỉ chỗ gọi biết. Nên nguyên nhân đi cùng lệnh, và handler chỉ
+    /// việc chuyển tiếp.
+    ///
+    /// Trường tùy chọn: một lệnh không khai nguyên nhân là một sự kiện gốc, và
+    /// đó là chuyện bình thường.
+    pub fn declared_cause(&self) -> Option<EventSeq> {
+        match self.command.payload.get("cause") {
+            Some(Value::Uint(v)) => Some(EventSeq(*v)),
+            _ => None,
+        }
+    }
+
+    /// Phát một sự kiện, tự gắn nguyên nhân đã khai nếu draft chưa có.
+    ///
+    /// Dùng cái này thay cho [`Ctx::emit`] ở mọi handler: quên gắn nguyên nhân
+    /// là một lỗi im lặng — chuỗi nhân quả vẫn "chạy", chỉ là luôn dài đúng một
+    /// mắt, và không có gì báo.
+    pub fn emit_caused(&mut self, draft: EventDraft) -> &mut Self {
+        let d = match self.declared_cause() {
+            Some(c) if draft.cause.is_none() => draft.caused_by(c),
+            _ => draft,
+        };
+        self.emit(d)
+    }
+
+    /// Ghi một sự kiện, **không** tự gắn nguyên nhân.
+    ///
+    /// Dùng khi chỗ gọi đã tự quyết định cạnh nhân quả. Với handler thường thì
+    /// dùng [`Ctx::emit_caused`].
     pub fn emit(&mut self, draft: EventDraft) -> &mut Self {
         self.events.push(draft);
         self

@@ -1,0 +1,14 @@
+# Đất đã cày, ẩm và sẫm hơn đất mặt.
+#
+# Ruộng nhận ra được **không** nhờ màu mà nhờ hình học: luống thẳng song song
+# trong một hình chữ nhật. Màu chỉ cần nói "đất này có người động vào".
+schema: block_def/v1
+id: farmland
+name: { en: "Tilled soil", vi: "Đất cày" }
+color: "#3f3223"
+hardness: 10
+liquid: false
+opaque: true
+walkable: true
+tags: [built, soil, farm]
+script: null

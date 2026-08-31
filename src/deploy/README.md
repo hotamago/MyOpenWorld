@@ -32,7 +32,7 @@ container, chúng không với tới ổ đĩa, biến môi trường hay khóa 
 |---|---|---|
 | **toolbox** | *(mặc định)* | Rust 1.90, Node 24, pnpm, uv, protoc, SQLite, target wasm32 |
 | **app** | `app` | frontend Vue (`web`), sidecar nhận thức Python (`agent`) |
-| **ai** | `ai` | máy chủ embedding cục bộ (vLLM + GPU) |
+| **ai** | `ai` | máy chủ embedding cục bộ (llama.cpp + GPU) |
 | **infra** | `infra` | Postgres 17, NATS JetStream, Qdrant, Jaeger, MinIO |
 
 ### "Sao chỉ có toolbox? Frontend, backend, agent đâu?"
@@ -74,7 +74,7 @@ thực thứ hai và chứng minh nó vượt đúng bộ test hợp đồng đ�
 | `./mow exec <lệnh>` | lệnh bất kỳ bên trong |
 | `./mow native <lệnh>` | chạy thẳng trên máy, bỏ qua container |
 | `./mow app up\|down\|logs` | frontend + sidecar nhận thức |
-| `./mow ai up\|down\|logs` | máy chủ embedding cục bộ (cần GPU NVIDIA) |
+| `./mow ai up\|down\|logs` | máy chủ embedding cục bộ (cần GPU NVIDIA) — xem mục dưới |
 | `./mow infra up\|down` | hạ tầng server mode |
 | `./mow logs [dịch vụ]` | xem log |
 | `./mow doctor` | máy thật có đủ gì, thiếu gì |
@@ -85,6 +85,71 @@ thực thứ hai và chứng minh nó vượt đúng bộ test hợp đồng đ�
 `RAYON_NUM_THREADS` khác nhau. Trên máy thật bạn không điều khiển được số nhân
 một cách đáng tin; trong container thì có, nên đây là chỗ duy nhất mà "cùng kết
 quả bất kể số luồng" thật sự được kiểm chứng chứ không chỉ được hy vọng.
+
+## Máy chủ embedding (`./mow ai up`)
+
+Phục vụ `jinaai/jina-embeddings-v5-text-small-retrieval` (nền Qwen3-0.6B, 1024
+chiều) qua endpoint lược đồ OpenAI ở `http://localhost:18080/v1/embeddings`.
+
+Bốn máy chủ đã được thử **trên chính máy này**, không phải đọc tài liệu:
+
+| Image | Trên đĩa / tải về | Kết quả |
+|---|---|---|
+| `ghcr.io/ggml-org/llama.cpp:server-cuda` | **6.98 GB** / 2.59 GB | chạy — đang dùng |
+| `ghcr.io/huggingface/text-embeddings-inference:89-1.8` | 1.74 GB / 612 MB | không nạp được model |
+| `michaelf34/infinity:latest` (0.0.77) | 14.3 GB / 4.76 GB | không nạp được model |
+| `vllm/vllm-openai:v0.28.0` | 28.8 GB / 8.63 GB | chạy — đã thay |
+
+**TEI** nhẹ nhất và là lựa chọn đầu tiên. Nó chết ở bước đọc cấu hình:
+`invalid type: null, expected usize at line 51 column 22`. Dòng 51 là
+`"pad_token_id": null` — kiểu config Qwen3 của TEI khai trường đó là `usize`
+không cho phép null, Hugging Face thì cho.
+
+**Infinity** chết vì ghim `transformers 4.49.0.dev0`, mà `qwen3` chỉ vào từ
+4.51: `has model type 'qwen3' but Transformers does not recognize this
+architecture`. Không có tag nào mới hơn 0.0.77 để đổi sang.
+
+**llama.cpp** chạy được vì Jina phát hành GGUF chính chủ
+(`jinaai/jina-embeddings-v5-text-small-retrieval-GGUF`, bản F16 1.2 GB). So với
+vLLM, đo trên RTX 4070 SUPER 12GB:
+
+| | vLLM | llama.cpp |
+|---|---|---|
+| image trên đĩa | 28.8 GB | **6.98 GB** |
+| VRAM khi rảnh | 6.0 GB, giữ suốt đời tiến trình | **~3.4 GB** |
+| khởi động lại (đã có trọng số) | `start_period` phải để 600s | **`healthy` sau 8s** |
+| lô 32 văn bản | — | 0.25 s |
+| `embed probe` gần / xa | 0.8553 / 0.0597 | 0.8569 / 0.0596 |
+
+Ô "600s" là ước lượng của bản cũ chứ không phải số đo — service vLLM đã bị thay
+nên không đo lại được. Nhưng nó là con số người viết bản đó chọn để container
+không bị giết oan, và nó gấp hai chữ số so với 8 giây.
+
+Hai con số cuối là điểm đáng chú ý: **chất lượng không đổi**. F16 GGUF và bf16
+của vLLM là cùng một model, và tích vô hướng chỉ lệch ở chữ số thứ ba.
+
+Lần `up` đầu tiên tải 1.2 GB trọng số (~3 phút ở đây) vào volume `hfcache`, nên
+`start_period` của healthcheck để 300s. Những lần sau container `healthy` trong
+khoảng mười giây.
+
+Kiểm nhanh mà không cần Rust:
+
+```bash
+curl -s http://localhost:18080/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"jina-embeddings-v5-text-small","input":["the blacksmith forges a sword"],"encoding_format":"float"}' \
+  | python -c 'import sys,json; print(len(json.load(sys.stdin)["data"][0]["embedding"]), "chiều")'
+```
+
+Kiểm đầy đủ — số chiều **và** thứ tự ngữ nghĩa:
+
+```bash
+cd src && cargo run -q -p mow-cli -- embed probe --env live
+```
+
+Ba biến ghi đè, nếu cần: `MOW_LLAMACPP_TAG` (tag image),
+`MOW_EMBED_GGUF_REPO` và `MOW_EMBED_GGUF_FILE` (đổi mức lượng tử hóa — cùng repo
+có Q8_0 639 MB và Q4_K_M 397 MB nếu phải nhường VRAM cho việc khác).
 
 ## Cổng ra máy thật
 

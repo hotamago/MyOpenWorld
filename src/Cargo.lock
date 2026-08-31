@@ -1545,6 +1545,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mow-content"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+]
+
+[[package]]
 name = "mow-core"
 version = "0.1.0"
 dependencies = [
@@ -1711,6 +1721,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mow-mind"
+version = "0.1.0"
+dependencies = [
+ "mow-llm",
+ "mow-society",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "mow-obs"
 version = "0.1.0"
 dependencies = [
@@ -1817,12 +1837,23 @@ dependencies = [
 name = "mow-server"
 version = "0.1.0"
 dependencies = [
+ "mow-content",
  "mow-core",
  "mow-math",
  "mow-scenario",
+ "mow-settle",
+ "mow-society",
+ "mow-spatial",
  "mow-worldgen",
  "serde_json",
  "tiny_http",
+]
+
+[[package]]
+name = "mow-settle"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

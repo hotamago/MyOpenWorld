@@ -108,7 +108,10 @@ impl<'a, T: Definition> IntoIterator for &'a DefRegistry<T> {
 /// File lẻ nằm ngay trong `dir` (`README.md`, `.gitkeep`) bị bỏ qua. Chỉ thư mục
 /// con mới là định nghĩa — đó là toàn bộ quy ước của bố cục này, và nó cần đúng
 /// một câu để giải thích.
-pub(crate) fn load_directory<T, F>(dir: &Path, parse: F) -> Result<BTreeMap<String, T>, ContentError>
+pub(crate) fn load_directory<T, F>(
+    dir: &Path,
+    parse: F,
+) -> Result<BTreeMap<String, T>, ContentError>
 where
     F: Fn(&Path, &str, &str) -> Result<T, ContentError>,
 {

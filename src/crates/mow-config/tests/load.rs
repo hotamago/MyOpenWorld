@@ -457,7 +457,9 @@ fn api_key_env_cua_vai_khong_phai_ten_bien_thi_bi_tu_choi() {
             ..RouteConfig::default()
         },
     );
-    let e = c.validate_with_env(co_khoa).expect_err("khóa không phải tên");
+    let e = c
+        .validate_with_env(co_khoa)
+        .expect_err("khóa không phải tên");
     assert!(e.to_string().contains("TÊN"), "{e}");
 }
 

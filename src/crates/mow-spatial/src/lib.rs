@@ -38,7 +38,9 @@
 pub mod chunk;
 pub mod lod;
 pub mod occupancy;
+pub mod pathfind;
 
 pub use chunk::{Chunk, ChunkDelta, ChunkStore, Lod};
 pub use lod::{lod_for_distance, transition, Aggregate, Conserved, Leak, LodError};
 pub use occupancy::Occupancy;
+pub use pathfind::{find_path, simplify, Coord, PathOutcome, PathRequest};

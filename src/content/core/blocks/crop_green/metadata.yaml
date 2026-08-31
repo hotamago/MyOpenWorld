@@ -1,0 +1,14 @@
+# Mạ và rau màu đang lên.
+#
+# Xanh ngả vàng ấm, tươi hơn bất kỳ sắc nào của cỏ tự nhiên trong bảng biome —
+# đó là chỗ phân biệt "có người trồng" với "cỏ tự mọc".
+schema: block_def/v1
+id: crop_green
+name: { en: "Standing crop", vi: "Cây trồng" }
+color: "#768647"
+hardness: 5
+liquid: false
+opaque: true
+walkable: true
+tags: [built, farm, crop]
+script: null

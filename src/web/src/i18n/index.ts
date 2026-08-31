@@ -43,7 +43,11 @@ const vi = {
   "panel.tile.depth": "sâu dưới chân",
 
   "panel.controls": "Điều khiển",
-  "panel.controls.move": "đi",
+  "panel.controls.move": "bấm để đi",
+  "panel.controls.stop": "chuột phải để dừng",
+  "panel.controls.walking": "đang đi",
+  "panel.controls.unreachable": "không có đường tới đó",
+  "panel.controls.partial": "chỉ tới được gần đó",
   "panel.controls.take": "nhặt",
   "panel.controls.talk": "nói",
   "panel.controls.layer": "đổi lát z",
@@ -52,14 +56,84 @@ const vi = {
   "panel.controls.nobodyNear": "không có ai bên cạnh",
 
   "panel.present": "Có mặt",
+  "panel.who": "Cư dân",
+  "panel.who.role": "vai",
+  "panel.who.doing": "đang định",
+  "panel.who.hunger": "đói",
   "panel.events": "Sự kiện",
   "panel.events.empty": "chưa có gì xảy ra",
+  "panel.events.hint": "bấm một sự kiện để truy ngược nguyên nhân",
+  "panel.cause": "Vì sao",
+  "panel.cause.root": "không còn nguyên nhân nào trước đó",
+  "panel.cause.close": "đóng",
   "panel.minimap": "Bản đồ thu nhỏ",
+  "god.title": "Ý chỉ",
+  "god.shape": "Khắc địa hình",
+  "god.shape.hint": "chọn vật liệu rồi bấm lên bản đồ",
+  "god.shape.off": "thôi khắc",
+  "god.pick": "chọn một sinh mệnh ở danh sách bên dưới",
+  "god.target": "đối tượng",
+  "god.act.feed": "Ban no đủ",
+  "god.act.starve": "Gieo cơn đói",
+  "god.act.rename": "Ban tên mới",
+  "god.foresee": "Nhìn trước",
+  "god.inscribe": "Khắc vào thế giới",
+  "god.withdraw": "Thu hồi ý chỉ",
+  "god.willChange": "sẽ đổi",
+  "god.nothing": "ý chỉ này không đổi gì cả",
+  "god.moved": "thế giới đã đổi từ lúc Người nhìn — hãy nhìn lại",
+  "god.done": "đã khắc",
+  "god.impossible": "không thể",
+  "panel.time": "Thời gian",
+  "panel.time.paused": "đang tạm dừng",
 
   "time.dawn": "rạng sáng",
   "time.day": "ban ngày",
   "time.dusk": "hoàng hôn",
   "time.night": "ban đêm",
+
+  "overlay.title": "Lớp dữ liệu",
+  "overlay.hint": "một lớp một lúc — chồng hai lớp lên nhau là hết đọc được",
+  "overlay.off": "tắt",
+  "overlay.elevation": "cao độ",
+  "overlay.water": "nước",
+  "overlay.walkable": "đi lại được",
+  "overlay.crowd": "mật độ người",
+  "overlay.legend.low": "thấp",
+  "overlay.legend.high": "cao",
+
+  "observe.title": "Quan sát",
+  "observe.hint": "chọn một cư dân rồi bám theo họ",
+  "observe.follow": "bám theo",
+  "observe.unfollow": "thôi bám",
+  "observe.timeline": "dòng đời",
+  "observe.empty": "chưa có gì xảy ra với người này",
+  "observe.following": "đang bám theo",
+  "observe.here": "ngay tại đây",
+
+  "card.arms": "gia huy",
+  "card.needs": "nhu cầu",
+  "card.fatigue": "mệt",
+  "card.home": "nhà",
+  "card.work": "chỗ làm",
+  "card.unknown": "chưa rõ",
+
+  "role.farmer": "nông dân",
+  "role.smith": "thợ rèn",
+  "role.hunter": "thợ săn",
+  "role.elder": "già làng",
+  "role.child": "trẻ con",
+
+  "intent.sleep": "đang ngủ",
+  "intent.eat": "đang ăn",
+  "intent.work": "đang làm việc",
+  "intent.socialize": "đang trò chuyện",
+  "intent.idle": "đang rảnh",
+  "intent.goto.home": "đang về nhà",
+  "intent.goto.workplace": "đang tới xưởng",
+  "intent.goto.well": "đang ra giếng",
+  "intent.goto.square": "đang ra quảng trường",
+  "intent.goto.field": "đang ra đồng",
 } as const;
 
 /** Khóa hợp lệ. Một khóa lạ là lỗi biên dịch, không phải ô trống lúc chạy. */
@@ -88,7 +162,11 @@ const en: Catalog = {
   "panel.tile.depth": "depth below",
 
   "panel.controls": "Controls",
-  "panel.controls.move": "move",
+  "panel.controls.move": "click to walk",
+  "panel.controls.stop": "right-click to stop",
+  "panel.controls.walking": "walking",
+  "panel.controls.unreachable": "no path there",
+  "panel.controls.partial": "can only get near it",
   "panel.controls.take": "take",
   "panel.controls.talk": "talk",
   "panel.controls.layer": "change z layer",
@@ -97,14 +175,84 @@ const en: Catalog = {
   "panel.controls.nobodyNear": "nobody nearby",
 
   "panel.present": "Present",
+  "panel.who": "Resident",
+  "panel.who.role": "role",
+  "panel.who.doing": "intends",
+  "panel.who.hunger": "hunger",
   "panel.events": "Events",
   "panel.events.empty": "nothing has happened yet",
+  "panel.events.hint": "click an event to trace its causes",
+  "panel.cause": "Why",
+  "panel.cause.root": "no earlier cause",
+  "panel.cause.close": "close",
   "panel.minimap": "Minimap",
+  "god.title": "Will",
+  "god.shape": "Shape the land",
+  "god.shape.hint": "pick a material, then click the map",
+  "god.shape.off": "stop shaping",
+  "god.pick": "choose a being from the list below",
+  "god.target": "target",
+  "god.act.feed": "Grant fullness",
+  "god.act.starve": "Sow hunger",
+  "god.act.rename": "Grant a new name",
+  "god.foresee": "Foresee",
+  "god.inscribe": "Inscribe into the world",
+  "god.withdraw": "Withdraw the will",
+  "god.willChange": "will change",
+  "god.nothing": "this will changes nothing",
+  "god.moved": "the world moved since you looked — look again",
+  "god.done": "inscribed",
+  "god.impossible": "impossible",
+  "panel.time": "Time",
+  "panel.time.paused": "paused",
 
   "time.dawn": "dawn",
   "time.day": "day",
   "time.dusk": "dusk",
   "time.night": "night",
+
+  "overlay.title": "Data layers",
+  "overlay.hint": "one layer at a time — two stacked layers read as neither",
+  "overlay.off": "off",
+  "overlay.elevation": "elevation",
+  "overlay.water": "water",
+  "overlay.walkable": "walkable",
+  "overlay.crowd": "crowding",
+  "overlay.legend.low": "low",
+  "overlay.legend.high": "high",
+
+  "observe.title": "Observe",
+  "observe.hint": "pick a resident, then follow them",
+  "observe.follow": "follow",
+  "observe.unfollow": "stop following",
+  "observe.timeline": "life so far",
+  "observe.empty": "nothing has happened to this one yet",
+  "observe.following": "following",
+  "observe.here": "right here",
+
+  "card.arms": "arms",
+  "card.needs": "needs",
+  "card.fatigue": "fatigue",
+  "card.home": "home",
+  "card.work": "workplace",
+  "card.unknown": "unknown",
+
+  "role.farmer": "farmer",
+  "role.smith": "smith",
+  "role.hunter": "hunter",
+  "role.elder": "elder",
+  "role.child": "child",
+
+  "intent.sleep": "sleeping",
+  "intent.eat": "eating",
+  "intent.work": "working",
+  "intent.socialize": "talking",
+  "intent.idle": "idle",
+  "intent.goto.home": "heading home",
+  "intent.goto.workplace": "heading to the workshop",
+  "intent.goto.well": "heading to the well",
+  "intent.goto.square": "heading to the square",
+  "intent.goto.field": "heading out to the fields",
 };
 
 const CATALOGS = { vi, en } as const;
@@ -138,6 +286,25 @@ export function locale(): Locale {
 /** Tra một chuỗi hiển thị. */
 export function t(key: MessageKey): string {
   return CATALOGS[current][key];
+}
+
+/**
+ * Tra một khóa chỉ biết được lúc chạy, có đường lui thấy được.
+ *
+ * [`t`] kiểm khóa bằng kiểu, và đó là điều đúng cho chữ viết trong mã. Nhưng
+ * engine gửi lên những khóa mà giao diện không biết trước — `npc.intent` là
+ * `"goto.field"`, và một content pack có thể thêm vai mới ngày mai. Với chúng
+ * thì kiểm bằng kiểu là bất khả thi, nên chỗ này nhận `string`.
+ *
+ * Đường lui trả về **chính khóa**, không phải chuỗi rỗng: một khóa lạ hiện ra
+ * dưới dạng `goto.market` là một lời nhắc thiếu bản dịch; một ô trống thì không
+ * nói cho ai biết điều gì cả.
+ */
+export function tRuntime(prefix: string, key: string | null | undefined): string {
+  if (!key) return "—";
+  const full = `${prefix}.${key}`;
+  const cat: Record<string, string> = CATALOGS[current];
+  return cat[full] ?? key;
 }
 
 /**

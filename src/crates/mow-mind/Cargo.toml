@@ -1,0 +1,15 @@
+[package]
+name = "mow-mind"
+description = "Tang nhan thuc LLM cho NPC: quan sat do engine dung, action registry, va fallback co ten theo §10.4/§10.5/§20.10."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# `mow-llm` chua co trong `[workspace.dependencies]`, nen dung path giong
+# `mow-cli`. `mow-society` co, nen dung workspace.
+mow-llm = { path = "../mow-llm" }
+mow-society = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

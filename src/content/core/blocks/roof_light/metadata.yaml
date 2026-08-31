@@ -1,0 +1,15 @@
+# Ngói mái phía đón nắng.
+#
+# Mái nhà chia hai sắc chứ không một: nhìn từ trên xuống, một khối đỏ đều là một
+# hình chữ nhật, còn hai sắc là một mái **dốc**. Đây là thứ duy nhất cho biết
+# đó là nhà chứ không phải nền lát.
+schema: block_def/v1
+id: roof_light
+name: { en: "Sunlit roof tile", vi: "Ngói đón nắng" }
+color: "#985d4b"
+hardness: 35
+liquid: false
+opaque: true
+walkable: false
+tags: [built, roof]
+script: null

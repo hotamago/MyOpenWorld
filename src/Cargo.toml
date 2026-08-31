@@ -15,6 +15,7 @@ mow-schema = { path = "crates/mow-schema" }
 mow-core = { path = "crates/mow-core" }
 mow-persist = { path = "crates/mow-persist" }
 mow-plugin = { path = "crates/mow-plugin" }
+mow-content = { path = "crates/mow-content" }
 mow-proto = { path = "crates/mow-proto" }
 mow-action = { path = "crates/mow-action" }
 mow-view = { path = "crates/mow-view" }
@@ -31,6 +32,8 @@ mow-portal = { path = "crates/mow-portal" }
 mow-eco = { path = "crates/mow-eco" }
 mow-divine = { path = "crates/mow-divine" }
 mow-yuu = { path = "crates/mow-yuu" }
+mow-settle = { path = "crates/mow-settle" }
+mow-mind = { path = "crates/mow-mind" }
 
 anyhow = "1"
 thiserror = "2"

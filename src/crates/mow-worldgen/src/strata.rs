@@ -146,7 +146,9 @@ pub fn material_at(elev: &Elevation, s: &Strata, sea_level_m: i64, z: i64) -> Ma
     // Hang nằm trong đá, dưới lớp đất. Nó là **khoảng rỗng**, nên nó phải trả
     // về `Air` chứ không phải một loại đá "rỗng" — người chơi rơi xuống hang,
     // và một cái hang bằng đá thì không phải hang.
-    if s.cave && depth > i64::from(s.bedrock_depth_m) + 4 && depth < i64::from(s.bedrock_depth_m) + 9
+    if s.cave
+        && depth > i64::from(s.bedrock_depth_m) + 4
+        && depth < i64::from(s.bedrock_depth_m) + 9
     {
         return Material::Air;
     }
@@ -162,7 +164,10 @@ pub fn material_at(elev: &Elevation, s: &Strata, sea_level_m: i64, z: i64) -> Ma
 
     // Quặng nằm thành dải trong đá gốc, không rải đều: chỉ một khoảng độ sâu
     // hẹp mới có. Không có ràng buộc đó thì "tìm thấy quặng" mất hết ý nghĩa.
-    if s.ore_present && depth >= i64::from(s.bedrock_depth_m) + 12 && depth < i64::from(s.bedrock_depth_m) + 20 {
+    if s.ore_present
+        && depth >= i64::from(s.bedrock_depth_m) + 12
+        && depth < i64::from(s.bedrock_depth_m) + 20
+    {
         return Material::Ore;
     }
     if depth > i64::from(s.bedrock_depth_m) + 900 {

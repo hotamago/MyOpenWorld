@@ -1,0 +1,13 @@
+[package]
+name = "mow-settle"
+description = "Bộ quy hoạch khu định cư khởi đầu: từ một vị từ ô-ở-được ra một bản kế hoạch làng xác định."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+# Không có `mow-core`, `mow-worldgen` hay bất cứ thứ gì biết về mô phỏng ở đây.
+# Crate này chỉ nhận một vị từ và trả một bản vẽ; giữ nó rời khỏi `Sim` là điều
+# duy nhất làm cho nó test được mà không cần dựng cả một thế giới.
+[dependencies]
+serde = { workspace = true }

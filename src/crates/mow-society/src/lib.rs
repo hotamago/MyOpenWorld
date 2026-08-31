@@ -30,6 +30,7 @@ pub mod economy;
 pub mod household;
 pub mod personality;
 pub mod reputation;
+pub mod routine;
 pub mod social;
 
 pub use drift::{Act, ActiveCause, DriftAuditor, DriftReport, Finding, Verdict};
@@ -40,6 +41,7 @@ pub use personality::{
     Traits, Values,
 };
 pub use reputation::{Belief, Norm, NormOrder, NormSet, Reputation, ReputationKey};
+pub use routine::{decide, phase_of, Intent, Phase, Place as RoutinePlace, Role, Situation};
 pub use social::{
     apply_outcome, volition, Bond, Exchange, ExchangeKind, Payer, SocialState, Volition,
 };

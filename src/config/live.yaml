@@ -1,6 +1,6 @@
 # Moi truong `live`: mo hinh THAT, tren may cua ban.
 #
-#     ./mow ai up                       # may chu embedding cuc bo (vLLM)
+#     ./mow ai up                       # may chu embedding cuc bo (llama.cpp)
 #     cp .env.example .env              # roi dien OPENROUTER_API_KEY
 #     cargo run -p mow-cli -- config check --env live
 #

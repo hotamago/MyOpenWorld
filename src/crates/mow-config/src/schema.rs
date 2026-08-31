@@ -762,97 +762,8 @@ impl AppConfig {
             errors.push(("llm.provider", "bắt buộc khi `llm.mode` là LIVE".to_owned()));
         }
 
-        // `api_key_env` nhận **tên biến**, không nhận khóa. Dán thẳng khóa vào
-        // đây là lỗi dễ mắc nhất, và hậu quả của nó là một bí mật nằm trong
-        // một file được commit — thứ không rút lại được bằng một commit sau.
-        check_key_env_name("llm.api_key_env", None, &self.llm.api_key_env, &mut errors);
-        check_key_env_name(
-            "embedding.api_key_env",
-            None,
-            &self.embedding.api_key_env,
-            &mut errors,
-        );
-        // Cùng bộ luật cho từng vai. Một vai khai khóa riêng là chỗ dễ lọt nhất
-        // vì nó được thêm về sau, khi luật ở trên đã trở thành thứ hiển nhiên
-        // và không ai đọc lại nữa.
-        for (role, route) in &self.llm.routes {
-            check_key_env_name(
-                "llm.routes.*.api_key_env",
-                Some(role),
-                &route.api_key_env,
-                &mut errors,
-            );
-        }
-
-        // Chế độ cần mạng: kiểm **đủ mọi mảnh, lúc khởi động**. Thiếu một mảnh
-        // mà vẫn chạy tiếp nghĩa là lỗi nổ ở lần suy nghĩ đầu tiên của một NPC
-        // nào đó, giữa chừng một thế giới đang chạy, và biểu hiện của nó là
-        // "NPC bỗng dưng ngờ nghệch" chứ không phải một thông báo cấu hình.
-        if matches!(self.llm.mode, LlmMode::Live | LlmMode::Record) {
-            if self.llm.base_url.is_empty() {
-                errors.push((
-                    "llm.base_url",
-                    "bắt buộc khi `llm.mode` là LIVE hoặc RECORD. OpenRouter: \
-                     `https://openrouter.ai/api/v1`"
-                        .to_owned(),
-                ));
-            }
-            if self.llm.model.is_empty() {
-                errors.push((
-                    "llm.model",
-                    "bắt buộc khi `llm.mode` là LIVE hoặc RECORD".to_owned(),
-                ));
-            }
-            if self.llm.max_output_tokens == 0 {
-                errors.push((
-                    "llm.max_output_tokens",
-                    "bằng 0 nghĩa là mô hình bị cắt trước khi nói được chữ nào, và nó \
-                     trả về chuỗi rỗng chứ không trả về lỗi"
-                        .to_owned(),
-                ));
-            }
-            if let Some(e) = missing_key_error("llm.api_key_env", &self.llm.api_key_env, &lookup) {
-                errors.push(e);
-            }
-            // Một vai trỏ sang endpoint khác thì cũng cần khóa của endpoint đó,
-            // và cần nó **lúc khởi động**. Vai để trống thì kế thừa
-            // `llm.api_key_env` — đã kiểm ngay ở trên, kiểm lại chỉ nhân đôi
-            // cùng một dòng lỗi.
-            for (role, route) in &self.llm.routes {
-                if route.api_key_env.is_empty() {
-                    continue;
-                }
-                if let Some((path, msg)) =
-                    missing_key_error("llm.routes.*.api_key_env", &route.api_key_env, &lookup)
-                {
-                    errors.push((path, format!("vai `{role}`: {msg}")));
-                }
-            }
-        }
-
-        if self.embedding.mode == EmbeddingMode::Live {
-            if self.embedding.base_url.is_empty() {
-                errors.push((
-                    "embedding.base_url",
-                    "bắt buộc khi `embedding.mode` là LIVE. Máy chủ cục bộ dựng bằng \
-                     `./mow ai up`: `http://localhost:18080/v1`"
-                        .to_owned(),
-                ));
-            }
-            if self.embedding.model.is_empty() {
-                errors.push((
-                    "embedding.model",
-                    "bắt buộc khi `embedding.mode` là LIVE".to_owned(),
-                ));
-            }
-            if let Some(e) = missing_key_error(
-                "embedding.api_key_env",
-                &self.embedding.api_key_env,
-                &lookup,
-            ) {
-                errors.push(e);
-            }
-        }
+        self.check_key_env_names(&mut errors);
+        self.check_network_requirements(&lookup, &mut errors);
 
         if self.embedding.batch_size == 0 {
             errors.push((
@@ -901,6 +812,108 @@ impl AppConfig {
             Ok(())
         } else {
             Err(ConfigError::Invalid(errors))
+        }
+    }
+
+    /// Mọi trường `*_api_key_env` có đúng là **tên biến**, không phải khóa.
+    ///
+    /// Dán thẳng khóa vào đây là lỗi dễ mắc nhất, và hậu quả của nó là một bí
+    /// mật nằm trong một file được commit — thứ không rút lại được bằng một
+    /// commit sau. Luật này áp **không phụ thuộc chế độ**: một khóa lọt vào YAML
+    /// ở chế độ STUB vẫn là một khóa đã lộ.
+    fn check_key_env_names(&self, errors: &mut Vec<(&'static str, String)>) {
+        check_key_env_name("llm.api_key_env", None, &self.llm.api_key_env, errors);
+        check_key_env_name(
+            "embedding.api_key_env",
+            None,
+            &self.embedding.api_key_env,
+            errors,
+        );
+        // Cùng bộ luật cho từng vai. Một vai khai khóa riêng là chỗ dễ lọt nhất
+        // vì nó được thêm về sau, khi luật ở trên đã trở thành thứ hiển nhiên
+        // và không ai đọc lại nữa.
+        for (role, route) in &self.llm.routes {
+            check_key_env_name(
+                "llm.routes.*.api_key_env",
+                Some(role),
+                &route.api_key_env,
+                errors,
+            );
+        }
+    }
+
+    /// Chế độ cần mạng: kiểm **đủ mọi mảnh, lúc khởi động**.
+    ///
+    /// Thiếu một mảnh mà vẫn chạy tiếp nghĩa là lỗi nổ ở lần suy nghĩ đầu tiên
+    /// của một NPC nào đó, giữa chừng một thế giới đang chạy, và biểu hiện của
+    /// nó là "NPC bỗng dưng ngờ nghệch" chứ không phải một thông báo cấu hình.
+    fn check_network_requirements(
+        &self,
+        lookup: &impl Fn(&str) -> Option<String>,
+        errors: &mut Vec<(&'static str, String)>,
+    ) {
+        if matches!(self.llm.mode, LlmMode::Live | LlmMode::Record) {
+            if self.llm.base_url.is_empty() {
+                errors.push((
+                    "llm.base_url",
+                    "bắt buộc khi `llm.mode` là LIVE hoặc RECORD. OpenRouter: \
+                     `https://openrouter.ai/api/v1`"
+                        .to_owned(),
+                ));
+            }
+            if self.llm.model.is_empty() {
+                errors.push((
+                    "llm.model",
+                    "bắt buộc khi `llm.mode` là LIVE hoặc RECORD".to_owned(),
+                ));
+            }
+            if self.llm.max_output_tokens == 0 {
+                errors.push((
+                    "llm.max_output_tokens",
+                    "bằng 0 nghĩa là mô hình bị cắt trước khi nói được chữ nào, và nó \
+                     trả về chuỗi rỗng chứ không trả về lỗi"
+                        .to_owned(),
+                ));
+            }
+            if let Some(e) = missing_key_error("llm.api_key_env", &self.llm.api_key_env, lookup) {
+                errors.push(e);
+            }
+            // Một vai trỏ sang endpoint khác thì cũng cần khóa của endpoint đó,
+            // và cần nó **lúc khởi động**. Vai để trống thì kế thừa
+            // `llm.api_key_env` — đã kiểm ngay ở trên, kiểm lại chỉ nhân đôi
+            // cùng một dòng lỗi và làm người đọc tưởng có hai chỗ hỏng.
+            for (role, route) in &self.llm.routes {
+                if route.api_key_env.is_empty() {
+                    continue;
+                }
+                if let Some((path, msg)) =
+                    missing_key_error("llm.routes.*.api_key_env", &route.api_key_env, lookup)
+                {
+                    errors.push((path, format!("vai `{role}`: {msg}")));
+                }
+            }
+        }
+
+        if self.embedding.mode == EmbeddingMode::Live {
+            if self.embedding.base_url.is_empty() {
+                errors.push((
+                    "embedding.base_url",
+                    "bắt buộc khi `embedding.mode` là LIVE. Máy chủ cục bộ dựng bằng \
+                     `./mow ai up`: `http://localhost:18080/v1`"
+                        .to_owned(),
+                ));
+            }
+            if self.embedding.model.is_empty() {
+                errors.push((
+                    "embedding.model",
+                    "bắt buộc khi `embedding.mode` là LIVE".to_owned(),
+                ));
+            }
+            if let Some(e) =
+                missing_key_error("embedding.api_key_env", &self.embedding.api_key_env, lookup)
+            {
+                errors.push(e);
+            }
         }
     }
 

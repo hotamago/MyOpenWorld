@@ -29,6 +29,7 @@
 
 mod api;
 mod game;
+mod preview;
 
 use game::Game;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,6 +45,7 @@ struct Args {
     web: Option<String>,
     dev: bool,
     tick_ms: u64,
+    content: String,
 }
 
 fn doc_args() -> Result<Args, String> {
@@ -53,6 +55,7 @@ fn doc_args() -> Result<Args, String> {
         web: None,
         dev: false,
         tick_ms: 250,
+        content: "content/core".to_owned(),
     };
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -79,6 +82,10 @@ fn doc_args() -> Result<Args, String> {
                 a.tick_ms = lay(i)?.parse().map_err(|e| format!("--tick-ms: {e}"))?;
                 i += 1;
             }
+            "--content" => {
+                a.content = lay(i)?;
+                i += 1;
+            }
             "--dev" => a.dev = true,
             "--help" | "-h" => return Err(String::new()),
             khac => return Err(format!("không hiểu tham số `{khac}`")),
@@ -96,7 +103,8 @@ fn tro_giup() {
          --seed N        seed thế giới (mặc định 42)\n\
          --web <thư mục> phục vụ file tĩnh, thường là `src/web/dist`\n\
          --dev           cho phép origin http://localhost:5173 gọi chéo\n\
-         --tick-ms N     nhịp tick, mili giây (mặc định 250)\n"
+         --tick-ms N     nhịp tick, mili giây (mặc định 250)\n\
+         --content <dir> content pack (mặc định `content/core`)\n"
     );
 }
 
@@ -121,27 +129,48 @@ fn main() -> std::process::ExitCode {
         }
     };
 
-    let game = Arc::new(Mutex::new(Game::new(args.seed)));
+    let mut world = Game::new(args.seed);
+    // Pack hỏng không làm server chết: client có bảng dự phòng, và một thế giới
+    // vẽ bằng màu dự phòng vẫn tốt hơn một tiến trình không khởi động được.
+    match world.load_content(&args.content) {
+        Ok(n) => println!("  nạp {n} vật liệu từ {}", args.content),
+        Err(e) => eprintln!("  ! không nạp được content `{}`: {e}", args.content),
+    }
+    let game = Arc::new(Mutex::new(world));
     let chay = Arc::new(AtomicBool::new(true));
 
     // ── Luồng tick ──────────────────────────────────────────────────────────
     {
         let game = Arc::clone(&game);
         let chay = Arc::clone(&chay);
-        let nhip = Duration::from_millis(args.tick_ms.max(10));
+        let base_tick_ms = args.tick_ms.max(1);
+        // Nhịp thức dậy **cố định**, tốc độ nằm ở số tick mỗi nhịp.
+        //
+        // Cách hiển nhiên là đổi thời gian ngủ theo tốc độ. Nó hỏng ở cả hai
+        // đầu: ở ×100 thời gian ngủ thành 3 ms và luồng dành phần lớn thời gian
+        // để giành khóa; ở ×0.001 nó ngủ 300 giây và người chơi kéo thanh trượt
+        // xong phải chờ năm phút mới thấy phản ứng.
+        const WAKE_MS: u64 = 50;
         std::thread::spawn(move || {
+            let mut carry = 0u64;
             while chay.load(Ordering::Relaxed) {
                 // Khóa mở trong một biểu thức rồi thả ngay: không `sleep` khi
                 // đang giữ khóa, nếu không mọi yêu cầu HTTP đứng theo nhịp tick.
                 if let Ok(mut g) = game.lock() {
-                    g.tick_once();
+                    let n = g.ticks_due(WAKE_MS, base_tick_ms, &mut carry);
+                    for _ in 0..n {
+                        g.tick_once();
+                    }
                 }
-                std::thread::sleep(nhip);
+                std::thread::sleep(Duration::from_millis(WAKE_MS));
             }
         });
     }
 
-    println!("mow-server: http://{dia_chi}  (seed {}, tick {}ms)", args.seed, args.tick_ms);
+    println!(
+        "mow-server: http://{dia_chi}  (seed {}, tick {}ms)",
+        args.seed, args.tick_ms
+    );
     if let Some(w) = &args.web {
         println!("  phục vụ giao diện từ {w}");
     }
@@ -221,8 +250,10 @@ fn mime(path: &str) -> &'static str {
 fn gui_tinh(req: tiny_http::Request, path: &str, goc: Option<&str>) -> std::io::Result<()> {
     let Some(goc) = goc else {
         return req.respond(
-            tiny_http::Response::from_string("mow-server đang chạy; giao diện chưa được gắn (--web)")
-                .with_status_code(404),
+            tiny_http::Response::from_string(
+                "mow-server đang chạy; giao diện chưa được gắn (--web)",
+            )
+            .with_status_code(404),
         );
     };
 
@@ -237,8 +268,8 @@ fn gui_tinh(req: tiny_http::Request, path: &str, goc: Option<&str>) -> std::io::
 
     match std::fs::read(&duong_dan) {
         Ok(b) => {
-            let resp = tiny_http::Response::from_data(b)
-                .with_header(header("Content-Type", mime(ten)));
+            let resp =
+                tiny_http::Response::from_data(b).with_header(header("Content-Type", mime(ten)));
             req.respond(resp)
         }
         // SPA: mọi đường dẫn không phải file đều trả `index.html`, để nút Back

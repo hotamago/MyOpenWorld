@@ -1,0 +1,15 @@
+# Đường làng: đất nện lẫn sỏi.
+#
+# Nằm giữa `topsoil` (#6b5a3e) và `sand` (#d8c48a) về độ sáng, và ngả xám ấm.
+# Dùng thẳng màu cát sẽ làm con đường chói hơn cả ruộng, và mắt sẽ đọc nó thành
+# một dòng sông cát.
+schema: block_def/v1
+id: path_gravel
+name: { en: "Packed path", vi: "Đường đất nện" }
+color: "#9e896a"
+hardness: 15
+liquid: false
+opaque: true
+walkable: true
+tags: [built, path]
+script: null

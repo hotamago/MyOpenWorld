@@ -31,8 +31,10 @@ pub mod credit;
 pub mod logistics;
 pub mod money;
 pub mod property;
+pub mod village;
 
 pub use credit::{Ledger, Loan, Seniority};
 pub use logistics::{specialize, Handover, LabourContract, Leg, ObservedTrade, Progress, Shipment};
 pub use money::{Coinage, EconomyProfile, Faucet, MonetaryStage, MoneyDiagnosis, Sink};
 pub use property::{Basis, Claim, Ownership, Right, RIGHTS};
+pub use village::{run_day, run_days, tools_sufficient, DayReport, Shortage, Stock, Workforce};

@@ -89,20 +89,43 @@ embedding:
   # chay va replay duoc truoc khi co bat ky khoa nao.
   mode: STUB
   provider: local
-  # May chu cuc bo dung bang `./mow ai up` (vLLM phuc vu model duoi day).
+  # May chu cuc bo dung bang `./mow ai up` — llama.cpp phuc vu GGUF chinh chu
+  # cua Jina. (Truoc day la vLLM; doi vi image 28.8GB xuong con 6.98GB ma so do
+  # khong doi. Ly do day du nam trong `deploy/compose/docker-compose.yml`.)
+  #
+  # PHAN GOC, khong kem `/embeddings`: `HttpEmbedder` tu noi them duong dan do.
+  # llama-server phoi endpoint theo luoc do OpenAI o `/v1/embeddings`, nen phan
+  # goc dung la `.../v1`. Viet du `.../v1/embeddings` o day thi client goi vao
+  # `/v1/embeddings/embeddings` va nhan 404.
   base_url: "http://localhost:18080/v1"
   api_key_env: EMBEDDINGS_API_KEY
-  # Khop `--served-model-name` trong docker-compose.yml.
+  # Khop `--alias` trong docker-compose.yml.
   model: "jina-embeddings-v5-text-small"
   batch_size: 32
   timeout_ms: 30000
-  # TAT. Model goc ho tro Matryoshka, nhung ban `-retrieval` da gop adapter
-  # thi khong: vLLM tra `400 does not support Matryoshka embeddings;
-  # dimensions must be unset`. Khong sao — 1024 la so chieu goc, dung bang
-  # `vector.dimension`, nen khong can cat gi ca.
+  # TAT, va lan nay TAT quan trong hon truoc.
+  #
+  # Model goc ho tro Matryoshka, nhung ban `-retrieval` da gop adapter thi
+  # khong. vLLM tu choi to tieng (`400 does not support Matryoshka embeddings`);
+  # llama-server thi **bo qua truong `dimensions` khong noi mot loi** — gui
+  # `dimensions: 768` van nhan ve 1024 chieu kem `200 OK`.
+  #
+  # Neu bat co nay len va sua `vector.dimension` xuong 768, cai chan lai la
+  # `HttpEmbedder`: no so do dai vector voi so chieu khai bao va bao loi. Do la
+  # lop bao ve cuoi cung, khong phai lop dau — dung dua vao no.
   send_dimensions: false
-  # De trong: ban `-retrieval` da gop adapter nen may chu tu ap tien to tac vu.
-  # Dat gia tri neu ban doi sang mot model doi tien to tuong minh.
+  # De trong, va day la mot lua chon co do chu khong phai bo sot.
+  #
+  # `config_sentence_transformers.json` cua model khai hai tien to tac vu
+  # ("Query: " / "Document: "). KHONG may chu nao trong hai may chu da thu tu ap
+  # chung — da kiem bang cach so ba cau cua `embed probe`: khong tien to thi
+  # llama.cpp (gan 0.8569 / xa 0.0596) trung vLLM (0.8553 / 0.0597) toi chu so
+  # thu ba. Neu vLLM co tu ap tien to thi hai con so do da phai lech nhau; them
+  # tay "Document: " vao llama.cpp cho 0.8532 / 0.0754, tuc la khac han.
+  #
+  # De trong nen chi muc ky uc dang co van doc duoc. Neu dat gia tri thi phai
+  # dat truoc khi nap ky uc dau tien: doi tien to giua chung se sinh ra hai vung
+  # vector khong so sanh duoc trong cung mot chi muc, va khong co gi bao loi.
   query_prefix: ""
   document_prefix: ""
 

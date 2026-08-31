@@ -60,7 +60,7 @@ pub fn handlers() -> HandlerRegistry {
             ctx.set(id, "cognition.branch_scope", ctx.command.world.get());
             ctx.set(id, "cognition.fallback", "routine");
         }
-        ctx.emit(EventDraft::new("core.entity.spawned", val! { "kind" => kind }).on(id));
+        ctx.emit_caused(EventDraft::new("core.entity.spawned", val! { "kind" => kind }).on(id));
         Ok(())
     });
 
@@ -88,7 +88,7 @@ pub fn handlers() -> HandlerRegistry {
         ctx.set(who, &format!("need.{need}"), value);
         ctx.set(who, "need.last_update_tick", tick);
         ctx.set(who, "need.clock_domain", "proper");
-        ctx.emit(
+        ctx.emit_caused(
             EventDraft::new("core.need.set", val! { "need" => need, "value" => value }).on(who),
         );
         Ok(())
@@ -106,7 +106,7 @@ pub fn handlers() -> HandlerRegistry {
                 format!("chưa đủ đói để {act}: hunger = {doi}"),
             ));
         }
-        ctx.emit(EventDraft::new("core.act.committed", val! { "act" => act }).by(who));
+        ctx.emit_caused(EventDraft::new("core.act.committed", val! { "act" => act }).by(who));
         Ok(())
     });
 

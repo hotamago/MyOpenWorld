@@ -1,0 +1,14 @@
+# Ngói mái phía khuất nắng, và sống mái.
+#
+# Cùng sắc với `roof_light`, chỉ tối hơn — nên hai màu đọc ra là *một vật liệu
+# dưới hai góc sáng*, không phải hai vật liệu khác nhau.
+schema: block_def/v1
+id: roof_dark
+name: { en: "Shaded roof tile", vi: "Ngói khuất nắng" }
+color: "#5b362b"
+hardness: 35
+liquid: false
+opaque: true
+walkable: false
+tags: [built, roof]
+script: null

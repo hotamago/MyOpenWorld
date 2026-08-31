@@ -30,6 +30,11 @@ export interface WorldMeta {
   z: number;
   view_radius: number;
   event_cursor: number;
+  /** Tốc độ thời gian, phần nghìn. `1000` là ×1, `0` là tạm dừng. */
+  speed_milli: number;
+  max_speed_milli: number;
+  /** Số bước còn lại trong kế hoạch đi của avatar. */
+  steps_remaining: number;
 }
 
 /**
@@ -50,9 +55,23 @@ export interface TileBatch {
   surface: string[];
   /** Số mét từ lát đang xem xuống mặt đất. */
   drop: number[];
+  /** `1` nếu ô đã bị ai đó xây/sửa, `0` nếu là địa hình sinh ra. */
+  built: number[];
   biome: string[];
   height: number[];
   river: number[];
+}
+
+/** Một vật liệu như content pack khai. */
+export interface BlockInfo {
+  id: string;
+  name: { en?: string; vi?: string };
+  /** Chuỗi hex `#rrggbb`. */
+  color: string;
+  liquid: boolean;
+  walkable: boolean;
+  hardness: number;
+  tags: string[];
 }
 
 export interface Entity {
@@ -63,6 +82,10 @@ export interface Entity {
   kind: "being" | "item";
   is_avatar: boolean;
   hunger: number | null;
+  /** Vai trong làng, nếu là cư dân. */
+  role: string | null;
+  /** Việc nó đang định làm, và vì sao panel trả lời được câu đó. */
+  intent: string | null;
 }
 
 export interface WorldEvent {
@@ -71,6 +94,37 @@ export interface WorldEvent {
   kind: string;
   actor: string | null;
   payload: unknown;
+}
+
+/** Một thực thể sẽ đổi, trong diff xem trước. */
+export interface DiffChange {
+  id: string;
+  name: string;
+  from: [number, number] | null;
+  to: [number, number] | null;
+  moved: boolean;
+  attrs: string[];
+}
+
+/** Kết quả nhìn trước một ý chỉ. */
+export interface Foresight {
+  command: string;
+  /** Hash thế giới lúc nhìn. Lúc khắc phải mang lại đúng giá trị này. */
+  base_hash: string;
+  after_hash: string;
+  changes_anything: boolean;
+  error: string | null;
+  events: { kind: string; summary: string }[];
+  changes: DiffChange[];
+}
+
+/** Một mắt xích trong chuỗi nhân quả. */
+export interface CauseLink {
+  seq: number;
+  tick: number;
+  kind: string;
+  actor: string | null;
+  summary: string;
 }
 
 export interface CommandResult {
@@ -106,8 +160,71 @@ export const api = {
 
   entities: () => getJson<{ entities: Entity[] }>("/api/entities"),
 
+  /** Bảng vật liệu của content pack đang nạp (`§19.7`). */
+  blocks: () => getJson<{ blocks: BlockInfo[]; loaded: boolean }>("/api/blocks"),
+
   events: (after: number) =>
     getJson<{ cursor: number; events: WorldEvent[] }>(`/api/events?after=${after}`),
+
+  /**
+   * Đổi tốc độ thời gian. Cũng là **query**: tốc độ không đổi kết quả mô phỏng.
+   * Cùng seed chạy ×0.001 hay ×100 vẫn cho cùng `state_hash` ở cùng số tick.
+   */
+  setSpeed: (speed_milli: number) =>
+    postJson<{ speed_milli: number }>("/api/speed", { speed_milli }),
+
+  /**
+   * Bấm chuột để đi. Server tính đường và giữ kế hoạch; mỗi bước vẫn là một
+   * `core.walk` riêng nên luật thế giới vẫn chặn được từng bước.
+   */
+  goto: (x: number, y: number) =>
+    postJson<{
+      steps: number;
+      outcome: string;
+      walkable: boolean;
+      /** Đường đi đã lên kế hoạch, để vẽ ra cho người chơi thấy. */
+      path: [number, number][];
+    }>("/api/goto", { x, y }),
+
+  /**
+   * Truy ngược chuỗi nhân quả của một sự kiện (`§18.10`).
+   *
+   * Cạnh nhân quả được ghi **lúc tạo** sự kiện, không suy ngược sau — một chuỗi
+   * đoán ra thì tệ hơn không có, vì người xem sẽ tin nó.
+   */
+  causes: (seq: number) => getJson<{ chain: CauseLink[] }>(`/api/cause?seq=${seq}`),
+
+  /** Nhìn trước một ý chỉ. **Không** đổi thế giới. */
+  preview: (kind: string, fields: Record<string, unknown>) =>
+    postJson<Foresight>("/api/preview", { kind, fields }),
+
+  /**
+   * Khắc một ý chỉ vào thế giới.
+   *
+   * `base_hash` là hash lúc nhìn trước. Server từ chối nếu thế giới đã đổi —
+   * thứ được khắc luôn đúng bằng thứ đã nhìn.
+   */
+  commit: (kind: string, fields: Record<string, unknown>, base_hash: string) =>
+    postJson<{
+      ok: boolean;
+      after_hash?: string;
+      changes?: number;
+      reason?: string;
+      message?: string;
+      state_hash?: string;
+    }>("/api/commit", { kind, fields, base_hash }),
+
+  /** Khắc địa hình: đổi vật liệu một ô. Quyền năng True God lên vật chất. */
+  build: (x: number, y: number, material: string) =>
+    postJson<{ ok: boolean; error?: string; built_cells?: number }>("/api/build", {
+      x,
+      y,
+      material,
+    }),
+
+  /** Chuột phải: dừng tại chỗ. */
+  stop: () =>
+    postJson<{ steps: number; outcome: string }>("/api/goto", { x: 0, y: 0, cancel: true }),
 
   /** Đổi lát `z`. Là **query**, không ghi vào thế giới (`§P6.8`). */
   setLayer: (z: number) => postJson<{ z: number; state_hash: string }>("/api/view", { z }),
@@ -145,3 +262,25 @@ export const DIRECTIONS: Readonly<Record<string, readonly [number, number]>> = {
   A: [-1, 0],
   D: [1, 0],
 };
+
+/**
+ * Các nấc tốc độ, phần nghìn.
+ *
+ * Nấc rời rạc chứ không phải thanh trượt liên tục theo log: người chơi muốn
+ * "×1" và "×10", không muốn "×7.4". Nấc cũng làm bàn phím và ảnh chụp màn hình
+ * so sánh được với nhau.
+ */
+export const SPEED_STEPS = [
+  { milli: 0, label: "⏸" },
+  { milli: 1, label: "x0.001" },
+  { milli: 10, label: "x0.01" },
+  { milli: 100, label: "x0.1" },
+  { milli: 500, label: "x0.5" },
+  { milli: 1_000, label: "x1" },
+  { milli: 2_000, label: "x2" },
+  { milli: 5_000, label: "x5" },
+  { milli: 10_000, label: "x10" },
+  { milli: 25_000, label: "x25" },
+  { milli: 50_000, label: "x50" },
+  { milli: 100_000, label: "x100" },
+] as const;

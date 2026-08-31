@@ -77,7 +77,7 @@ lặng lẽ gọi mạng là một lệnh người ta chỉ dám chạy một l�
 | | |
 |---|---|
 | LLM | `deepseek/deepseek-v4-flash-0731` qua OpenRouter |
-| Embedding | `jinaai/jina-embeddings-v5-text-small-retrieval`, chạy cục bộ bằng vLLM (`./mow ai up`) |
+| Embedding | `jinaai/jina-embeddings-v5-text-small-retrieval`, chạy cục bộ bằng llama.cpp (`./mow ai up`) |
 | Số chiều | **1024**, khai đúng một chỗ: `vector.dimension` |
 
 `embedding` cố ý **không** có trường `dimension`. Hai chỗ khai cùng một con số
@@ -90,8 +90,50 @@ Hai điều đã học được khi chạy thật, ghi lại vì cả hai đều
   *trước* khi sinh chữ nào. `max_output_tokens: 32` trả về **chuỗi rỗng** kèm
   `finish_reason: length` — trông y hệt "mô hình không có gì để nói".
 - **Bản `-retrieval` không cắt Matryoshka được.** Model gốc thì có, nhưng bản đã
-  gộp adapter thì vLLM trả `400 does not support Matryoshka embeddings`. Nên
+  gộp adapter thì vLLM trả `400 does not support Matryoshka embeddings`, còn
+  llama.cpp thì **bỏ qua trường `dimensions` trong im lặng**. Nên
   `send_dimensions: false`, và `vector.dimension` để đúng 1024 gốc.
+- **`--pooling last` là bắt buộc.** Model dùng last-token pooling; mặc định của
+  llama.cpp là `mean`. Sai cờ này vẫn trả `200 OK` kèm đúng 1024 chiều — hỏng
+  hoàn toàn im lặng, chỉ lộ ra ở chất lượng truy xuất.
+
+## Ba vai, ba model (`§20.7`)
+
+`llm.*` là mặc định chung; `llm.routes.<vai>` nói vai nào đi chệch khỏi nó.
+Trường để trống hoặc bằng `0` nghĩa là **kế thừa** `llm.*`, nên một route chỉ
+khai đúng thứ nó đổi.
+
+| Vai | Model | Chạy ở đâu | Trần token |
+|---|---|---|---|
+| `action` | `Qwen/Qwen3.5-4B` | cục bộ, `localhost:18081` | 256 |
+| `npc` | `deepseek/deepseek-v4-flash-0731` | OpenRouter | 2048 *(kế thừa)* |
+| `yuu` | `deepseek/deepseek-v4-pro-0813` | OpenRouter | 4096 |
+
+Ba vai này khác nhau về **số lần gọi**, không khác nhau về kiến trúc, và đó là
+lý do duy nhất chúng được tách:
+
+- `action` bị gọi nhiều nhất — mỗi thực thể, mỗi lần chọn bước tiếp theo — mà
+  việc nó làm là chọn một hành động trong một danh sách ngắn. Trả giá model
+  mạnh cho nó là trả giá mạnh nhất cho công việc tầm thường nhất, nên nó chạy
+  cục bộ.
+- `yuu` hiếm nhất, nhưng mỗi lần gọi là một phản tư hoặc một đề xuất luật ảnh
+  hưởng cả thế giới. Đây là chỗ đáng trả tiền cho một model mạnh.
+
+Gộp cả ba về một model là chọn một trong hai cái giá: hoặc trả giá `yuu` cho
+mọi bước đi của mọi NPC, hoặc giao việc của `yuu` cho một model không kham nổi.
+Không cái nào lộ ra bằng test đỏ — cái thứ nhất lộ trên hóa đơn, cái thứ hai lộ
+ở chất lượng thế giới.
+
+Hai hệ quả cần biết:
+
+- **Một vai gõ sai không phải lỗi.** `llm.route("vai-la")` trả về đúng `llm.*`.
+  Định tuyến là chuyện tối ưu chi phí, không phải chuyện đúng sai của mô phỏng,
+  nên nó không được làm sập một thế giới đang chạy giữa lượt.
+- **Vai trỏ sang endpoint khác cần khóa riêng.** `action` dùng
+  `LOCAL_LLM_API_KEY`, và ở `LIVE`/`RECORD` biến đó phải tồn tại và khác rỗng —
+  cùng bộ luật với `llm.api_key_env` (chữ hoa/số/gạch dưới, không bắt đầu bằng
+  `MOW_`). Máy chủ nội bộ không kiểm khóa, nhưng biến vẫn phải có: thà chết lúc
+  khởi động còn hơn chết ở lần suy nghĩ đầu tiên của một NPC.
 
 ## Không có khóa thì sao
 
@@ -107,7 +149,7 @@ So sánh trên cùng ba câu (`mow-cli embed probe`):
 | | gần (kiếm ↔ cuốc) | xa (kiếm ↔ mưa sao băng) |
 |---|---|---|
 | `STUB` (băm từ vựng) | 0.800 | 0.000 |
-| jina v5 qua vLLM | 0.855 | 0.060 |
+| jina v5 qua llama.cpp | 0.857 | 0.060 |
 
 Con số `0.000` của `STUB` chính là chỗ nó thú nhận mình là gì: hai câu không
 chia một từ nào thì trực giao hoàn toàn, dù người đọc thấy cả hai đều nói về

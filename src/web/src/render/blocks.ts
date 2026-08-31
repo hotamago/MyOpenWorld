@@ -20,6 +20,7 @@
  * đoán một màu hợp lý và giấu luôn vấn đề.
  */
 
+import type { BlockInfo } from "@/api/game";
 import { localized } from "@/i18n";
 
 export interface BlockDef {
@@ -103,3 +104,22 @@ export class BlockPalette {
 
 /** Bảng dự phòng dạng mảng, cho test so sánh với content pack. */
 export const FALLBACK_BLOCKS = FALLBACK;
+
+/**
+ * Dựng bảng từ dữ liệu server trả về.
+ *
+ * Màu tới dưới dạng chuỗi `#rrggbb` chứ không phải số: đọc được bằng mắt khi gỡ
+ * lỗi, và không có chuyện `0x0d1014` bị một tầng JSON nào đó đọc thành số thập
+ * phân. Đổi sang số đúng một lần, ở đây.
+ */
+export function paletteFrom(infos: readonly BlockInfo[]): BlockPalette {
+  const defs: BlockDef[] = infos.map((b) => ({
+    id: b.id,
+    name: b.name,
+    color: Number.parseInt(b.color.replace("#", ""), 16) || UNDEFINED_COLOR,
+    liquid: b.liquid,
+    walkable: b.walkable,
+    tags: b.tags,
+  }));
+  return new BlockPalette(defs);
+}
