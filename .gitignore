@@ -180,3 +180,22 @@ tmp/
 *.bak
 *.orig
 *.rej
+
+# Dau ra cua `vue-tsc -b`: no phat `.js` va `.d.ts` canh nguon.
+#
+# Chung khong phai ma nguon — chung la ban bien dich, va commit chung se lam
+# moi PR co hang tram file rac, cong voi rui ro ai do sua nham ban `.js` roi
+# thac mac vi sao `vite` khong thay thay doi.
+src/web/src/**/*.js
+src/web/src/**/*.d.ts
+# `vue-tsc -b` bien dich ca file cau hinh o goc `web/`. Liet ten tung file chu
+# khong dung `src/web/*.js`: `eslint.config.js` la ma nguon viet tay, va mot
+# quy tac quet ca thu muc se nuot no.
+src/web/vite.config.js
+src/web/vite.config.d.ts
+src/web/playwright.config.js
+src/web/playwright.config.d.ts
+src/web/*.tsbuildinfo
+src/web/playwright-report/
+src/web/test-results/
+src/deploy/tauri/src-tauri/binaries/

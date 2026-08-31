@@ -59,6 +59,10 @@ test-rust: ## Test Rust
 test-py: ## Test Python
 	uv run pytest
 
+test-e2e: ## E2E Playwright cho panel chính (§P7.8)
+	pnpm --filter web build
+	pnpm --filter web test:e2e
+
 test-web: ## Test web
 	pnpm -r test
 
@@ -70,7 +74,7 @@ lint: ## fmt --check + clippy + ruff + eslint
 	@echo "▸ ruff"
 	-uv run ruff check .
 	@echo "▸ eslint"
-	-pnpm -r lint
+	pnpm -r lint
 
 fmt: ## Định dạng lại. SỬA FILE NGUỒN.
 	cargo fmt --all

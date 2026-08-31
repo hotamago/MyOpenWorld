@@ -116,7 +116,7 @@ describe("§18.15.7 — so sánh không rút về một điểm số", () => {
     // Bài này khóa hình dạng của module lại: nếu ai đó thêm `totalScore`, họ
     // phải xóa bài test này và đối diện với lý do nó tồn tại.
     const api = Object.keys(
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       {} as Record<string, unknown>,
     );
     const cam = ["totalScore", "overallRating", "score"];

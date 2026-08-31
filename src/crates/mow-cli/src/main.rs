@@ -27,7 +27,7 @@ fn main() -> ExitCode {
         ["debug-session"] => debug_session(),
         ["scenario", "run", duong_dan] => scenario_run(Path::new(duong_dan)),
         ["scenario", "list", duong_dan] => scenario_list(Path::new(duong_dan)),
-        ["pack", "validate", duong_dan] => pack_validate(Path::new(duong_dan)),
+        ["pack", "validate", cac @ ..] if !cac.is_empty() => pack_validate(cac),
         ["pack", "test", duong_dan] => pack_test(Path::new(duong_dan)),
         ["pack", "watch", duong_dan] => pack_watch(Path::new(duong_dan)),
         ["determinism", rest @ ..] => determinism(rest),
@@ -49,7 +49,11 @@ fn in_tro_giup() {
          mow-cli scenario run <đường dẫn>   chạy kịch bản, in báo cáo JSON\n\
          mow-cli scenario list <đường dẫn>  liệt kê kịch bản và kiểm cấu trúc\n\
          mow-cli determinism --runs N       chạy lại N lần, so state hash, bisect\n\
-         mow-cli pack validate <thư mục>    kiểm một content pack\n"
+         mow-cli pack validate <thư mục>+   kiểm một hay nhiều content pack\n\
+         mow-cli pack test <thư mục>        chạy kịch bản pack khai trong manifest\n\
+         mow-cli pack watch <thư mục>       kế hoạch nạp nóng (chỉ dev build)\n\
+         mow-cli soak --years N --worlds M  chạy dài, xuất World Health Report\n\
+         mow-cli budget --phase F           áp bảng ngân sách hiệu năng §P8.1\n"
     );
 }
 
@@ -194,11 +198,15 @@ fn scenario_list(root: &Path) -> ExitCode {
     }
 }
 
-fn pack_validate(dir: &Path) -> ExitCode {
+/// `pack validate` — kiểm một hay **nhiều** pack cùng lúc.
+///
+/// Nhận nhiều thư mục vì phụ thuộc chỉ giải được khi cả bộ có mặt: một pack
+/// của cộng đồng khai `requires: core` mà kiểm riêng thì luôn báo thiếu phụ
+/// thuộc, và thông báo đó đúng nhưng vô ích.
+fn pack_validate(dirs: &[&str]) -> ExitCode {
     let mut r = mow_plugin::Registry::new();
-    match r.add_from_dir(dir) {
-        Ok(()) => {}
-        Err(e) => {
+    for d in dirs {
+        if let Err(e) = r.add_from_dir(Path::new(d)) {
             eprintln!("{e}");
             return ExitCode::FAILURE;
         }

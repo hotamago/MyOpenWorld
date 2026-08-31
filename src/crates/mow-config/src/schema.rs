@@ -403,8 +403,32 @@ impl AppConfig {
     }
 
     /// Sinh JSON Schema cho `schemas/config/app_config.v1.json`.
+    ///
+    /// Gắn `$id` **có version** (`PF-13`). Modder cần một định danh ổn định để
+    /// trỏ tới, và version nằm trong định danh chứ không nằm cạnh nó: một
+    /// schema đổi hình dạng mà giữ nguyên `$id` sẽ làm mọi công cụ đã tải bản
+    /// cũ diễn giải sai bản mới, và không có gì báo.
+    ///
+    /// Cùng quy tắc với id nội dung ở `§19.7.2`: muốn đổi thì **thêm cái mới**,
+    /// không sửa cái đã phát hành.
     pub fn json_schema_string() -> String {
-        let schema = schemars::schema_for!(AppConfig);
+        let mut schema = serde_json::to_value(schemars::schema_for!(AppConfig))
+            .expect("schema tuần tự hóa được");
+        if let Some(o) = schema.as_object_mut() {
+            // Chèn `$id` ngay sau `$schema` — thứ tự khóa trong JSON không có
+            // nghĩa với máy, nhưng file này người đọc, và hai dòng định danh
+            // đứng cạnh nhau thì đọc được.
+            o.insert(
+                "$id".to_owned(),
+                serde_json::Value::String(SCHEMA_ID.to_owned()),
+            );
+        }
         serde_json::to_string_pretty(&schema).expect("schema tuần tự hóa được")
     }
 }
+
+/// Định danh có version của schema cấu hình (`PF-13`).
+///
+/// Đổi con số cuối là **phát hành một schema mới**, không phải sửa cái cũ. Một
+/// công cụ của bên thứ ba trỏ vào `v1` phải còn diễn giải được `v1` mãi mãi.
+pub const SCHEMA_ID: &str = "https://myopenworld.dev/schemas/config/app_config.v1.json";

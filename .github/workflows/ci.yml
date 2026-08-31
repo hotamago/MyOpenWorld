@@ -111,6 +111,12 @@ jobs:
       - name: pack validate
         run: cargo run -p mow-cli -- pack validate content/core
 
+      # `PF-13`: một pack của "bên thứ ba" nạp được cạnh core, và sự có mặt của
+      # nó không đổi hash của một world không dùng nó. Vế thứ hai là vế quyết
+      # định việc có ai dám cài mod hay không.
+      - name: pack bên thứ ba nạp được
+        run: cargo run -p mow-cli -- pack validate content/core content/example-thirdparty
+
   python:
     name: Python — lint, test
     runs-on: ubuntu-latest
@@ -128,6 +134,48 @@ jobs:
 
       - name: pytest
         run: uv run pytest services tools -q
+
+  e2e:
+    name: E2E — panel chính trên bản đã build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.22.0 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: src/pnpm-lock.yaml
+
+      - name: cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      # `make lint` liệt eslint từ lâu nhưng chưa bao giờ có cấu hình, nên bước
+      # đó im lặng không làm gì. Giờ nó chạy thật, và chạy ở đây để nó không
+      # lặng lẽ đỏ trong một target có dấu `-`.
+      - name: eslint
+        run: pnpm --filter web lint
+
+      # Chạy trên `dist/`, không trên `vite dev`: bản dev có HMR và không qua
+      # `vue-tsc -b`, nên kiểm trên nó là kiểm một thứ khác với thứ người dùng
+      # nhận.
+      - name: build web
+        run: pnpm --filter web build
+
+      - name: cài Chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: playwright
+        run: pnpm --filter web test:e2e
+
+      - name: lưu báo cáo khi đỏ
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: src/web/playwright-report
+          retention-days: 7
 
   secrets:
     name: Quét bí mật

@@ -27,6 +27,11 @@ mow-items = { path = "../mow-items" }
 mow-life = { path = "../mow-life" }
 mow-spatial = { path = "../mow-spatial" }
 mow-worldgen = { path = "../mow-worldgen" }
+mow-culture = { path = "../mow-culture" }
+mow-org = { path = "../mow-org" }
+mow-persist = { path = "../mow-persist" }
+mow-plugin = { path = "../mow-plugin" }
+mow-yuu = { path = "../mow-yuu" }
 mow-magic = { path = "../mow-magic" }
 mow-portal = { path = "../mow-portal" }
 mow-eco = { path = "../mow-eco" }

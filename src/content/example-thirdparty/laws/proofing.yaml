@@ -1,0 +1,19 @@
+# Luat u bot: nhiet do quyet dinh bot no nhanh hay cham.
+#
+# Day la ly do pack nay phai xin `define_law` trong manifest. Mot pack chi them
+# vat pham thi khong can quyen nao — xem `Grants::default`.
+schema: law/v1
+rule_id: example_thirdparty.proofing
+version: 1
+trigger: action.proof_dough
+inputs:
+  ambient_c: joule
+compute:
+  # Bot no theo nhiet, chan trong khoang an toan.
+  rise_rate:
+    clamp:
+      value: { var: ambient_c }
+      lo: { const: { value: 0, unit: joule } }
+      hi: { const: { value: 400, unit: joule } }
+output_units:
+  rise_rate: joule

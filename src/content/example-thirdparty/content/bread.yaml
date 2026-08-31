@@ -1,0 +1,13 @@
+# Vat pham cua pack ben thu ba.
+#
+# Chu y **namespace**: moi id bat dau bang `example_thirdparty.`. Day la §22.29,
+# va no duoc thi hanh boi `Registry::define` chu khong phai boi quy uoc — mot id
+# khong co namespace bi tu choi luc nap.
+schema: item/v1
+id: example_thirdparty.rye_loaf
+name: "O banh lua mach"
+form:
+  volume_ml: 1200
+  mass_g: 700
+nutrition_kcal: 1800
+spoils_after_days: 4

@@ -137,3 +137,164 @@ describe("người chưa từng gặp", () => {
     expect(la.key).toBe(strangerPortrait({ species: "core.human" }).key);
   });
 });
+
+// ═══════════════ PF-19 · bộ mười lăm lớp đầy đủ (§18.14.4) ═══════════════
+
+describe("chân dung đầy đủ 15 lớp (PF-19, §18.14.4)", () => {
+  const nen: Phenotype = {
+    species: "human",
+    ageYears: 30,
+    nutrition: 600,
+    illness: 0,
+    scars: 0,
+    mood: 0,
+  };
+
+  it("có đúng mười lăm lớp", () => {
+    expect(PORTRAIT_LAYERS).toHaveLength(15);
+    expect(buildPortrait(1n, nen).layers).toHaveLength(15);
+  });
+
+  it("thứ tự lớp là thứ tự vẽ: biểu cảm nằm trên cùng", () => {
+    const l = [...PORTRAIT_LAYERS];
+    expect(l[0]).toBe("species");
+    expect(l[l.length - 1]).toBe("expression");
+    // Trang bị đè lên trang phục.
+    expect(l.indexOf("equipment")).toBeGreaterThan(l.indexOf("dress_culture"));
+    expect(l.indexOf("equipment")).toBeGreaterThan(l.indexOf("dress_status"));
+  });
+
+  it("nét mặt di truyền — hai anh em cùng seed có cùng nét", () => {
+    const a = buildPortrait(4242n, nen);
+    const b = buildPortrait(4242n, { ...nen, ageYears: 60, mood: -800 });
+    const net = (p: typeof a) =>
+      p.layers.find((l) => l.layer === "features")?.variant;
+    expect(net(a)).toBe(net(b));
+  });
+
+  it("sẹo KHÔNG di truyền — con không thừa hưởng vết sẹo của cha", () => {
+    expect(LAYER_SOURCE.injuries).toBe("phenotype");
+    const cha = buildPortrait(4242n, { ...nen, scars: 5 });
+    const con = buildPortrait(4242n, nen);
+    const seo = (p: typeof cha) =>
+      p.layers.find((l) => l.layer === "injuries")?.variant;
+    expect(seo(cha)).not.toBe(seo(con));
+  });
+
+  it("trẻ con không mọc râu dù bộ gen nói có", () => {
+    const rau = (tuoi: number) =>
+      buildPortrait(4242n, { ...nen, ageYears: tuoi }).layers.find(
+        (l) => l.layer === "facial_hair",
+      )?.variant;
+    expect(rau(8)).toBe("none");
+    expect(rau(30)).not.toBe("none");
+    // Nhưng vẫn là cùng một phương án ở mọi tuổi trưởng thành — nó là gen.
+    expect(rau(30)).toBe(rau(70));
+  });
+
+  it("bộ phận mất đi thắng số sẹo", () => {
+    const p = buildPortrait(1n, {
+      ...nen,
+      scars: 9,
+      missingParts: ["left_hand"],
+    });
+    expect(p.layers.find((l) => l.layer === "injuries")?.variant).toBe(
+      "missing_left_hand",
+    );
+  });
+
+  it("cùng tập bộ phận cho cùng khóa bất kể thứ tự truyền vào", () => {
+    const a = buildPortrait(1n, { ...nen, missingParts: ["eye", "left_hand"] });
+    const b = buildPortrait(1n, { ...nen, missingParts: ["left_hand", "eye"] });
+    expect(a.key).toBe(b.key);
+  });
+
+  it("bệnh và sẹo là hai lớp riêng, chồng lên nhau được", () => {
+    const p = buildPortrait(1n, { ...nen, illness: 800, scars: 2 });
+    expect(p.layers.find((l) => l.layer === "condition")?.variant).toBe(
+      "gravely_ill",
+    );
+    expect(p.layers.find((l) => l.layer === "injuries")?.variant).toBe(
+      "scarred",
+    );
+  });
+
+  it("không khai văn hóa thì mặc đồ chung, không phải để trống", () => {
+    expect(
+      buildPortrait(1n, nen).layers.find((l) => l.layer === "dress_culture")
+        ?.variant,
+    ).toBe("common");
+  });
+
+  it("địa vị thành năm bậc rời rạc, phân biệt được", () => {
+    const bac = (s: number) =>
+      buildPortrait(1n, { ...nen, status: s }).layers.find(
+        (l) => l.layer === "dress_status",
+      )?.variant;
+    expect(bac(50)).toBe("destitute");
+    expect(bac(300)).toBe("common");
+    expect(bac(500)).toBe("prosperous");
+    expect(bac(800)).toBe("notable");
+    expect(bac(950)).toBe("exalted");
+    // Không khai địa vị khác với địa vị thấp.
+    expect(
+      buildPortrait(1n, nen).layers.find((l) => l.layer === "dress_status")
+        ?.variant,
+    ).toBe("unmarked");
+  });
+
+  it("chỉ hiện món trang bị ngoài cùng", () => {
+    const p = buildPortrait(1n, {
+      ...nen,
+      equipped: ["plate_armour", "cloak", "pouch"],
+    });
+    expect(p.layers.find((l) => l.layer === "equipment")?.variant).toBe(
+      "plate_armour",
+    );
+  });
+
+  it("trần hai dấu hiệu effect — vượt quá thì thành nhiễu", () => {
+    const p = buildPortrait(1n, {
+      ...nen,
+      visibleEffects: ["burning", "frozen", "cursed", "blessed"],
+    });
+    const dau = p.layers.find((l) => l.layer === "effect_marks")?.variant ?? "";
+    expect(dau.split("+")).toHaveLength(2);
+  });
+
+  it("dấu hiệu effect xác định bất kể thứ tự truyền vào", () => {
+    const a = buildPortrait(1n, { ...nen, visibleEffects: ["frozen", "burning"] });
+    const b = buildPortrait(1n, { ...nen, visibleEffects: ["burning", "frozen"] });
+    expect(a.key).toBe(b.key);
+  });
+
+  it("vẫn thuần: cùng đầu vào cho cùng chân dung", () => {
+    const day: Phenotype = {
+      ...nen,
+      missingParts: ["left_hand"],
+      culture: "veskar",
+      status: 700,
+      equipped: ["mail"],
+      visibleEffects: ["blessed"],
+    };
+    expect(buildPortrait(9n, day)).toEqual(buildPortrait(9n, day));
+  });
+
+  it("phần di truyền vẫn là bảy lớp, đủ để đo họ hàng", () => {
+    const gen = PORTRAIT_LAYERS.filter((l) => LAYER_SOURCE[l] === "genotype");
+    expect(gen).toEqual([
+      "species",
+      "skin",
+      "hair",
+      "eyes",
+      "features",
+      "facial_hair",
+    ]);
+  });
+
+  it("người lạ vẫn chỉ hiện những gì quan sát được, đủ mười lăm lớp", () => {
+    const la = strangerPortrait({ build: "gaunt", equipment: "hood" });
+    expect(la.layers).toHaveLength(15);
+    expect(la.layers.filter((l) => l.variant === "unknown")).toHaveLength(13);
+  });
+});

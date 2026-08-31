@@ -171,6 +171,12 @@ impl Store for SqliteStore {
         from: EventSeq,
         to: EventSeq,
     ) -> PersistResult<Vec<EventRecord>> {
+        // `EventSeq` là `u64` còn cột SQL là `i64`. Ép thẳng thì `u64::MAX`
+        // thành `-1`, và truy vấn trả về **rỗng** thay vì trả về tất cả — một
+        // câu trả lời sai mà không có lỗi nào. Chặn ở `i64::MAX` để "không có
+        // cận trên" nghĩa đúng như nó đọc.
+        let can_duoi = i64::try_from(from.0).unwrap_or(i64::MAX);
+        let can_tren = i64::try_from(to.0).unwrap_or(i64::MAX);
         let mut stmt = self.conn.prepare_cached(
             "SELECT seq, world, tick, kind, actor, subject, payload, cause, law_version,
                     norm_set_version
@@ -178,24 +184,21 @@ impl Store for SqliteStore {
               WHERE branch = ?1 AND seq >= ?2 AND seq < ?3
               ORDER BY seq",
         )?;
-        let rows = stmt.query_map(
-            params![branch.get() as i64, from.0 as i64, to.0 as i64],
-            |r| {
-                Ok(EventRecord {
-                    seq: EventSeq(r.get::<_, i64>(0)? as u64),
-                    branch,
-                    world: WorldId(r.get::<_, i64>(1)? as u64),
-                    tick: Tick(r.get::<_, i64>(2)? as u64),
-                    kind: r.get(3)?,
-                    actor: r.get::<_, i64>(4)? as u64,
-                    subject: r.get::<_, i64>(5)? as u64,
-                    payload: r.get(6)?,
-                    cause: r.get::<_, Option<i64>>(7)?.map(|v| EventSeq(v as u64)),
-                    law_version: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
-                    norm_set_version: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
-                })
-            },
-        )?;
+        let rows = stmt.query_map(params![branch.get() as i64, can_duoi, can_tren], |r| {
+            Ok(EventRecord {
+                seq: EventSeq(r.get::<_, i64>(0)? as u64),
+                branch,
+                world: WorldId(r.get::<_, i64>(1)? as u64),
+                tick: Tick(r.get::<_, i64>(2)? as u64),
+                kind: r.get(3)?,
+                actor: r.get::<_, i64>(4)? as u64,
+                subject: r.get::<_, i64>(5)? as u64,
+                payload: r.get(6)?,
+                cause: r.get::<_, Option<i64>>(7)?.map(|v| EventSeq(v as u64)),
+                law_version: r.get::<_, Option<i64>>(8)?.map(|v| v as u32),
+                norm_set_version: r.get::<_, Option<i64>>(9)?.map(|v| v as u32),
+            })
+        })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 

@@ -174,7 +174,7 @@ describe("§18.5 — kênh thị giác phân bổ cố định", () => {
 
   it("mỗi kênh có đúng một chủ", () => {
     const chu = Object.values(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+       
       ({} as Record<string, never>),
     );
     expect(chu).toEqual([]);

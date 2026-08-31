@@ -179,7 +179,13 @@ impl Store for PostgresStore {
                    FROM event
                   WHERE branch = $1 AND seq >= $2 AND seq < $3
                   ORDER BY seq",
-                &[&(branch.get() as i64), &(from.0 as i64), &(to.0 as i64)],
+                // Cùng lý do với `sqlite.rs`: ép `u64::MAX` sang `i64` cho ra
+                // `-1`, và truy vấn trả rỗng thay vì trả tất cả.
+                &[
+                    &(branch.get() as i64),
+                    &i64::try_from(from.0).unwrap_or(i64::MAX),
+                    &i64::try_from(to.0).unwrap_or(i64::MAX),
+                ],
             )
             .map_err(|e| loi(&e))?;
 

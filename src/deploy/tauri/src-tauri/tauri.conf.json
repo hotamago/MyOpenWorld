@@ -25,7 +25,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "dmg", "appimage", "deb"],
-    "icon": ["icons/icon.png"]
+    "targets": [
+      "msi",
+      "dmg",
+      "appimage",
+      "deb"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../../../content": "content",
+      "../../../config": "config"
+    }
   }
 }

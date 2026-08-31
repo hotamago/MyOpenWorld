@@ -1,0 +1,34 @@
+# Content pack mau cua "ben thu ba" (PF-13).
+#
+# Pack nay ton tai de chung minh mot dieu, va no la dieu ma tai lieu modder
+# khong tu chung minh duoc: **mot pack cua cong dong nap duoc qua dung co che
+# ma content/core dung, va su co mat cua no khong doi hash cua mot world khong
+# dung no.**
+#
+# Ve thu hai moi la ve kho. Neu chi can co mat trong thu muc mod la hash doi,
+# thi moi nguoi choi cai them mot mod se khong mo lai duoc save cu — va do la
+# cach nhanh nhat de khong ai dam cai mod nao.
+#
+# Xem docs/modding.md.
+
+id: example_thirdparty
+version: "1.0.0"
+name: "Lo banh mi Veskar"
+description: "Mot pack mau: them nghe lam banh va mot luat u bot."
+
+requires:
+  - id: core
+    version: ">=0.1"
+
+# Khong ghi de gi cua ai. Pack nay chi **them**.
+overrides: []
+
+# Xin dung mot quyen: no co thu muc `laws/`.
+#
+# Khong xin `override_foreign` — pack nay khong dung toi id cua pack khac, va
+# viec phai them mot dong de lam duoc dieu do la mot cau hoi dang duoc hoi.
+capabilities:
+  - define_law
+
+tests:
+  - smoke/genesis.yaml

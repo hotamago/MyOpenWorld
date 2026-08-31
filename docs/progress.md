@@ -14,8 +14,8 @@
 | Phase C — Nhận thức LLM và ký ức | 21 | 21 | 100% |
 | Phase D — Xã hội, tri thức, kinh tế | 26 | 26 | 100% |
 | Phase E — Ma thuật và đa thế giới | 17 | 17 | 100% |
-| Phase F — Yuu/True God và mở rộng | 9 | 21 | 43% |
-| **Tổng** | **135** | **147** | **92%** |
+| Phase F — Yuu/True God và mở rộng | 21 | 21 | 100% |
+| **Tổng** | **147** | **147** | **100%** |
 
 Đếm lại bằng lệnh này rồi dán số vào bảng — **không đếm tay, không đọc cả file để đếm**:
 
@@ -239,18 +239,18 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 - [x] **PF-07** Yuu Auditor và Historian — dùng chung bộ invariant với harness; biên niên sử chỉ dùng event có thật. `§22.17`
 - [x] **PF-08** True God console — query/proposal/command, preview, snapshot tự động, rollback, branch. `§15.5`, `§16`
 - [x] **PF-09** Hóa thân và chỉnh prompt — possession, phân tầng quyền prompt, mọi can thiệp có provenance. `§16.3`, `§16.4`
-- [ ] **PF-10** Soak và World Health Report — 3 world × 200 năm, cảnh báo dạng "lạm phát không giải thích được". `§P7.7`
-- [ ] **PF-11** Hiệu năng — đạt toàn bộ ngân sách ở bảng `§P8.1`; vượt ngân sách làm CI fail.
-- [ ] **PF-12** Đóng gói phát hành — Tauri bundle, sidecar Python, `tauri-driver` cho đường riêng của desktop. `§P3.4`
-- [ ] **PF-13** Tài liệu modder — schema có `$id` version, một content pack mẫu của "bên thứ ba" nạp được và không đổi hash của world không dùng nó.
-- [ ] **PF-14** Bộ test đầy đủ — regression từ mọi bug đã sửa, e2e Playwright cho các panel chính.
-- [ ] **PF-15** Console Yuu và True God — proposal hiện dưới dạng diff có preview, báo cáo rủi ro, commit/rollback; audit view lọc theo provenance. `§18.12`
-- [ ] **PF-16** Dễ đọc — triệu chứng trước con số, mọi giá trị suy ra bấm được về nguồn, affordance "vì sao?" ở khắp nơi. `§18.13`
-- [ ] **PF-17** Tiếp cận được — hoa văn thay màu, bảng số cho mọi overlay, chế độ tối là thang riêng đã qua kiểm tra. `§18.6.3`, `§18.6.4`
-- [ ] **PF-18** Huy hiệu đầy đủ — bộ giải văn phạm blazon. Tách khỏi `PD-20` vì đây là phần đắt; `PD-20` chỉ cần bảng tĩnh cộng dấu nhánh thứ để đọc được huyết thống. `§18.14.3`
-- [ ] **PF-19** Chân dung đầy đủ — 15 lớp paper-doll. Tách khỏi `PC-17` vốn chỉ cần lớp tối thiểu: loài, tuổi, trạng thái thấy được. `§18.14.4`
-- [ ] **PF-20** Di cư và ứng phó thảm họa — quyết định rời đi theo belief, cộng đồng ly tán, cảnh báo/sơ tán/tái thiết; cùng một trận động đất cho hai kết cục khác nhau tùy chính danh. `§12.19`, `§12.20`
-- [ ] **PF-GATE** Cổng Giai đoạn F.
+- [x] **PF-10** Soak và World Health Report — 3 world × 200 năm, cảnh báo dạng "lạm phát không giải thích được". `§P7.7`
+- [x] **PF-11** Hiệu năng — đạt toàn bộ ngân sách ở bảng `§P8.1`; vượt ngân sách làm CI fail.
+- [x] **PF-12** Đóng gói phát hành — Tauri bundle, sidecar Python, `tauri-driver` cho đường riêng của desktop. `§P3.4`
+- [x] **PF-13** Tài liệu modder — schema có `$id` version, một content pack mẫu của "bên thứ ba" nạp được và không đổi hash của world không dùng nó.
+- [x] **PF-14** Bộ test đầy đủ — regression từ mọi bug đã sửa, e2e Playwright cho các panel chính.
+- [x] **PF-15** Console Yuu và True God — proposal hiện dưới dạng diff có preview, báo cáo rủi ro, commit/rollback; audit view lọc theo provenance. `§18.12`
+- [x] **PF-16** Dễ đọc — triệu chứng trước con số, mọi giá trị suy ra bấm được về nguồn, affordance "vì sao?" ở khắp nơi. `§18.13`
+- [x] **PF-17** Tiếp cận được — hoa văn thay màu, bảng số cho mọi overlay, chế độ tối là thang riêng đã qua kiểm tra. `§18.6.3`, `§18.6.4`
+- [x] **PF-18** Huy hiệu đầy đủ — bộ giải văn phạm blazon. Tách khỏi `PD-20` vì đây là phần đắt; `PD-20` chỉ cần bảng tĩnh cộng dấu nhánh thứ để đọc được huyết thống. `§18.14.3`
+- [x] **PF-19** Chân dung đầy đủ — 15 lớp paper-doll. Tách khỏi `PC-17` vốn chỉ cần lớp tối thiểu: loài, tuổi, trạng thái thấy được. `§18.14.4`
+- [x] **PF-20** Di cư và ứng phó thảm họa — quyết định rời đi theo belief, cộng đồng ly tán, cảnh báo/sơ tán/tái thiết; cùng một trận động đất cho hai kết cục khác nhau tùy chính danh. `§12.19`, `§12.20`
+- [x] **PF-GATE** Cổng Giai đoạn F.
 
 ---
 
@@ -259,6 +259,12 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 > Mỗi checkpoint thêm **một dòng**, dạng `YYYY-MM-DD — <việc đã xong hoặc quyết định> — <ID liên quan>`.
 > Giữ tối đa **20 dòng gần nhất**; vượt thì xóa dòng cũ nhất. Đây không phải nơi kể chuyện.
 
+- 2026-08-31 — **Cổng Giai đoạn F xanh**: pack bên thứ ba không đổi hash world không dùng nó; rewind giữ nguyên nhánh cũ; biên niên sử chỉ dùng event có thật — PF-GATE
+- 2026-08-31 — `read_events` với cận trên `u64::MAX` trả về **rỗng**: ép `u64`→`i64` cho ra `-1`. Chặn ở `i64::MAX` ở cả hai backend — PF-GATE
+- 2026-08-31 — Đóng gói: sidecar Python có giao thức sẵn sàng (Rust và Python cùng một hằng số, có test đọc chéo), `externalBin` tách sang config bundle để smoke build không cần sidecar — PF-12
+- 2026-08-31 — `eslint` được liệt trong `make lint` từ lâu mà chưa bao giờ có cấu hình; giờ chạy thật và không còn dấu `-` bỏ qua lỗi — PF-14
+- 2026-08-31 — Playwright e2e chạy trên `dist/`, bắt được thứ `vitest` không thấy: mount, layout thật, `BigInt` qua biên, không có yêu cầu mạng ra ngoài — PF-14
+- 2026-08-31 — **Cổng Giai đoạn E xanh**: NPC chỉ ghép từ node đã biết; transfer không nhân đôi/mất entity ở mọi điểm cắt; ủ bệnh không khỏi tức thì; con lai giảm sinh sản đo được — PE-GATE
 - 2026-08-31 — **Cổng Giai đoạn B xanh**: 5/5 điều kiện `§P9`, mỗi cái một bài test riêng ở `tests/gate_b.rs` — PB-GATE
 - 2026-08-31 — `PB-25` khép vòng lặp chơi: thấy theo tri giác → đi → nhặt → ăn → nói → thế giới đổi, cộng True God có preview khớp hash sau commit — PB-25
 - 2026-08-31 — Thêm `Store::attr_entity`: lưu tham chiếu thực thể là `Uint` mà đọc bằng `attr_int` trả `None`, nên điều kiện tiên quyết **luôn** thất bại mà không báo sai kiểu — PB-25
@@ -273,7 +279,3 @@ awk '/^## Phase/{p=$0} /^- \[/{t[p]++; if(/^- \[x\]/) d[p]++}
 - 2026-08-31 — Tauri build thật trên Windows; `mow-desktop` để ngoài workspace để `cargo test --workspace` không kéo 400 crate — PA-09
 - 2026-08-31 — **Cổng Giai đoạn 0 xanh**: 7/7 điều kiện `§P9`; 150 test Rust + 29 Python — P0-GATE
 - 2026-08-31 — Harness đủ vòng: MCP vào world → 1000 tick → invariant; determinism bisect O(log n); repro bundle chụp-chạy-cùng-hash — P0-11/12/13/14/15/16
-- 2026-08-31 — Sửa `plan.md §P9`: điều kiện cổng còn đòi **hai** hiện thực trong khi Giai đoạn 0 đã rút xuống **một** ở lần review trước — P0-07/08/09
-- 2026-08-31 — Dựng `src/` (workspace Rust + uv + pnpm + Makefile), 7 crate, 89 test xanh — P0-01/02/03/05/06/07/08/09/20
-- 2026-08-31 — Thêm `deploy/` + `./mow` một lệnh: toolbox cách ly, infra sau `profiles`, kiểm chứng determinism theo số luồng — P0-02
-- 2026-08-31 — `quantize` chuẩn hóa L2 thay vì theo max; chuẩn hóa max làm ký ức gần giống nhau hòa điểm rồi xếp theo id — P0-09

@@ -1,227 +1,126 @@
 {
+  "$id": "https://myopenworld.dev/schemas/config/app_config.v1.json",
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AppConfig",
-  "description": "Toàn bộ cấu hình ứng dụng.",
-  "type": "object",
-  "properties": {
-    "budget": {
-      "description": "Ngân sách nhận thức.",
-      "default": {
-        "max_calls_per_tick": 8,
-        "max_concurrent": 4
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/BudgetConfig"
-        }
-      ]
-    },
-    "content": {
-      "description": "Content pack.",
-      "default": {
-        "packs": [
-          "core"
-        ],
-        "root": "content"
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/ContentConfig"
-        }
-      ]
-    },
-    "env": {
-      "description": "Tên môi trường, để đối chiếu với file đã nạp.",
-      "default": "dev",
-      "type": "string"
-    },
-    "llm": {
-      "description": "Mô hình ngôn ngữ.",
-      "default": {
-        "cassette_dir": "llm-cassettes",
-        "cognitive_latency_ticks": 10,
-        "mode": "STUB",
-        "model": "",
-        "provider": "",
-        "timeout_ms": 30000
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/LlmConfig"
-        }
-      ]
-    },
-    "observability": {
-      "description": "Quan sát và log.",
-      "default": {
-        "log_format": "pretty",
-        "log_level": "info",
-        "otel_endpoint": ""
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/ObservabilityConfig"
-        }
-      ]
-    },
-    "persistence": {
-      "description": "Lưu trữ.",
-      "default": {
-        "url": "saves/world.sqlite"
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/PersistenceConfig"
-        }
-      ]
-    },
-    "sim": {
-      "description": "Mô phỏng.",
-      "default": {
-        "active_radius": 3,
-        "chunk_size": 32,
-        "snapshot_interval": 10000,
-        "tick_rate": 20
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/SimConfig"
-        }
-      ]
-    },
-    "vector": {
-      "description": "Chỉ mục ký ức.",
-      "default": {
-        "dimension": 768,
-        "url": "memory-index/index.sqlite"
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/VectorConfig"
-        }
-      ]
-    }
-  },
   "additionalProperties": false,
   "definitions": {
     "BudgetConfig": {
+      "additionalProperties": false,
       "description": "Ngân sách nhận thức (`§20.2`).",
-      "type": "object",
       "properties": {
         "max_calls_per_tick": {
-          "description": "Số lời gọi tối đa mỗi tick trên toàn thế giới.",
           "default": 8,
-          "type": "integer",
+          "description": "Số lời gọi tối đa mỗi tick trên toàn thế giới.",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "max_concurrent": {
-          "description": "Số lời gọi song song tối đa.",
           "default": 4,
-          "type": "integer",
+          "description": "Số lời gọi song song tối đa.",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "ContentConfig": {
+      "additionalProperties": false,
       "description": "Content pack.",
-      "type": "object",
       "properties": {
         "packs": {
-          "description": "Danh sách pack nạp, **theo thứ tự**. Thứ tự quyết định ghi đè.",
           "default": [
             "core"
           ],
-          "type": "array",
+          "description": "Danh sách pack nạp, **theo thứ tự**. Thứ tự quyết định ghi đè.",
           "items": {
             "type": "string"
-          }
+          },
+          "type": "array"
         },
         "root": {
-          "description": "Thư mục gốc chứa pack.",
           "default": "content",
+          "description": "Thư mục gốc chứa pack.",
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "LlmConfig": {
+      "additionalProperties": false,
       "description": "Cấu hình mô hình ngôn ngữ.",
-      "type": "object",
       "properties": {
         "cassette_dir": {
-          "description": "Thư mục chứa bản ghi cho chế độ `RECORD`/`REPLAY`.",
           "default": "llm-cassettes",
+          "description": "Thư mục chứa bản ghi cho chế độ `RECORD`/`REPLAY`.",
           "type": "string"
         },
         "cognitive_latency_ticks": {
-          "description": "**Độ trễ nhận thức cố định `D`, tính bằng tick** (`§20.2.2`).\n\nĐây là trường quan trọng nhất trong cả file config, và lý do nó tồn tại đáng đọc kỹ: một thực thể suy nghĩ ở tick `T` sẽ hành động ở tick `T+D`, **bất kể mô hình trả lời nhanh hay chậm**. Không có nó, một mô hình trả lời trong 500ms và một mô hình trả lời trong 3 giây sẽ tạo ra hai thế giới khác nhau từ cùng một seed, và replay trở thành vô nghĩa.\n\nMuốn nhân vật phản ứng nhanh hơn thì tăng `cognition_rate` của nó — đó là thuộc tính của thế giới. Đường truyền nhanh không phải là một thuộc tính của thế giới.",
           "default": 10,
-          "type": "integer",
+          "description": "**Độ trễ nhận thức cố định `D`, tính bằng tick** (`§20.2.2`).\n\nĐây là trường quan trọng nhất trong cả file config, và lý do nó tồn tại đáng đọc kỹ: một thực thể suy nghĩ ở tick `T` sẽ hành động ở tick `T+D`, **bất kể mô hình trả lời nhanh hay chậm**. Không có nó, một mô hình trả lời trong 500ms và một mô hình trả lời trong 3 giây sẽ tạo ra hai thế giới khác nhau từ cùng một seed, và replay trở thành vô nghĩa.\n\nMuốn nhân vật phản ứng nhanh hơn thì tăng `cognition_rate` của nó — đó là thuộc tính của thế giới. Đường truyền nhanh không phải là một thuộc tính của thế giới.",
           "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "mode": {
-          "description": "Chế độ.",
-          "default": "STUB",
           "allOf": [
             {
               "$ref": "#/definitions/LlmMode"
             }
-          ]
+          ],
+          "default": "STUB",
+          "description": "Chế độ."
         },
         "model": {
-          "description": "Mô hình mặc định.",
           "default": "",
+          "description": "Mô hình mặc định.",
           "type": "string"
         },
         "provider": {
-          "description": "Nhà cung cấp, ví dụ `anthropic`, `openai`.",
           "default": "",
+          "description": "Nhà cung cấp, ví dụ `anthropic`, `openai`.",
           "type": "string"
         },
         "timeout_ms": {
-          "description": "Thời gian chờ mỗi lời gọi, tính bằng mili giây.",
           "default": 30000,
-          "type": "integer",
+          "description": "Thời gian chờ mỗi lời gọi, tính bằng mili giây.",
           "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "LlmMode": {
       "description": "Chế độ gọi mô hình (`§P6.7`).",
       "oneOf": [
         {
           "description": "Gọi thật.",
-          "type": "string",
           "enum": [
             "LIVE"
-          ]
+          ],
+          "type": "string"
         },
         {
           "description": "Gọi thật và ghi lại để phát lại sau.",
-          "type": "string",
           "enum": [
             "RECORD"
-          ]
+          ],
+          "type": "string"
         },
         {
           "description": "Phát lại từ bản ghi; không có mạng.",
-          "type": "string",
           "enum": [
             "REPLAY"
-          ]
+          ],
+          "type": "string"
         },
         {
           "description": "Trả lời cố định. Toàn bộ Giai đoạn B chạy ở chế độ này.",
-          "type": "string",
           "enum": [
             "STUB"
-          ]
+          ],
+          "type": "string"
         }
       ]
     },
@@ -230,111 +129,213 @@
       "oneOf": [
         {
           "description": "Đọc được bằng mắt, cho lúc phát triển.",
-          "type": "string",
           "enum": [
             "pretty"
-          ]
+          ],
+          "type": "string"
         },
         {
           "description": "JSON, cho lúc thu thập.",
-          "type": "string",
           "enum": [
             "json"
-          ]
+          ],
+          "type": "string"
         }
       ]
     },
     "ObservabilityConfig": {
+      "additionalProperties": false,
       "description": "Quan sát.",
-      "type": "object",
       "properties": {
         "log_format": {
-          "description": "Định dạng.",
-          "default": "pretty",
           "allOf": [
             {
               "$ref": "#/definitions/LogFormat"
             }
-          ]
+          ],
+          "default": "pretty",
+          "description": "Định dạng."
         },
         "log_level": {
-          "description": "Mức log.",
           "default": "info",
+          "description": "Mức log.",
           "type": "string"
         },
         "otel_endpoint": {
-          "description": "Điểm nhận OTLP. Rỗng là tắt trace.",
           "default": "",
+          "description": "Điểm nhận OTLP. Rỗng là tắt trace.",
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "PersistenceConfig": {
+      "additionalProperties": false,
       "description": "Cấu hình lưu trữ.",
-      "type": "object",
       "properties": {
         "url": {
-          "description": "Đường dẫn file save (SQLite) hoặc DSN (Postgres, từ Giai đoạn C).",
           "default": "saves/world.sqlite",
+          "description": "Đường dẫn file save (`SQLite`) hoặc DSN (Postgres, từ Giai đoạn C).",
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "SimConfig": {
+      "additionalProperties": false,
       "description": "Cấu hình mô phỏng.\n\n**Mọi trường ở đây ảnh hưởng kết quả mô phỏng**, nên đổi chúng giữa chừng phải ghi vào event log (`§P6.1`, `§8.4`) — nếu không replay sẽ lệch mà không có gì trong lịch sử giải thích tại sao.",
-      "type": "object",
       "properties": {
         "active_radius": {
-          "description": "Bán kính chunk giữ ở mức `active`, tính từ tiêu điểm.",
           "default": 3,
-          "type": "integer",
+          "description": "Bán kính chunk giữ ở mức `active`, tính từ tiêu điểm.",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "chunk_size": {
-          "description": "Cạnh của một chunk, tính bằng ô.",
           "default": 32,
-          "type": "integer",
+          "description": "Cạnh của một chunk, tính bằng ô.",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "snapshot_interval": {
-          "description": "Số tick giữa hai lần chụp ảnh tự động. `0` là tắt.",
           "default": 10000,
-          "type": "integer",
+          "description": "Số tick giữa hai lần chụp ảnh tự động. `0` là tắt.",
           "format": "uint64",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "tick_rate": {
-          "description": "Số tick thần mỗi giây thời gian thật khi chạy ở tốc độ ×1.",
           "default": 20,
-          "type": "integer",
+          "description": "Số tick thần mỗi giây thời gian thật khi chạy ở tốc độ ×1.",
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     },
     "VectorConfig": {
+      "additionalProperties": false,
       "description": "Cấu hình chỉ mục ký ức.",
-      "type": "object",
       "properties": {
         "dimension": {
-          "description": "Số chiều của embedding.",
           "default": 768,
-          "type": "integer",
+          "description": "Số chiều của embedding.",
           "format": "uint",
-          "minimum": 0.0
+          "minimum": 0.0,
+          "type": "integer"
         },
         "url": {
-          "description": "Đường dẫn file chỉ mục.\n\n**Phải khác** [`PersistenceConfig::url`] — `P0-09`. Kho ký ức nằm ở file riêng để không tranh khóa với tiến trình mô phỏng, và để `PC-06` xóa sạch chỉ mục mà không đụng vào save của người chơi.",
           "default": "memory-index/index.sqlite",
+          "description": "Đường dẫn file chỉ mục.\n\n**Phải khác** [`PersistenceConfig::url`] — `P0-09`. Kho ký ức nằm ở file riêng để không tranh khóa với tiến trình mô phỏng, và để `PC-06` xóa sạch chỉ mục mà không đụng vào save của người chơi.",
           "type": "string"
         }
       },
-      "additionalProperties": false
+      "type": "object"
     }
-  }
+  },
+  "description": "Toàn bộ cấu hình ứng dụng.",
+  "properties": {
+    "budget": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/BudgetConfig"
+        }
+      ],
+      "default": {
+        "max_calls_per_tick": 8,
+        "max_concurrent": 4
+      },
+      "description": "Ngân sách nhận thức."
+    },
+    "content": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ContentConfig"
+        }
+      ],
+      "default": {
+        "packs": [
+          "core"
+        ],
+        "root": "content"
+      },
+      "description": "Content pack."
+    },
+    "env": {
+      "default": "dev",
+      "description": "Tên môi trường, để đối chiếu với file đã nạp.",
+      "type": "string"
+    },
+    "llm": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/LlmConfig"
+        }
+      ],
+      "default": {
+        "cassette_dir": "llm-cassettes",
+        "cognitive_latency_ticks": 10,
+        "mode": "STUB",
+        "model": "",
+        "provider": "",
+        "timeout_ms": 30000
+      },
+      "description": "Mô hình ngôn ngữ."
+    },
+    "observability": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ObservabilityConfig"
+        }
+      ],
+      "default": {
+        "log_format": "pretty",
+        "log_level": "info",
+        "otel_endpoint": ""
+      },
+      "description": "Quan sát và log."
+    },
+    "persistence": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PersistenceConfig"
+        }
+      ],
+      "default": {
+        "url": "saves/world.sqlite"
+      },
+      "description": "Lưu trữ."
+    },
+    "sim": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/SimConfig"
+        }
+      ],
+      "default": {
+        "active_radius": 3,
+        "chunk_size": 32,
+        "snapshot_interval": 10000,
+        "tick_rate": 20
+      },
+      "description": "Mô phỏng."
+    },
+    "vector": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/VectorConfig"
+        }
+      ],
+      "default": {
+        "dimension": 768,
+        "url": "memory-index/index.sqlite"
+      },
+      "description": "Chỉ mục ký ức."
+    }
+  },
+  "title": "AppConfig",
+  "type": "object"
 }

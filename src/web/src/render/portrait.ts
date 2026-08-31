@@ -31,7 +31,26 @@
  * hình ảnh mà `§18.14.6` nói là không được đổi.
  */
 
-/** Một lớp trong chân dung. */
+/**
+ * Mười lăm lớp của `§18.14.4` (`PF-19`).
+ *
+ * `PC-17` chỉ cần bộ tối thiểu — loài, tuổi, trạng thái thấy được — vừa đủ để
+ * một khuôn mặt hiện lên. Đây là bộ đầy đủ, và thứ tự **là thứ tự vẽ**: lớp
+ * sau đè lên lớp trước, nên trang bị che được trang phục và biểu cảm nằm trên
+ * cùng.
+ *
+ * Danh sách bám sát nguyên văn `§18.14.4`: loài → thể trạng → tuổi → sắc da →
+ * tóc → mắt → nét mặt → sẹo và thương tích → trang phục theo văn hóa → trang
+ * phục theo địa vị → trang bị đang mặc → dấu hiệu effect → biểu cảm theo mood.
+ *
+ * `facial_hair` tách khỏi `hair` vì hai thứ này di truyền cùng nhau nhưng
+ * **hiện khác nhau theo tuổi**; gộp lại thì một đứa trẻ và một ông già cùng
+ * dòng họ phải dùng chung một phương án.
+ *
+ * `condition` giữ riêng cho xanh xao vì bệnh: `§18.14.4` nói chân dung *"xanh
+ * xao khi bệnh"* — một trạng thái phủ lên cả khuôn mặt, khác với sẹo vốn nằm ở
+ * một chỗ.
+ */
 export const PORTRAIT_LAYERS = [
   "species",
   "build",
@@ -39,8 +58,15 @@ export const PORTRAIT_LAYERS = [
   "skin",
   "hair",
   "eyes",
-  "expression",
+  "features",
+  "facial_hair",
+  "injuries",
   "condition",
+  "dress_culture",
+  "dress_status",
+  "equipment",
+  "effect_marks",
+  "expression",
 ] as const;
 
 /** Tên lớp. */
@@ -60,8 +86,20 @@ export const LAYER_SOURCE: Record<PortraitLayer, "genotype" | "phenotype"> = {
   skin: "genotype",
   hair: "genotype",
   eyes: "genotype",
-  expression: "phenotype",
+  // Nét mặt là lớp mang **nhiều** thông tin họ hàng nhất trong đời thật: người
+  // ta nhận ra anh em qua đường nét chứ không qua màu tóc.
+  features: "genotype",
+  facial_hair: "genotype",
+  // Sẹo, bệnh, quần áo, trang bị, hiệu ứng, tâm trạng — tất cả là **lịch sử và
+  // hoàn cảnh**, không phải bộ gen. Chuyển bất kỳ cái nào sang `genotype` sẽ
+  // làm con cái thừa hưởng vết sẹo của cha, và không có gì báo lỗi.
+  injuries: "phenotype",
   condition: "phenotype",
+  dress_culture: "phenotype",
+  dress_status: "phenotype",
+  equipment: "phenotype",
+  effect_marks: "phenotype",
+  expression: "phenotype",
 };
 
 /** Kiểu hình quan sát được ngay lúc này. */
@@ -78,6 +116,28 @@ export interface Phenotype {
   scars: number;
   /** Tâm trạng `-1000`..`1000`, quyết định biểu cảm. */
   mood: number;
+  /**
+   * Bộ phận cơ thể đã mất hoặc đang băng bó (`§9.4`).
+   *
+   * Danh sách chứ không phải một con số: mất một bàn tay và mất một mắt là hai
+   * chân dung khác nhau, và gộp thành `injuries: 2` sẽ mất đúng phần người
+   * chơi nhìn thấy.
+   */
+  missingParts?: readonly string[];
+  /** Văn hóa quy định cách ăn mặc (`§12.3`). */
+  culture?: string;
+  /** Địa vị xã hội `0`–`1000` (`§12.10`). */
+  status?: number;
+  /** Trang bị đang mặc, theo thứ tự ưu tiên hiện (`§18.15.4`). */
+  equipped?: readonly string[];
+  /**
+   * Hiệu ứng **nhìn thấy được** (`§9.8.2 perceptible_as`).
+   *
+   * Chỉ những hiệu ứng mà người xem nhận biết được — lọc ở tầng view, không ở
+   * đây. Truyền vào một hiệu ứng ẩn là một lỗi rò rỉ tri giác, cùng loại với
+   * `§18.14.5`.
+   */
+  visibleEffects?: readonly string[];
 }
 
 /** Một lớp đã chọn xong phương án. */
@@ -136,6 +196,8 @@ const SO_PHUONG_AN: Record<string, number> = {
   skin: 6,
   hair: 8,
   eyes: 5,
+  features: 10,
+  facial_hair: 4,
 };
 
 /** Thể trạng theo dinh dưỡng. */
@@ -146,7 +208,14 @@ function theTrang(nutrition: number): string {
   return "normal";
 }
 
-/** Nhóm tuổi. Ngưỡng theo loài là việc của `PF-19`; ở đây là bộ tối thiểu. */
+/**
+ * Nhóm tuổi.
+ *
+ * Ngưỡng dưới đây là **thang người**. Một loài sống 3000 năm cần thang riêng —
+ * `§9.11.4` gọi chênh lệch tuổi thọ là một rào cản thật — nên dùng chung một
+ * thang sẽ vẽ một elf 200 tuổi thành một cụ già. Thang theo loài lấy từ
+ * `species.lifespan` ở tầng gọi; đây là mặc định khi loài không khai.
+ */
 function nhomTuoi(years: number): string {
   if (years < 3) return "infant";
   if (years < 13) return "child";
@@ -166,19 +235,95 @@ function bieuCam(mood: number): string {
 }
 
 /**
- * Dấu hiệu trạng thái thấy được.
+ * Xanh xao vì bệnh (`§18.14.4`).
  *
- * Chỉ **một** lớp, và nó chọn cái nặng nhất. Chồng cả bệnh lẫn sẹo lẫn đói lên
- * cùng một khuôn mặt nhỏ 32px cho ra một mớ không đọc được — và `§18.13` nguyên
- * tắc 4 nói thẳng: đổ hết mọi thứ ra cùng lúc là cách chắc chắn nhất khiến
- * không ai đọc gì.
+ * Chỉ bệnh. Ở bản `PC-17` lớp này gộp cả sẹo, vì lúc đó chưa có lớp
+ * `injuries`. Giờ đã có, và tách ra là đúng: bệnh phủ lên **cả** khuôn mặt còn
+ * sẹo nằm ở **một chỗ**, nên chúng chồng lên nhau được mà không thành nhiễu.
  */
 function tinhTrang(p: Phenotype): string {
   if (p.illness > 700) return "gravely_ill";
   if (p.illness > 300) return "sickly";
+  return "none";
+}
+
+/**
+ * Râu tóc theo tuổi: trẻ con không có râu dù bộ gen nói có.
+ *
+ * Lớp `facial_hair` là `genotype`, nhưng **biểu hiện** của nó phụ thuộc tuổi —
+ * đúng như một gen bật ở tuổi dậy thì. Bỏ bước này thì một đứa trẻ trong dòng
+ * họ râu rậm sẽ mọc râu, và lỗi đó chỉ lộ ra khi ai đó nhìn kỹ một chân dung
+ * trẻ em.
+ */
+function rauTheoTuoi(genotypeSeed: bigint, years: number): string {
+  if (years < 15) return "none";
+  return `facial_${chon(genotypeSeed, "facial_hair", SO_PHUONG_AN.facial_hair!)}`;
+}
+
+/**
+ * Sẹo và thương tích (`§9.4`).
+ *
+ * Bộ phận mất đi thắng số sẹo: một người cụt tay có ba vết sẹo thì cái người
+ * khác nhìn thấy trước là bàn tay không còn.
+ */
+function thuongTich(p: Phenotype): string {
+  const mat = p.missingParts ?? [];
+  if (mat.length > 0) {
+    // Sắp để cùng một tập bộ phận luôn cho cùng một khóa, bất kể thứ tự truyền
+    // vào — điều kiện để chân dung cache được.
+    return `missing_${[...mat].sort().join("_")}`;
+  }
   if (p.scars >= 3) return "scarred_heavy";
   if (p.scars >= 1) return "scarred";
   return "none";
+}
+
+/**
+ * Trang phục theo văn hóa (`§12.3`).
+ *
+ * Không khai văn hóa thì mặc đồ chung, **không** phải để trống: một người
+ * không mặc gì là một tuyên bố mạnh hơn nhiều so với một người mặc đồ thường.
+ */
+function trangPhucVanHoa(p: Phenotype): string {
+  return p.culture ?? "common";
+}
+
+/**
+ * Trang phục theo địa vị (`§12.10`).
+ *
+ * Bậc rời rạc từ một giá trị liên tục — cùng cách với `CraftQuality` ở
+ * `§8.6.2`. Người xem phân biệt được năm bậc; hai mươi bậc thì không.
+ */
+function trangPhucDiaVi(status: number | undefined): string {
+  if (status === undefined) return "unmarked";
+  if (status < 150) return "destitute";
+  if (status < 400) return "common";
+  if (status < 700) return "prosperous";
+  if (status < 900) return "notable";
+  return "exalted";
+}
+
+/**
+ * Trang bị đang mặc (`§18.15.4`).
+ *
+ * Chỉ hiện **món ngoài cùng**. Vẽ chồng cả bộ giáp lẫn áo choàng lẫn túi lên
+ * một khuôn mặt 32px cho ra một mớ — cùng lý do với trần hai huy hiệu ở
+ * `§18.14.1`.
+ */
+function trangBi(equipped: readonly string[] | undefined): string {
+  return equipped?.[0] ?? "none";
+}
+
+/**
+ * Dấu hiệu hiệu ứng nhìn thấy được (`§9.8.2`).
+ *
+ * **Trần hai dấu**, cùng con số với huy hiệu vật phẩm ở `§18.14.1` và cùng lý
+ * do: vượt quá thì hình thành nhiễu và mất luôn công dụng.
+ */
+function dauHieuEffect(visible: readonly string[] | undefined): string {
+  const v = visible ?? [];
+  if (v.length === 0) return "none";
+  return [...v].sort().slice(0, 2).join("+");
 }
 
 /**
@@ -196,8 +341,18 @@ export function buildPortrait(genotypeSeed: bigint, p: Phenotype): Portrait {
     { layer: "skin", variant: `skin_${chon(genotypeSeed, "skin", SO_PHUONG_AN.skin!)}` },
     { layer: "hair", variant: `hair_${chon(genotypeSeed, "hair", SO_PHUONG_AN.hair!)}` },
     { layer: "eyes", variant: `eyes_${chon(genotypeSeed, "eyes", SO_PHUONG_AN.eyes!)}` },
-    { layer: "expression", variant: bieuCam(p.mood) },
+    {
+      layer: "features",
+      variant: `features_${chon(genotypeSeed, "features", SO_PHUONG_AN.features!)}`,
+    },
+    { layer: "facial_hair", variant: rauTheoTuoi(genotypeSeed, p.ageYears) },
+    { layer: "injuries", variant: thuongTich(p) },
     { layer: "condition", variant: tinhTrang(p) },
+    { layer: "dress_culture", variant: trangPhucVanHoa(p) },
+    { layer: "dress_status", variant: trangPhucDiaVi(p.status) },
+    { layer: "equipment", variant: trangBi(p.equipped) },
+    { layer: "effect_marks", variant: dauHieuEffect(p.visibleEffects) },
+    { layer: "expression", variant: bieuCam(p.mood) },
   ];
   return { layers, key: layers.map((l) => `${l.layer}:${l.variant}`).join("|") };
 }
