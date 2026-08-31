@@ -104,3 +104,40 @@ describe("skyTint và dayPhase", () => {
     expect(seen).toEqual(new Set(["night", "dawn", "day", "dusk"]));
   });
 });
+
+describe("paintTerrain — vách đá vẫn đọc được", () => {
+  it("một vách 6 m mỗi ô không bị vẽ thành đen tuyền", () => {
+    // Đây là bài cho đúng lỗi đã thấy trên màn hình: nửa bên phải bản đồ là
+    // một mảng đen, trông y hệt một lỗi renderer nhưng thực ra là hillshade
+    // đang làm đúng việc của nó trên một địa hình quá dốc.
+    const W = 16;
+    const n = W * W;
+    const b: TileBatch = {
+      x: 0,
+      y: 0,
+      w: W,
+      h: W,
+      z: 0,
+      material: Array.from({ length: n }, () => "air"),
+      surface: Array.from({ length: n }, () => "topsoil"),
+      drop: Array.from({ length: n }, () => 0),
+      built: Array.from({ length: n }, () => 0),
+      biome: Array.from({ length: n }, () => "grassland"),
+      // Nửa trái bằng phẳng, nửa phải là vách rơi 6 m mỗi ô — đúng hình dạng
+      // đã thấy trên màn hình, nơi làng đứng trên mép một vách 64 m.
+      height: Array.from({ length: n }, (_, i) => {
+        const gx = i % W;
+        return gx < W / 2 ? 90 : 90 - (gx - W / 2) * 6;
+      }),
+      river: Array.from({ length: n }, () => 0),
+    };
+    const px = paintTerrain(b, new BlockPalette());
+    const vals = Array.from({ length: n }, (_, i) => lum(px, i));
+    // Không ô nào được rơi xuống mức "không phân biệt nổi với nền đen".
+    expect(Math.min(...vals)).toBeGreaterThan(30);
+    // Nhưng vẫn phải còn tương phản giữa đỉnh bằng và mặt vách: kẹp mà làm
+    // phẳng hết thì mất luôn hình khối của địa hình, tức là đổi một lỗi này
+    // lấy một lỗi khác.
+    expect(Math.max(...vals) - Math.min(...vals)).toBeGreaterThan(20);
+  });
+});

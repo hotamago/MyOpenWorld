@@ -30,10 +30,11 @@
  * `outline` chỉ là một lớp phụ giúp mắt quen nhanh hơn, không phải chỗ để giấu
  * thông tin không thể thiếu.
  *
- * Avatar là trường hợp đặc biệt duy nhất: nó luôn đội `crown` và tay không,
- * bất kể vai nền của người chơi trong dữ liệu server là gì. Không cư dân nào
- * khác được cấp `crown`, nên avatar không bao giờ lẫn vào đám đông — kể cả khi
- * người chơi tự gán cho mình vai nông dân để hóa trang.
+ * ## Không có hình cho người chơi
+ *
+ * Bản đầu có một nhánh riêng vẽ avatar đội vương miện. Nhánh đó đã bị gỡ: người
+ * chơi là một true god, không thân xác, không đứng ở ô nào cả. Mọi hình vẽ ở
+ * đây là hình của **thế giới**, không của người đang nhìn nó.
  */
 
 import type { Entity } from "@/api/game";
@@ -84,8 +85,6 @@ const ADULT_SCALE = 0.29;
  */
 const CHILD_SCALE = ADULT_SCALE * 0.72;
 
-/** Avatar lớn hơn một chút — giữ đúng mức chênh mà bản cũ dùng (`0.34` so với `0.29`). */
-const AVATAR_SCALE = 0.33;
 
 /** Bán kính thân của vật phẩm — giữ nguyên từ bản cũ. */
 const ITEM_SCALE = 0.26;
@@ -191,23 +190,6 @@ export function figureOf(e: Entity, prev?: { x: number; y: number }): FigureSpec
   }
 
   const mark = markOf(e.intent);
-
-  if (e.is_avatar) {
-    // Avatar ghi đè toàn bộ hình dạng theo vai — kể cả khi server gán cho nó
-    // một vai cư dân thật (một vị thần vẫn có thể đứng tên "farmer" trong dữ
-    // liệu định cư). Ghi đè hoàn toàn, không hợp nhất một phần, là cách duy
-    // nhất đảm bảo avatar không bao giờ trùng `tool`+`head` với bất kỳ ai.
-    return {
-      shape: "being",
-      scale: AVATAR_SCALE,
-      body: 0xf5f7fa,
-      outline: 0x2b6cb0,
-      tool: "none",
-      head: "crown",
-      facing,
-      mark,
-    };
-  }
 
   const rs = (e.role !== null ? ROLE_SHAPE[e.role] : undefined) ?? FALLBACK_SHAPE;
   return {

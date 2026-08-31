@@ -424,3 +424,66 @@ proptest! {
         prop_assert!((-1..=1).contains(&c.flow.dy));
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §7.4 — sông là lòng sông, không phải cả lưu vực
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Cờ đúng ở **mọi** ô là một cờ không mang thông tin nào.
+///
+/// Bản đầu tính `is_river` chỉ từ nước tích lũy, mà nước tích lũy lại xấp xỉ
+/// bằng quãng đường đã đi trong ô lưu vực — nên gần như ô nào cũng vượt ngưỡng.
+/// Tầng vẽ trung thành tô lam mọi ô "sông", và cả thế giới hiện ra xanh lét như
+/// chìm dưới nước. Không bài test nào bắt được, vì `true` ở mọi nơi vẫn là một
+/// giá trị hợp lệ — chỉ có màn hình nói ra.
+#[test]
+fn song_khong_phu_kin_ban_do() {
+    let mut xet = 0_usize;
+    for seed in [42_u64, 7, 648_238, 999] {
+        let g = wg(seed);
+        let mut song = 0_usize;
+        let mut tong = 0_usize;
+        for y in -60..60 {
+            for x in -60..60 {
+                let Ok(c) = g.base_cell(x, y) else { continue };
+                if c.elevation.submerged {
+                    continue;
+                }
+                tong += 1;
+                if c.flow.is_river {
+                    song += 1;
+                }
+            }
+        }
+        // Một hành tinh đại dương là một thế giới hợp lệ: quanh gốc tọa độ của
+        // seed đó không có ô cạn nào, và bài này không có gì để nói về nó.
+        if tong == 0 {
+            continue;
+        }
+        xet += 1;
+        let ti_le = song * 100 / tong;
+        assert!(
+            ti_le < 25,
+            "seed {seed}: {ti_le}% ô cạn là sông — cờ này không còn nói lên điều gì"
+        );
+    }
+    assert!(xet > 0, "không seed nào có đất cạn để xét — bài này đã thành vô nghĩa");
+}
+
+/// Nhưng cũng không được **không có** con sông nào ở đâu cả.
+///
+/// Hai bài này là một cặp có chủ ý: sửa một cờ luôn đúng bằng cách làm nó luôn
+/// sai là đổi một lỗi im lặng lấy một lỗi im lặng khác.
+#[test]
+fn van_con_song_o_dau_do() {
+    let g = wg(42);
+    let mut song = 0_usize;
+    for y in -300..300 {
+        for x in -300..300 {
+            if g.base_cell(x, y).is_ok_and(|c| c.flow.is_river) {
+                song += 1;
+            }
+        }
+    }
+    assert!(song > 0, "cả một vùng 600×600 ô mà không có một khúc sông nào");
+}

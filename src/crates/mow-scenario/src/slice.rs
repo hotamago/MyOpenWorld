@@ -202,7 +202,34 @@ pub fn slice_handlers() -> HandlerRegistry {
     r
 }
 
+/// Một thế giới trống: đúng bộ handler và đúng đồng hồ, không một thực thể nào.
+///
+/// Đây là thế giới mà trò chơi thật dùng. [`build_slice_world`] dựng thêm ba
+/// thực thể mẫu (một avatar, một người bạn, một ổ bánh) — chúng có ích cho bài
+/// test của lát cắt và **có hại** cho trò chơi: người chơi là một vị thần, và
+/// một vị thần không có thân xác đi lại trên bản đồ. Bản đầu dùng chung một
+/// hàm, nên thế giới thật mở ra là thấy một nhân vật tên "Nguoi Choi" đứng giữa
+/// làng cùng một ổ bánh mì nằm trên đất.
+///
+/// Mọi thứ có thật trong thế giới — làng, cư dân, vai trò — sinh ra bằng **lệnh
+/// đã ghi nhật ký**, nên phát lại nhật ký lên một thế giới trống dựng lại đúng
+/// nó. Đó là điều kiện để `preview` so được hai trạng thái.
+pub fn build_empty_world(seed: u64) -> Sim {
+    Sim::new(
+        SimConfig {
+            world: WORLD,
+            branch: BranchId(1),
+            seed: WorldSeed(seed),
+            clock: Clock::synchronous(),
+        },
+        slice_handlers(),
+    )
+}
+
 /// Dựng thế giới của lát cắt: một avatar, một ổ bánh, một người khác.
+///
+/// Dành cho **bài test và kịch bản**, không cho trò chơi thật — xem
+/// [`build_empty_world`] để biết vì sao.
 pub fn build_slice_world(seed: u64) -> Sim {
     let mut sim = Sim::new(
         SimConfig {

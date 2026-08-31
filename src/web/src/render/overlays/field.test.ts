@@ -49,7 +49,6 @@ function beingAt(x: number, y: number, id = "1"): Entity {
     x,
     y,
     kind: "being",
-    is_avatar: false,
     hunger: null,
     role: null,
     intent: null,
@@ -186,8 +185,7 @@ describe("crowd", () => {
       x: 4,
       y: 0,
       kind: "item",
-      is_avatar: false,
-      hunger: null,
+        hunger: null,
       role: null,
       intent: null,
     };

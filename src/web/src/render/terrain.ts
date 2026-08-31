@@ -46,6 +46,17 @@ const SUN: readonly [number, number, number] = (() => {
   return [-0.55 / d, -0.62 / d, 0.56 / d] as const;
 })();
 
+/**
+ * Sàn và trần cho hệ số ánh sáng của một ô.
+ *
+ * Sàn 0.5 chứ không phải 0: nhân thêm sắc trời ban đêm (0.62) thì ô tối nhất
+ * vẫn còn khoảng 31% độ sáng — đủ để phân biệt vật liệu, không đủ để hết cảm
+ * giác là bóng tối. Trần 1.45 chặn mặt dốc đón nắng cháy trắng thành một mảng
+ * không còn màu vật liệu.
+ */
+const SHADE_FLOOR = 0.5;
+const SHADE_CEIL = 1.45;
+
 /** Băm hai tọa độ thành `[0, 1)`. Rẻ, xác định, đủ trắng cho việc này. */
 function hash2(x: number, y: number): number {
   let h = Math.imul(x | 0, 0x27d4_eb2d) ^ Math.imul(y | 0, 0x1656_67b1);
@@ -218,9 +229,22 @@ export function paintTerrain(batch: TileBatch, palette: BlockPalette): Uint8Clam
         b = b * 0.55 + 0xb8 * 0.45;
       }
 
-      out[i * 4] = CLAMP8(Math.round(r * light));
-      out[i * 4 + 1] = CLAMP8(Math.round(g * light));
-      out[i * 4 + 2] = CLAMP8(Math.round(b * light));
+      // ── Sàn và trần độ sáng ────────────────────────────────────────────
+      //
+      // Đổ bóng theo độ dốc là **đúng** về vật lý và **sai** về mục đích: một
+      // vách 6 mét mỗi ô cho `ndotl` gần 0, nhân với sắc trời rạng sáng thì ra
+      // đen tuyền, và cả một sườn núi biến mất khỏi bản đồ. `§18.13` đòi bản đồ
+      // đọc được mà không cần bảng số — một mảng đen thì không đọc được gì, và
+      // tệ hơn, nó trông y hệt một lỗi renderer.
+      //
+      // Kẹp ở đây chứ không hạ `SLOPE_EXAGGERATION`: hạ hệ số sẽ làm phẳng cả
+      // những gợn đồi nhẹ vốn là thứ hillshade sinh ra để cho thấy. Kẹp chỉ cắt
+      // đúng phần đuôi mà mắt không đọc được nữa.
+      const lit = light < SHADE_FLOOR ? SHADE_FLOOR : light > SHADE_CEIL ? SHADE_CEIL : light;
+
+      out[i * 4] = CLAMP8(Math.round(r * lit));
+      out[i * 4 + 1] = CLAMP8(Math.round(g * lit));
+      out[i * 4 + 2] = CLAMP8(Math.round(b * lit));
       out[i * 4 + 3] = 255;
     }
   }

@@ -47,6 +47,6 @@ pub use prehistory::{
     PrehistoryConfig, TICK_MOI_NAM,
 };
 pub use runner::{run, AssertResult, Report, RunError, WorldFactory};
-pub use slice::{act, build_slice_world, observe_as, preview, Preview};
+pub use slice::{act, build_empty_world, build_slice_world, observe_as, preview, Preview};
 pub use vault::{Bundle, Difference, Impact, Risk, SeedVault, VaultEntry, VaultError};
 pub use worldseed::{GenesisStep, Lockfile, Worldseed};

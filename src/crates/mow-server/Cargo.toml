@@ -11,10 +11,33 @@ name = "mow-server"
 path = "src/main.rs"
 
 [dependencies]
-# `tiny_http` chu khong phai axum/hyper: dong bo, khong keo tokio vao mot du an
-# co y tranh async (`§P10.3`). No lam dung mot viec — HTTP/1.1 blocking — va
-# phan kho cua server nay khong nam o do.
-tiny_http = "0.12"
+# `axum` thay `tiny_http`: the gioi chay theo tick phai **day** trang thai qua
+# WebSocket, khong the client `setInterval` roi hoi lai (`plan.md` yeu cau
+# chuyen tang van chuyen). `axum` duoc chon vi no dung ngay tren `tokio` +
+# `hyper` da on dinh, co san `extract::ws` — khong phai tu viet WebSocket
+# handshake (RFC 6455) chi de lam lai thu thu vien da lam dung.
+axum = { version = "0.8.7", features = ["ws"] }
+# Runtime da luong: luong tick van la mot `std::thread` rieng (xem `main.rs`),
+# nhung tang mang can `tokio` de chay nhieu ket noi WebSocket dong thoi ma
+# khong moi ket noi la mot he thread rieng.
+tokio = { version = "1.48.0", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "sync",
+    "time",
+    "signal",
+] }
+# CORS va phuc vu file tinh (`ServeDir`/`ServeFile`): hai thu tower-http da
+# lam dung va co test rieng, khong co ly do chep lai — dac biet la chan
+# duong dan `..`, thu ban dau ta phai tu tay chan trong `gui_tinh` cu.
+tower-http = { version = "0.6.6", features = ["cors", "fs"] }
+# `WebSocket` cua axum la mot `Stream`/`Sink`; `.split()` thanh doc rieng ghi
+# rieng can trait tu `futures-util` — khong phai code lai logic ghep kenh.
+futures-util = { version = "0.3.31", default-features = false, features = [
+    "std",
+    "sink",
+] }
 mow-core = { workspace = true }
 mow-math = { workspace = true }
 mow-worldgen = { path = "../mow-worldgen" }
@@ -24,3 +47,9 @@ mow-society = { workspace = true }
 mow-settle = { workspace = true }
 mow-content = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+# Client WebSocket chi de kiem thu: server dung `axum::extract::ws`, nhung bai
+# test phai la mot client that noi qua TCP that (khong co "instance" API cho
+# WebSocket nhu `api::route` co cho HTTP), nen can mot thu vien client doc lap.
+tokio-tungstenite = "0.28.0"

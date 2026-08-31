@@ -228,7 +228,15 @@ fn gui_json(req: tiny_http::Request, r: &api::Reply, dev: bool) -> std::io::Resu
     if dev {
         resp = resp
             .with_header(header("Access-Control-Allow-Origin", ORIGIN_DEV))
-            .with_header(header("Access-Control-Allow-Headers", "Content-Type"));
+            .with_header(header("Access-Control-Allow-Headers", "Content-Type"))
+            // Thiếu dòng này thì **mọi** `POST` từ trình duyệt đều chết. Một
+            // `POST` mang `Content-Type: application/json` không phải "yêu cầu
+            // đơn giản", nên trình duyệt gửi `OPTIONS` hỏi trước; không thấy
+            // `Allow-Methods` thì nó bỏ luôn yêu cầu thật, và thứ tới tay mã
+            // JavaScript chỉ là một `TypeError: Failed to fetch` không nói gì
+            // về nguyên nhân. Lỗi này chỉ lộ ra khi tự mở trình duyệt bấm thử.
+            .with_header(header("Access-Control-Allow-Methods", "GET, POST, OPTIONS"))
+            .with_header(header("Access-Control-Max-Age", "600"));
     }
     req.respond(resp)
 }

@@ -13,7 +13,6 @@ function entity(overrides: Partial<Entity> = {}): Entity {
     x: 10,
     y: 10,
     kind: "being",
-    is_avatar: false,
     hunger: null,
     role: null,
     intent: null,
@@ -74,30 +73,24 @@ describe("figureOf — mỗi vai một hình riêng", () => {
     expect(child.scale / adult.scale).toBeCloseTo(0.72, 1);
   });
 
-  it("vai lạ (một content pack chưa biết) không ném lỗi, và không lẫn với avatar", () => {
+  it("vai lạ (một content pack chưa biết) rơi về hình mặc định, không ném lỗi", () => {
+    // Một content pack thêm vai mới là chuyện bình thường (`§19.7`). Vẽ ra một
+    // người tay không thì vẫn đọc được là người; ném lỗi thì mất cả khung hình.
     expect(() => figureOf(entity({ role: "vai-tu-mod-la" }))).not.toThrow();
     const s = figureOf(entity({ role: "vai-tu-mod-la" }));
-    expect(s.head).not.toBe("crown");
+    expect(s.tool).toBe("none");
+    expect(s.head).toBe("bare");
+    expect(s.shape).toBe("being");
   });
 });
 
-describe("figureOf — avatar luôn khác biệt", () => {
-  it("avatar đội crown — không vai cư dân nào khác có crown", () => {
-    const avatar = figureOf(entity({ is_avatar: true }));
-    expect(avatar.head).toBe("crown");
+describe("figureOf — không còn hình cho người chơi", () => {
+  it("không vai nào được cấp crown", () => {
+    // Bản đầu dành `crown` cho avatar. Người chơi là một true god không thân
+    // xác, nên không có avatar nào để vẽ — và một `crown` không ai đội là một
+    // nhánh mã sẽ mục ruỗng.
     for (const role of ROLES) {
       expect(figureOf(entity({ role })).head).not.toBe("crown");
-    }
-  });
-
-  it("avatar khác cư dân thường kể cả khi mang chung một vai nền", () => {
-    // Đây là trường hợp dễ vỡ nhất: một vị thần vẫn có thể đứng tên "farmer"
-    // trong dữ liệu định cư. Avatar phải ghi đè, không hợp nhất một phần.
-    for (const role of ROLES) {
-      const god = figureOf(entity({ is_avatar: true, role }));
-      const resident = figureOf(entity({ is_avatar: false, role }));
-      const collide = god.tool === resident.tool && god.head === resident.head;
-      expect(collide, `avatar mang vai ${role} trùng hết tool+head với cư dân thường`).toBe(false);
     }
   });
 });

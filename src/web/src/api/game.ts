@@ -25,15 +25,22 @@ export interface WorldMeta {
   seed: string;
   tick: number;
   state_hash: string;
-  /** Định danh avatar, dạng chuỗi. */
-  avatar: string;
+  /**
+   * Ô mà cái nhìn của vị thần đang đặt vào, dạng `[x, y]`.
+   *
+   * **Không** phải một thực thể. Người chơi là một true god: không thân xác,
+   * không tọa độ trong thế giới. Trước đây chỗ này là `avatar: string`, và câu
+   * hỏi đầu tiên người chơi hỏi khi nhìn màn hình là *"tại sao mặc định true
+   * god lại có cơ thể?"*.
+   */
+  eye: [number, number];
   z: number;
   view_radius: number;
   event_cursor: number;
   /** Tốc độ thời gian, phần nghìn. `1000` là ×1, `0` là tạm dừng. */
   speed_milli: number;
   max_speed_milli: number;
-  /** Số bước còn lại trong kế hoạch đi của avatar. */
+  /** Tổng số bước còn lại của mọi kế hoạch đi đang chạy. */
   steps_remaining: number;
 }
 
@@ -42,6 +49,12 @@ export interface WorldMeta {
  *
  * `{material: [...], biome: [...]}` thay vì `[{material, biome}, ...]`: một
  * vùng 87×41 là hơn 3500 ô, và dạng object lặp tên khóa 3500 lần.
+ *
+ * Đây là kiểu **sau khi giải mã** — hình dạng mà `render/terrain.ts`,
+ * `render/minimap.ts`, `render/overlays/field.ts` và `App.vue` đã quen dùng.
+ * Trên dây, `material`/`surface`/`biome` giờ đi qua một bảng chỉ mục (xem
+ * [`decodeTiles`]); `api.tiles` giải mã trước khi trả về, nên bốn chỗ gọi kể
+ * trên không phải đổi gì.
  */
 export interface TileBatch {
   x: number;
@@ -62,6 +75,107 @@ export interface TileBatch {
   river: number[];
 }
 
+/**
+ * Hình dạng trên dây của `/api/tiles` ở định dạng **mới**: `material`,
+ * `surface`, `biome` là chỉ mục nhỏ trỏ vào bảng `names` dùng chung, thay vì
+ * ba mảng chuỗi lặp lại. Xem tài liệu `tiles` ở `mow-server/src/api.rs` cho lý
+ * do, và [`decodeTiles`] cho cách giải mã.
+ */
+interface TileBatchWire {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  z: number;
+  /** Bảng tra: chỉ mục -> chuỗi. Vài chục phần tử, không phải vài nghìn. */
+  names: string[];
+  material: number[];
+  surface: number[];
+  biome: number[];
+  drop: number[];
+  built: number[];
+  height: number[];
+  river: number[];
+}
+
+/**
+ * Giải một mảng chỉ mục thành mảng chuỗi qua bảng `names`.
+ *
+ * Vòng lặp trần, không `map`: có ba trường (`material`, `surface`, `biome`)
+ * nhân với hàng nghìn ô mỗi khung nhìn, và mục tiêu chính của việc đổi định
+ * dạng này là giảm việc CPU phải làm mỗi khung — dựng thêm mảng trung gian
+ * qua `map` lồng nhau đi ngược lại đúng mục tiêu đó.
+ */
+function resolveNames(indices: number[], names: string[]): string[] {
+  const out = new Array<string>(indices.length);
+  for (let i = 0; i < indices.length; i++) {
+    const idx = indices[i];
+    // Chỉ mục ngoài phạm vi bảng phải hiện ra được, không được là `undefined`:
+    // một `undefined` lọt vào tầng vẽ sẽ thành một màu tím không giải thích
+    // được, và người ta sẽ đổ lỗi cho renderer thay vì cho bảng chỉ mục sai.
+    // (`idx` tự nó cũng có thể `undefined` nếu `indices` thưa hơn khai báo —
+    // cùng một lý do, cùng một cách xử lý.)
+    out[i] = (idx === undefined ? undefined : names[idx]) ?? "?";
+  }
+  return out;
+}
+
+/**
+ * Giải mã một `TileBatch` từ dây.
+ *
+ * ## Dây thay đổi, kiểu ở client thì không
+ *
+ * Server giờ gửi một bảng chỉ mục `names` cộng ba mảng số thay vì ba mảng
+ * chuỗi lặp lại (xem tài liệu hàm `tiles` ở `api.rs`). Hàm này giải mã ngược
+ * lại **ngay tại đây**, để bốn chỗ dùng `TileBatch` — `render/terrain.ts`,
+ * `render/minimap.ts`, `render/overlays/field.ts`, `App.vue` — không phải đổi
+ * một dòng nào: chúng vẫn nhận đúng `material`/`surface`/`biome: string[]`
+ * như trước.
+ *
+ * Nghe có vẻ mất hết cái lợi của việc đổi định dạng — không phải. Cái lợi nằm
+ * ở **băng thông trên dây** và **thời gian `JSON.parse`**: với một khung nhìn
+ * ~4000 ô, JSON kiểu cũ buộc trình duyệt dựng lại hàng nghìn bản sao của vài
+ * chục chuỗi, còn JSON kiểu mới chỉ cần gửi và parse vài chục chuỗi cộng vài
+ * nghìn số nguyên nhỏ. Cả hai cái lợi đó đã thu được **trước khi** hàm này
+ * chạy; bước giải mã ở đây chỉ là một lượt tra bảng rẻ, không phải chỗ tiền
+ * tiết kiệm bị tiêu hết.
+ *
+ * Bước kế tiếp — khi `render/*` rảnh tay để đổi theo — là bỏ hẳn bước giải mã
+ * này và để chỉ mục chạy thẳng tới tầng vẽ (renderer tự tra `names` lúc vẽ),
+ * tiết kiệm luôn phần dựng lại ba mảng chuỗi ở đây.
+ *
+ * ## Vẫn đọc được định dạng cũ
+ *
+ * Trong lúc phát triển, client và server không phải lúc nào cũng khởi động
+ * lại cùng nhau — một server cũ (ba mảng chuỗi thẳng, không có `names`) có
+ * thể đang chạy trong khi client mới đã nạp. Không kiểm thì kết quả là một
+ * màn hình trắng không nói cho ai biết vì sao. Nhận diện hai định dạng bằng
+ * sự có mặt của `names`: định dạng mới luôn có nó, định dạng cũ thì không.
+ */
+export function decodeTiles(raw: unknown): TileBatch {
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.names)) {
+    // Định dạng cũ: `material`/`surface`/`biome` đã là chuỗi sẵn, không có gì
+    // để giải mã.
+    return r as unknown as TileBatch;
+  }
+  const batch = r as unknown as TileBatchWire;
+  return {
+    x: batch.x,
+    y: batch.y,
+    w: batch.w,
+    h: batch.h,
+    z: batch.z,
+    material: resolveNames(batch.material, batch.names),
+    surface: resolveNames(batch.surface, batch.names),
+    biome: resolveNames(batch.biome, batch.names),
+    drop: batch.drop,
+    built: batch.built,
+    height: batch.height,
+    river: batch.river,
+  };
+}
+
 /** Một vật liệu như content pack khai. */
 export interface BlockInfo {
   id: string;
@@ -80,7 +194,6 @@ export interface Entity {
   x: number;
   y: number;
   kind: "being" | "item";
-  is_avatar: boolean;
   hunger: number | null;
   /** Vai trong làng, nếu là cư dân. */
   role: string | null;
@@ -155,8 +268,12 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   meta: () => getJson<WorldMeta>("/api/meta"),
 
-  tiles: (x: number, y: number, w: number, h: number, z: number) =>
-    getJson<TileBatch>(`/api/tiles?x=${x}&y=${y}&w=${w}&h=${h}&z=${z}`),
+  tiles: async (x: number, y: number, w: number, h: number, z: number): Promise<TileBatch> => {
+    // Dây trả về chỉ mục, không phải chuỗi (xem `decodeTiles`); giải mã ở
+    // đây để mọi chỗ gọi `api.tiles` không phải biết chuyện đó.
+    const raw = await getJson<unknown>(`/api/tiles?x=${x}&y=${y}&w=${w}&h=${h}&z=${z}`);
+    return decodeTiles(raw);
+  },
 
   entities: () => getJson<{ entities: Entity[] }>("/api/entities"),
 
@@ -174,17 +291,29 @@ export const api = {
     postJson<{ speed_milli: number }>("/api/speed", { speed_milli }),
 
   /**
-   * Bấm chuột để đi. Server tính đường và giữ kế hoạch; mỗi bước vẫn là một
-   * `core.walk` riêng nên luật thế giới vẫn chặn được từng bước.
+   * Ra lệnh cho **một cư dân** đi tới một ô.
+   *
+   * `who` là bắt buộc, và đó là điểm khác cốt lõi so với bản trước: vị thần
+   * không có chân, nên "đi tới đó" luôn là một mệnh lệnh gửi cho ai đó. Server
+   * tính đường và giữ kế hoạch; mỗi bước vẫn là một `core.walk` riêng nên luật
+   * thế giới vẫn chặn được từng bước.
    */
-  goto: (x: number, y: number) =>
+  guide: (who: string, x: number, y: number) =>
     postJson<{
       steps: number;
       outcome: string;
       walkable: boolean;
       /** Đường đi đã lên kế hoạch, để vẽ ra cho người chơi thấy. */
       path: [number, number][];
-    }>("/api/goto", { x, y }),
+    }>("/api/goto", { who, x, y }),
+
+  /**
+   * Dời cái nhìn của vị thần tới một ô.
+   *
+   * Không ghi sự kiện nào: `§P6.8` xếp camera vào **truy vấn khung nhìn**, và
+   * một nhật ký đầy "thần đã nhìn sang trái" là một nhật ký không còn đọc được.
+   */
+  look: (x: number, y: number) => postJson<{ eye: [number, number] }>("/api/look", { x, y }),
 
   /**
    * Truy ngược chuỗi nhân quả của một sự kiện (`§18.10`).
@@ -222,9 +351,26 @@ export const api = {
       material,
     }),
 
-  /** Chuột phải: dừng tại chỗ. */
-  stop: () =>
-    postJson<{ steps: number; outcome: string }>("/api/goto", { x: 0, y: 0, cancel: true }),
+  /** Thu hồi mệnh lệnh đi của một cư dân. */
+  halt: (who: string) =>
+    postJson<{ steps: number; outcome: string }>("/api/goto", {
+      who,
+      x: 0,
+      y: 0,
+      cancel: true,
+    }),
+
+  /**
+   * Khởi nguyên một thế giới mới từ seed.
+   *
+   * Seed đi ra dạng **chuỗi**: `§22.10` cấm cho `u64` đi qua `Number` của
+   * JavaScript, và một seed bị làm tròn vẫn là một seed **hợp lệ** — chỉ là của
+   * một thế giới khác, nên lỗi này không bao giờ tự lộ ra.
+   */
+  genesis: (seed: string) =>
+    postJson<{ seed: string; state_hash: string; content_error?: string }>("/api/genesis", {
+      seed,
+    }),
 
   /** Đổi lát `z`. Là **query**, không ghi vào thế giới (`§P6.8`). */
   setLayer: (z: number) => postJson<{ z: number; state_hash: string }>("/api/view", { z }),

@@ -84,6 +84,35 @@ fn basin_cell(p: &GenerationProfile) -> i64 {
     (p.continental_cell / 4).max(64)
 }
 
+/// Khoảng cách lấy mẫu hai bờ, tính bằng ô.
+///
+/// Một ô là quá gần: nhiễu địa hình ở bước sóng ngắn lấn át chênh lệch thật, và
+/// gần như ô nào cũng có lúc trông như đáy một cái rãnh. Hai ô đủ xa để đọc
+/// được hình dạng thung lũng mà vẫn đủ gần để lòng sông không phình ra.
+const BANK_PROBE: i64 = 2;
+
+/// Chênh cao tối thiểu của bờ so với lòng, tính bằng mét.
+const BANK_RISE_M: i64 = 1;
+
+/// Ô này có nằm dưới đáy một rãnh theo hướng chảy không.
+///
+/// Hướng chảy `(dx, dy)` cho hướng vuông góc `(-dy, dx)`. Nước khoét thành lòng
+/// thì **cả hai** bờ phải cao hơn; chỉ một bên cao hơn là một sườn dốc, và nước
+/// trên sườn dốc thì chảy tràn chứ không thành sông.
+///
+/// `(0, 0)` — ô nằm ngay tại outlet — không có hướng nào để xét, và một điểm
+/// duy nhất thì không làm nên một con sông.
+fn in_channel(seed: u64, p: &GenerationProfile, x: i64, y: i64, dx: i8, dy: i8) -> bool {
+    if dx == 0 && dy == 0 {
+        return false;
+    }
+    let (px, py) = (-i64::from(dy), i64::from(dx));
+    let here = crate::elevation::height_at(seed, p, x, y);
+    let left = crate::elevation::height_at(seed, p, x + px * BANK_PROBE, y + py * BANK_PROBE);
+    let right = crate::elevation::height_at(seed, p, x - px * BANK_PROBE, y - py * BANK_PROBE);
+    left - here >= BANK_RISE_M && right - here >= BANK_RISE_M
+}
+
 /// Lưu vực chứa một ô thế giới.
 pub fn basin_of(seed: u64, p: &GenerationProfile, x: i64, y: i64) -> Basin {
     let cell = basin_cell(p);
@@ -178,9 +207,22 @@ pub fn sample(
     let mua = i64::from(climate.precipitation_mm_yr).max(0);
     let accumulation = ((da_di * mua) / 1_000).clamp(0, i64::from(u32::MAX)) as u32;
 
-    // Là sông khi nước tích đủ **và** địa hình không quá dốc: sườn dốc thì nước
-    // chảy tràn chứ không khoét thành lòng.
-    let is_river = accumulation > 400 && elev.slope < 60;
+    // Là sông khi nước tích đủ, địa hình không quá dốc, **và** ô này thật sự
+    // nằm dưới đáy một rãnh.
+    //
+    // Điều kiện thứ ba là điều kiện đã thiếu, và cái thiếu đó không hề im lặng:
+    // nó làm `is_river` đúng ở **mọi** ô. `accumulation` ở đây xấp xỉ bằng
+    // quãng đường đã đi trong ô lưu vực nhân lượng mưa, nên mọi ô cách góc ô
+    // lưu vực đủ xa đều vượt ngưỡng — tức là gần hết bản đồ. Tầng vẽ trung
+    // thành tô lam mọi ô "sông", và cả thế giới hiện ra xanh lét như chìm dưới
+    // nước. Không một bài test nào bắt được, vì `true` ở mọi nơi vẫn là một giá
+    // trị hợp lệ.
+    //
+    // Đáy rãnh kiểm bằng hai ô **vuông góc** với hướng chảy: nước khoét thành
+    // lòng thì hai bờ phải cao hơn. Lấy mẫu cách 2 ô chứ không phải 1, vì ở
+    // khoảng cách 1 ô nhiễu địa hình lấn át chênh lệch thật và mọi ô đều có lúc
+    // trông như một cái rãnh.
+    let is_river = accumulation > 400 && elev.slope < 60 && in_channel(seed, p, x, y, dx, dy);
 
     Flow {
         dx,

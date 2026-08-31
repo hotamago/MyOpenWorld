@@ -134,6 +134,22 @@ const vi = {
   "intent.goto.well": "đang ra giếng",
   "intent.goto.square": "đang ra quảng trường",
   "intent.goto.field": "đang ra đồng",
+
+  "hud.souls": "sinh mệnh",
+  "panel.controls.inspect": "bấm để soi xét",
+  "panel.controls.pan": "kéo để dời cái nhìn",
+  "panel.controls.cancel": "chuột phải để thôi",
+  "panel.controls.pause": "dừng / thả thời gian",
+  "god.act.guide": "Chỉ đường",
+  "god.act.guiding": "Đang chỉ đường…",
+  "god.act.guide.hint": "bấm một ô để bảo người này tới đó",
+  "god.act.take": "Khiến nhặt",
+  "hud.day": "ngày",
+  "menu.open": "Mở menu",
+  "rail.observe": "Quan sát",
+  "rail.layers": "Lớp dữ liệu",
+  "rail.chronicle": "Biên niên sử",
+  "rail.cause": "Nhân quả",
 } as const;
 
 /** Khóa hợp lệ. Một khóa lạ là lỗi biên dịch, không phải ô trống lúc chạy. */
@@ -253,6 +269,22 @@ const en: Catalog = {
   "intent.goto.well": "heading to the well",
   "intent.goto.square": "heading to the square",
   "intent.goto.field": "heading out to the fields",
+
+  "hud.souls": "souls",
+  "panel.controls.inspect": "click to inspect",
+  "panel.controls.pan": "drag to move your gaze",
+  "panel.controls.cancel": "right-click to cancel",
+  "panel.controls.pause": "stop / start time",
+  "god.act.guide": "Guide",
+  "god.act.guiding": "Guiding…",
+  "god.act.guide.hint": "click a tile to send this one there",
+  "god.act.take": "Bid them take",
+  "hud.day": "day",
+  "menu.open": "Open menu",
+  "rail.observe": "Observe",
+  "rail.layers": "Data layers",
+  "rail.chronicle": "Chronicle",
+  "rail.cause": "Causality",
 };
 
 const CATALOGS = { vi, en } as const;

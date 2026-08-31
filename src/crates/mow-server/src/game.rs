@@ -42,6 +42,7 @@ use mow_society::routine::{decide, Intent, Place, Role, Situation};
 use mow_spatial::pathfind::{find_path, PathOutcome, PathRequest};
 use mow_worldgen::strata::material_at;
 use mow_worldgen::{BaseCell, GenerationProfile, Worldgen};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 
 /// Bán kính vùng người chơi thấy được, tính bằng ô.
@@ -52,7 +53,17 @@ pub struct Game {
     sim: Sim,
     gen: Worldgen,
     seed: u64,
-    avatar: EntityId,
+    /// Điểm mà cái nhìn của vị thần đang đặt vào, tính bằng ô.
+    ///
+    /// **Không** phải một thực thể. Người chơi là một true god: không thân xác,
+    /// không tọa độ trong thế giới, không đi lại được ai chặn. Bản đầu cho thần
+    /// một avatar tên "Nguoi Choi" đứng giữa làng — và câu hỏi đầu tiên người
+    /// chơi hỏi là *"tại sao mặc định true god lại có cơ thể?"*.
+    ///
+    /// Vì nó là **cái nhìn** chứ không phải thế giới, nó không đi vào
+    /// `state_hash` và đổi nó không sinh sự kiện nào (`§P6.8`: camera là một
+    /// truy vấn khung nhìn, không phải một lệnh).
+    eye: (i64, i64),
     /// Lát `z` mà người chơi đang xem. Trạng thái **giao diện**, không phải
     /// trạng thái thế giới — nên nó ở đây chứ không đi qua một command.
     z: i64,
@@ -93,6 +104,17 @@ pub struct Game {
     /// không có nhu cầu, và biến nó thành entity chỉ để có tọa độ sẽ làm mọi
     /// vòng lặp qua thực thể phải học cách bỏ qua nó.
     landmarks: BTreeMap<Place, (i64, i64)>,
+    /// Nhớ tạm địa hình gốc: `(x, y)` → `(cao độ mét, có nước không)`.
+    ///
+    /// `Worldgen::base_cell` chạy cả chuỗi tầng nhiễu cho mỗi ô, và ba chỗ hỏi
+    /// nó nhiều nhất đều hỏi **cùng những ô đó** nhiều lần: tìm đường (A* xét
+    /// mỗi ô tới tám lần), quy hoạch làng, và bộ chấm điểm đất bằng. Không có
+    /// bảng nhớ này, riêng việc chọn chỗ đặt làng đã mất bảy mươi giây.
+    ///
+    /// `RefCell` chứ không phải `&mut`: đây là nhớ tạm, không phải state. Nó
+    /// **không** đi vào `state_hash`, và xóa nó đi không đổi một hạt nào của
+    /// thế giới — nó chỉ là một cách hỏi lại nhanh hơn.
+    terrain: RefCell<BTreeMap<(i64, i64), (i64, bool)>>,
     /// Ô đã bị ghi đè: `(x, y)` → vật liệu.
     ///
     /// Địa hình là hàm thuần của seed (`§7.2`), nên **chỉ** những ô ai đó đã
@@ -114,6 +136,12 @@ pub struct Game {
     /// phòng, và một thế giới vẽ bằng màu dự phòng vẫn tốt hơn một màn hình
     /// trắng kèm stack trace.
     content: Option<PackContent>,
+    /// Thư mục content pack đang nạp, để khởi nguyên lại còn biết nạp lại gì.
+    ///
+    /// Content **không** thuộc về seed: nó là dữ liệu bên ngoài mà tiến trình
+    /// được khởi động cùng. Một thế giới mới vẫn phải biết những vật liệu ấy,
+    /// nếu không thì bấm "khởi nguyên" xong bản đồ hiện toàn màu dự phòng.
+    content_dir: Option<String>,
     /// Mọi lệnh đã áp, theo thứ tự.
     ///
     /// Đây là thứ làm preview đúng: dựng lại thế giới từ seed rồi phát lại nhật
@@ -190,68 +218,103 @@ pub struct Tile {
 impl Game {
     /// Dựng thế giới mới từ seed.
     pub fn new(seed: u64) -> Game {
-        let sim = slice::build_slice_world(seed);
+        let sim = slice::build_empty_world(seed);
         let gen = Worldgen::new(WorldSeed(seed), GenerationProfile::default());
-        let avatar = sim
-            .store()
-            .ids()
-            .find(|id| {
-                sim.store()
-                    .attr_text(*id, "core.name")
-                    .is_some_and(|n| n == "Nguoi Choi")
-            })
-            .unwrap_or(EntityId::new(1));
-
-        // `build_slice_world` đặt mọi thứ ở `(0, 0)` vì test không quan tâm
-        // địa hình. Màn hình thì có: với seed 42, ô `(0, 0)` nằm **dưới mực
-        // biển**, nên người chơi mở game ra và thấy mình ở đáy biển.
-        let (sx, sy) = tim_cho_o_duoc(&gen);
+        // Chỗ ở được: `§P2` nói thế giới sinh ra từ seed, và seed không hứa
+        // rằng gốc tọa độ nằm trên cạn. Với seed 42, ô `(0, 0)` nằm **dưới mực
+        // biển**.
+        let (sx, sy) = find_habitable(&gen);
         let mut g = Game {
             sim,
             gen,
             seed,
-            avatar,
+            eye: (sx, sy),
             z: 0,
             speed_milli: 1_000,
             plans: BTreeMap::new(),
             plan_cause: BTreeMap::new(),
             landmarks: BTreeMap::new(),
+            terrain: RefCell::new(BTreeMap::new()),
             overrides: BTreeMap::new(),
             content: None,
+            content_dir: None,
             journal: Vec::new(),
         };
-        g.doi_cho_o(sx, sy);
 
-        // Lát bắt đầu là mặt đất dưới chân avatar, không phải `z = 0`. Nếu
-        // avatar đứng trên một ngọn đồi cao 300 m thì lát 0 nằm sâu trong đá và
+        // Trung tâm làng là khoảnh đất **bằng** gần chỗ ở được nhất, không phải
+        // chính chỗ ở được. Hai thứ khác nhau: "khô ráo" chỉ loại nước ra, và
+        // một mỏm đá dựng đứng thì vẫn khô ráo.
+        let (vx, vy) = g.flattest_near(sx, sy);
+        g.raise_village(vx, vy);
+
+        // Cái nhìn mở ra ở quảng trường, không ở gốc tọa độ và không ở một chỗ
+        // ngẫu nhiên: cảnh đầu tiên phải là ngôi làng đang sống, không phải một
+        // bãi đất trống mà người chơi phải đi tìm làng.
+        g.eye = g.landmarks.get(&Place::Square).copied().unwrap_or((vx, vy));
+
+        // Lát bắt đầu là mặt đất dưới cái nhìn, không phải `z = 0`. Nếu quảng
+        // trường nằm trên một ngọn đồi cao 300 m thì lát 0 nằm sâu trong đá và
         // màn hình đầu tiên là một khối đen đặc — trông y hệt một lỗi renderer,
         // và người ta sẽ đi sửa renderer.
-        // Một ngôi làng, không phải ba chấm trên bãi đất trống.
-        //
-        // Dựng **sau** khi đã biết chỗ ở được, và dựng quanh đó chứ không quanh
-        // gốc tọa độ: người chơi mở trò chơi ra là đứng giữa làng, không phải đi
-        // tìm nó.
-        g.raise_village(sx, sy);
-
-        // Lát bắt đầu tính **sau** khi đã dời người chơi ra quảng trường, theo
-        // cao độ dưới chân họ. Tính trước sẽ cho một lát lệch vài mét so với
-        // mặt đất, và màn hình đầu tiên là một lát cắt ngang không khí — đúng
-        // lỗi mà `PG-02` đã sửa một lần, quay lại từ một hướng khác.
-        let (fx, fy) = (
-            g.attr_int(avatar, "core.pos.x"),
-            g.attr_int(avatar, "core.pos.y"),
-        );
-        g.z = g
-            .gen
-            .base_cell(fx, fy)
-            .map(|c| c.elevation.height_m)
-            .unwrap_or(0);
+        g.z = g.ground(g.eye.0, g.eye.1).0;
 
         // Đẩy đồng hồ tới buổi sáng **sau** khi đã dựng làng: dựng xong mới
         // chạy đồng hồ nghĩa là mọi cư dân sinh ra ở nhà mình rồi mới thức dậy,
         // chứ không phải sinh ra giữa ban ngày ở một nơi họ chưa từng đi tới.
         let _ = g.sim.advance(DAY_START);
         g
+    }
+
+    /// Tâm của khoảnh đất bằng nhất trong bán kính quét quanh `(x, y)`.
+    ///
+    /// Chấm điểm bằng số ô dựng được trong một ô vuông 7×7, chứ không bằng độ
+    /// dốc tại một điểm: một ô phẳng nằm lọt giữa các vách đá vẫn là chỗ tồi để
+    /// đặt làng, và chỉ có ô lân cận mới nói ra điều đó.
+    ///
+    /// Quét thưa (bước 4) vì đây chạy một lần lúc khởi tạo và mục tiêu là "đủ
+    /// tốt", không phải "tối ưu": lệch vài ô so với chỗ bằng nhất tuyệt đối thì
+    /// không ai nhận ra, còn quét từng ô trên bán kính 40 là 6.400 lần lấy mẫu
+    /// địa hình cho một câu trả lời gần như y hệt.
+    fn flattest_near(&self, x: i64, y: i64) -> (i64, i64) {
+        let score = |cx: i64, cy: i64| -> u32 {
+            let mut n = 0;
+            for dy in -3..=3 {
+                for dx in -3..=3 {
+                    if self.buildable(cx + dx, cy + dy) {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        let mut best = (x, y);
+        let mut best_score = score(x, y);
+        // 49 là điểm tối đa; đạt rồi thì dừng, không có gì hơn được nữa.
+        if best_score == 49 {
+            return best;
+        }
+        let mut r = 4;
+        while r <= FLAT_SEARCH_RADIUS {
+            for dy in (-r..=r).step_by(4) {
+                for dx in (-r..=r).step_by(4) {
+                    // Chỉ xét viền của vòng: bên trong đã xét ở vòng trước.
+                    if dx.abs() != r && dy.abs() != r {
+                        continue;
+                    }
+                    let p = (x + dx, y + dy);
+                    let sc = score(p.0, p.1);
+                    if sc > best_score {
+                        best_score = sc;
+                        best = p;
+                    }
+                }
+            }
+            if best_score == 49 {
+                return best;
+            }
+            r += 4;
+        }
+        best
     }
 
     /// Quy hoạch rồi dựng một ngôi làng quanh `(cx, cy)`.
@@ -264,9 +327,9 @@ impl Game {
         let req = SettleRequest {
             seed: self.seed,
             center: (cx, cy),
-            radius: 26,
+            radius: 32,
         };
-        let plan = mow_settle::plan(&req, &|x, y| self.walkable(x, y));
+        let plan = mow_settle::plan(&req, &|x, y| self.buildable(x, y));
         if plan.buildings.is_empty() {
             // Không đủ đất khô. Không phải lỗi: một hòn đảo nhỏ là một thế giới
             // hợp lệ, và thà không có làng còn hơn có một cái làng dưới biển.
@@ -300,6 +363,8 @@ impl Game {
             self.dat(id, "core.pos.y", Value::Int(y));
         }
 
+        self.stock_larder(well.door);
+
         for r in &plan.residents {
             let home = plan.buildings.get(r.home).map_or(well.door, |b| b.door);
             let work = plan
@@ -309,6 +374,51 @@ impl Game {
             let who = self.spawn_villager(&r.name, r.start);
             self.assign_role(who, settle_role(r.role), home, work);
         }
+    }
+
+    /// Đặt kho lương của làng: vài ổ bánh nằm quanh quảng trường.
+    ///
+    /// Vật phẩm nằm trên đất chứ không nằm trong một con số kho ẩn: `§22.33`
+    /// nói một vật ở đúng một nơi, và một cái kho vô hình là một nơi người chơi
+    /// không nhìn thấy, không cướp được, không ban thêm được. Một vị thần muốn
+    /// gieo nạn đói thì phải có thứ để lấy đi.
+    fn stock_larder(&mut self, at: (i64, i64)) {
+        // Xếp quanh quảng trường theo một vòng nhỏ, không chồng lên nhau và
+        // không chồng lên cư dân.
+        for (i, (dx, dy)) in [(1, 0), (0, 1), (-1, 0), (0, -1)].into_iter().enumerate() {
+            let p = (at.0 + dx, at.1 + dy);
+            if !self.walkable(p.0, p.1) {
+                continue;
+            }
+            self.spawn_bread(&format!("O Banh {}", i + 1), p);
+        }
+    }
+
+    /// Một ổ bánh nằm trên đất tại `at`.
+    fn spawn_bread(&mut self, name: &str, at: (i64, i64)) -> EntityId {
+        self.apply(&Command::new(
+            "core.spawn",
+            WORLD,
+            Value::Map(
+                [
+                    ("kind".to_owned(), Value::Text("item".to_owned())),
+                    ("name".to_owned(), Value::Text(name.to_owned())),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ))
+        .expect("tạo vật phẩm");
+        let it = self.sim.store().ids().next_back().expect("vừa tạo");
+        self.dat(it, "core.pos.x", Value::Int(at.0));
+        self.dat(it, "core.pos.y", Value::Int(at.1));
+        self.dat(it, "item.def", Value::Text("core.bread".to_owned()));
+        self.dat(it, "item.nutrition", Value::Int(4_000));
+        self.dat(it, "loc.cell", Value::Int(1));
+        // Dấu hiệu giác quan: cư dân **nhìn thấy** nó là thức ăn, chứ không phải
+        // biết vì engine bảo thế (`§10.4`).
+        self.dat(it, "sign.sight.food", Value::Bool(true));
+        it
     }
 
     /// Sinh một cư dân và trả về định danh.
@@ -341,24 +451,6 @@ impl Game {
         who
     }
 
-    /// Dời avatar, người đồng hành và ổ bánh về quanh `(sx, sy)`.
-    ///
-    /// Đi qua `core.set_attr`, tức là đúng đường ghi của mọi thứ khác. Sửa
-    /// thẳng `Store` sẽ nhanh hơn và sẽ là lần đầu tiên có một thay đổi không
-    /// nằm trong event log (`§22.1`).
-    fn doi_cho_o(&mut self, sx: i64, sy: i64) {
-        let ids: Vec<EntityId> = self.sim.store().with_attr("core.pos.x").collect();
-        // Giữ nguyên bố cục tương đối mà lát cắt đã dựng: người chơi ở giữa,
-        // bạn đồng hành cách 3 ô, ổ bánh cách 1 ô. Dời từng cái về một chỗ sẽ
-        // làm ba thực thể chồng lên nhau.
-        for id in ids {
-            let x = self.attr_int(id, "core.pos.x") + sx;
-            let y = self.attr_int(id, "core.pos.y") + sy;
-            self.dat(id, "core.pos.x", Value::Int(x));
-            self.dat(id, "core.pos.y", Value::Int(y));
-        }
-    }
-
     fn dat(&mut self, id: EntityId, key: &str, v: Value) {
         let cmd = Command::new(
             "core.set_attr",
@@ -377,6 +469,11 @@ impl Game {
     }
 
     /// Nạp content pack. Trả về lỗi dạng chuỗi để chỗ gọi in ra rồi chạy tiếp.
+    /// Thư mục content pack đang nạp, nếu có.
+    pub fn content_dir(&self) -> Option<&str> {
+        self.content_dir.as_deref()
+    }
+
     pub fn load_content(&mut self, dir: &str) -> Result<usize, String> {
         let pack = load_pack(dir).map_err(|e| e.to_string())?;
         let n = pack.blocks.len();
@@ -389,6 +486,7 @@ impl Game {
             return Err(format!("`{dir}` không có vật liệu nào — sai đường dẫn?"));
         }
         self.content = Some(pack);
+        self.content_dir = Some(dir.to_owned());
         Ok(n)
     }
 
@@ -402,9 +500,18 @@ impl Game {
         self.seed
     }
 
-    /// Avatar của người chơi.
-    pub fn avatar(&self) -> EntityId {
-        self.avatar
+    /// Ô mà cái nhìn của vị thần đang đặt vào.
+    pub fn eye(&self) -> (i64, i64) {
+        self.eye
+    }
+
+    /// Dời cái nhìn. Không sinh sự kiện: đây là khung nhìn, không phải thế giới.
+    ///
+    /// `§P6.8` tách rạch ròi **truy vấn khung nhìn** khỏi **lệnh**. Ghi một sự
+    /// kiện mỗi lần người chơi kéo bản đồ sẽ nhấn chìm nhật ký bằng thứ không
+    /// phải lịch sử của thế giới, và làm mọi chuỗi nhân quả dài thêm vô ích.
+    pub fn look_at(&mut self, x: i64, y: i64) {
+        self.eye = (x, y);
     }
 
     /// Lát `z` đang xem.
@@ -639,14 +746,64 @@ impl Game {
     /// khoanh người chơi vào một thung lũng mà không nói cho họ biết vì sao —
     /// một luật vô hình thì tệ hơn một luật lỏng.
     pub fn walkable(&self, x: i64, y: i64) -> bool {
-        self.gen.base_cell(x, y).is_ok_and(|c| {
-            !c.elevation.submerged
-                && !c.flow.is_water_body
-                && !matches!(
+        !self.ground(x, y).1
+    }
+
+    /// Cao độ và "có nước không" của một ô, qua bảng nhớ tạm.
+    ///
+    /// Ô ngoài thế giới trả về `(0, true)` — coi như nước: không đi vào được và
+    /// không dựng được, đúng thứ ta muốn ở rìa bản đồ.
+    fn ground(&self, x: i64, y: i64) -> (i64, bool) {
+        if let Some(v) = self.terrain.borrow().get(&(x, y)) {
+            return *v;
+        }
+        let v = self.gen.base_cell(x, y).map_or((0, true), |c| {
+            let wet = c.elevation.submerged
+                || c.flow.is_water_body
+                || matches!(
                     c.strata.surface,
                     mow_worldgen::Material::Water | mow_worldgen::Material::Magma
-                )
-        })
+                );
+            (c.elevation.height_m, wet)
+        });
+        let mut cache = self.terrain.borrow_mut();
+        // Trần để một ván dài không biến bảng nhớ thành chỗ rò bộ nhớ. Xóa sạch
+        // chứ không đuổi từng ô: không có thứ tự truy cập nào để dựa vào, và
+        // dựng lại thì rẻ.
+        if cache.len() >= TERRAIN_CACHE_CAP {
+            cache.clear();
+        }
+        cache.insert((x, y), v);
+        v
+    }
+
+    /// Chênh cao lớn nhất giữa một ô và bốn ô kề nó, tính bằng mét.
+    ///
+    /// Đây là thước đo độ dốc rẻ nhất còn đúng: một ô nằm giữa sườn có thể có
+    /// độ dốc trung bình nhỏ trong khi một phía của nó là vách đứng, và trung
+    /// bình sẽ giấu mất đúng cái vách đó.
+    fn slope_m(&self, x: i64, y: i64) -> i64 {
+        let h = self.ground(x, y).0;
+        [(1, 0), (-1, 0), (0, 1), (0, -1)]
+            .into_iter()
+            .map(|(dx, dy)| (self.ground(x + dx, y + dy).0 - h).abs())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Ô này dựng nhà lên được không.
+    ///
+    /// Khác [`Game::walkable`] ở đúng một điều kiện, và điều kiện đó quan trọng:
+    /// **độ dốc**. Đi bộ lên một sườn dốc là chuyện bình thường; dựng một cái
+    /// nhà lên đó thì không. Bản đầu chỉ hỏi "có phải nước không", và ngôi làng
+    /// đầu tiên nằm vắt qua một vách 64 mét — đường sỏi chạy thẳng xuống vực,
+    /// và nửa làng chìm trong bóng đổ của chính cái vách đó.
+    ///
+    /// Ngưỡng `MAX_BUILD_SLOPE_M` là chênh cao giữa hai ô kề nhau, không phải
+    /// độ dốc trung bình cả khu: một bậc thềm cao 3 mét giữa hai nhà là thứ
+    /// người ta phải trèo qua mỗi ngày.
+    pub fn buildable(&self, x: i64, y: i64) -> bool {
+        self.walkable(x, y) && self.slope_m(x, y) <= MAX_BUILD_SLOPE_M
     }
 
     /// Đặt một đích tới cho một thực thể. Trả về số bước đã lên kế hoạch.
@@ -690,6 +847,15 @@ impl Game {
     }
 
     /// Số bước còn lại trong kế hoạch của một thực thể.
+    /// Tổng số bước còn lại của mọi kế hoạch đi đang chạy.
+    ///
+    /// Client dùng nó để biết khi nào xóa đường vẽ. Trước đây chỗ này hỏi số
+    /// bước của avatar; giờ không có avatar nào, và câu hỏi đúng là *"còn ai
+    /// đang trên đường không"*.
+    pub fn pending_steps(&self) -> usize {
+        self.plans.values().map(VecDeque::len).sum()
+    }
+
     pub fn remaining_steps(&self, who: EntityId) -> usize {
         self.plans.get(&who).map_or(0, VecDeque::len)
     }
@@ -771,7 +937,7 @@ impl Game {
         if self.journal.len() > PREVIEW_JOURNAL_LIMIT {
             return None;
         }
-        let mut copy = slice::build_slice_world(self.seed);
+        let mut copy = slice::build_empty_world(self.seed);
         for e in &self.journal {
             // Đưa bản sao tới đúng tick của lệnh **trước khi** áp nó. Không có
             // bước này thì mọi lệnh rơi vào tick 0 và `state_hash` lệch, vì sự
@@ -939,14 +1105,15 @@ impl Game {
             return;
         }
 
-        let ax = self.attr_int(self.avatar, "core.pos.x");
-        let ay = self.attr_int(self.avatar, "core.pos.y");
+        // Điểm neo cho NPC lang thang là **cái nhìn của thần**, không phải một
+        // avatar: không còn avatar nào để neo vào. Về mặt cảm giác điều này còn
+        // đúng hơn — thứ sinh vật lang thang tụ lại quanh chỗ thần đang nhìn.
+        let (ax, ay) = self.eye;
 
         let npcs: Vec<EntityId> = self
             .sim
             .store()
             .with_attr("core.pos.x")
-            .filter(|id| *id != self.avatar)
             .filter(|id| self.sim.store().attr_text(*id, "core.name").is_some())
             .filter(|id| self.sim.store().attr_int(*id, "item.nutrition").is_none())
             .collect();
@@ -959,7 +1126,7 @@ impl Game {
                 self.follow_routine(npc, t);
                 continue;
             }
-            let (dx, dy) = self.buoc_npc(npc, t, ax, ay);
+            let (dx, dy) = self.wander_step(npc, t, ax, ay);
             if dx == 0 && dy == 0 {
                 continue;
             }
@@ -1082,7 +1249,7 @@ impl Game {
     /// Xác định là bắt buộc, không phải tùy chọn: hai lần chạy từ cùng seed
     /// phải cho cùng thế giới (`§P7.5`), và một `rand::random()` ở đây phá điều
     /// đó mà không có bài test nào đỏ.
-    fn buoc_npc(&self, npc: EntityId, t: u64, ax: i64, ay: i64) -> (i64, i64) {
+    fn wander_step(&self, npc: EntityId, t: u64, ax: i64, ay: i64) -> (i64, i64) {
         let nx = self.attr_int(npc, "core.pos.x");
         let ny = self.attr_int(npc, "core.pos.y");
         let d = (nx - ax).abs() + (ny - ay).abs();
@@ -1123,6 +1290,28 @@ pub const TICKS_PER_DAY: u64 = 2_400;
 /// Chọn theo **phần trăm ngày** chứ không phải một hằng số nhịp, để đổi độ dài
 /// ngày không lặng lẽ đẩy thế giới về lại giữa đêm.
 pub const DAY_START: u64 = TICKS_PER_DAY * 30 / 100;
+
+/// Chênh cao tối đa giữa hai ô kề nhau mà vẫn dựng nhà được, tính bằng mét.
+///
+/// Con số này là một đánh đổi đo được, không phải một ước đoán. Trên seed 42,
+/// trong ô vuông 53×53 quanh chỗ ở được:
+///
+/// | Ngưỡng | Ô dựng được | Cỡ làng |
+/// |---|---|---|
+/// | 2 m | 731 / 2809 | 147 ô — không đọc ra một cộng đồng |
+/// | 3 m | 1305 / 2809 | 257 ô |
+/// | 4 m | 1792 / 2809 | 646 ô |
+///
+/// Chọn 4: đủ đất để có một ngôi làng thật, và vẫn loại được cái vách 64 mét mà
+/// bản đầu đã dựng nhà vắt qua — đường sỏi chạy thẳng xuống vực, nửa làng chìm
+/// trong bóng đổ của chính nó.
+pub const MAX_BUILD_SLOPE_M: i64 = 4;
+
+/// Bán kính quét quanh chỗ ở được để tìm khoảnh đất bằng nhất.
+pub const FLAT_SEARCH_RADIUS: i64 = 40;
+
+/// Trần số ô giữ trong bảng nhớ địa hình. Vượt là xóa sạch và dựng lại.
+pub const TERRAIN_CACHE_CAP: usize = 1_000_000;
 
 /// Đổi vai của bộ quy hoạch sang vai của bộ lập lịch.
 ///
@@ -1216,21 +1405,21 @@ fn role_from(s: &str) -> Role {
 ///
 /// Tổng số lần lấy mẫu khoảng 10 nghìn thay vì 600 nghìn, và nó phủ một vùng
 /// rộng gấp 30 lần.
-fn tim_cho_o_duoc(gen: &Worldgen) -> (i64, i64) {
-    let kho_rao = |x: i64, y: i64| {
+fn find_habitable(gen: &Worldgen) -> (i64, i64) {
+    let is_dry = |x: i64, y: i64| {
         gen.base_cell(x, y).is_ok_and(|c| {
             !c.elevation.submerged
                 && !c.flow.is_water_body
                 && c.strata.surface != mow_worldgen::Material::Water
         })
     };
-    if kho_rao(0, 0) {
+    if is_dry(0, 0) {
         return (0, 0);
     }
 
     let mut tam = (0i64, 0i64);
     for (buoc, ban_kinh) in [(256i64, 12_288i64), (16, 256), (1, 16)] {
-        match quet_vong(tam, buoc, ban_kinh, &kho_rao) {
+        match scan_rings(tam, buoc, ban_kinh, &is_dry) {
             Some(p) => tam = p,
             // Mức thô không thấy gì nghĩa là quanh đây thật sự toàn nước. Trả
             // về chỗ tốt nhất tìm được thay vì quét mãi: một hành tinh đại
@@ -1244,11 +1433,11 @@ fn tim_cho_o_duoc(gen: &Worldgen) -> (i64, i64) {
 /// Quét các vòng vuông quanh `tam`, bước `buoc`, tới `ban_kinh`.
 ///
 /// Trả về ô khô gần `tam` nhất trong lưới đó, hoặc `None`.
-fn quet_vong(
+fn scan_rings(
     tam: (i64, i64),
     buoc: i64,
     ban_kinh: i64,
-    kho_rao: &impl Fn(i64, i64) -> bool,
+    is_dry: &impl Fn(i64, i64) -> bool,
 ) -> Option<(i64, i64)> {
     let mut r = 0;
     while r <= ban_kinh {
@@ -1269,7 +1458,7 @@ fn quet_vong(
         // seed cho cùng thế giới" hỏng ngay ở ô đầu tiên.
         ung_vien.sort_unstable();
         ung_vien.dedup();
-        if let Some(p) = ung_vien.into_iter().find(|(x, y)| kho_rao(*x, *y)) {
+        if let Some(p) = ung_vien.into_iter().find(|(x, y)| is_dry(*x, *y)) {
             return Some(p);
         }
         r += buoc;
@@ -1282,42 +1471,75 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dung_duoc_va_co_avatar() {
+    fn the_true_god_has_no_body() {
+        // Người chơi hỏi thẳng: *"tại sao mặc định true god lại có cơ thể?"*.
+        // Câu trả lời đúng là "không có" — và bài này giữ nó ở đó.
         let g = Game::new(42);
-        assert!(g.sim().store().contains(g.avatar()));
-        assert_eq!(
-            g.sim().store().attr_text(g.avatar(), "core.name"),
-            Some("Nguoi Choi")
+        let named: Vec<&str> = g
+            .sim()
+            .store()
+            .with_attr("core.name")
+            .filter_map(|id| g.sim().store().attr_text(id, "core.name"))
+            .collect();
+        assert!(
+            !named.contains(&"Nguoi Choi"),
+            "thế giới vẫn còn một thân xác của người chơi: {named:?}"
         );
+        // Và mọi sinh mệnh đều phải là cư dân thật, không phải đồ dựng tạm của
+        // bài test lát cắt. Vật phẩm thì được: kho lương của làng là thứ có
+        // thật trong thế giới.
+        assert!(!named.is_empty(), "thế giới không có ai cả");
+        for id in g.sim().store().with_attr("core.name") {
+            let is_item = g.sim().store().attr_int(id, "item.nutrition").is_some();
+            assert!(
+                is_item || g.sim().store().attr_text(id, "npc.role").is_some(),
+                "thực thể {id:?} không phải cư dân cũng không phải vật phẩm —                  đồ dựng tạm lọt vào thế giới thật"
+            );
+        }
     }
 
-    fn vi_tri_avatar(g: &Game) -> (i64, i64) {
-        (
-            g.attr_int(g.avatar(), "core.pos.x"),
-            g.attr_int(g.avatar(), "core.pos.y"),
-        )
+    /// Một cư dân bất kỳ, để các bài test cũ có ai đó mà ra lệnh.
+    ///
+    /// Trước đây chúng dùng avatar. Giờ không có avatar, và một vị thần ra lệnh
+    /// cho cư dân là đúng cách trò chơi vận hành.
+    fn a_villager(g: &Game) -> EntityId {
+        g.sim()
+            .store()
+            .with_attr("npc.role")
+            .next()
+            .expect("làng phải có cư dân")
+    }
+
+    fn eye_pos(g: &Game) -> (i64, i64) {
+        g.eye()
+    }
+
+    /// Vị trí của một thực thể. Các bài dưới từng dùng vị trí avatar; giờ chúng
+    /// phải hỏi đúng người mà chúng đang ra lệnh.
+    fn pos_of(g: &Game, who: EntityId) -> (i64, i64) {
+        (g.attr_int(who, "core.pos.x"), g.attr_int(who, "core.pos.y"))
     }
 
     #[test]
-    fn lat_bat_dau_la_mat_dat_duoi_chan_avatar() {
+    fn the_starting_slice_is_the_ground_under_the_gaze() {
         // Không phải `z = 0`: nếu avatar ở trên một ngọn đồi thì lát 0 nằm
         // trong đá và màn hình đầu tiên đen đặc.
         let g = Game::new(42);
-        let (ax, ay) = vi_tri_avatar(&g);
+        let (ax, ay) = eye_pos(&g);
         let t = g.tile(ax, ay);
         assert_eq!(g.z(), t.height);
         assert_ne!(t.material, "air", "ô dưới chân phải là chất rắn");
     }
 
     #[test]
-    fn avatar_khong_sinh_ra_duoi_bien() {
+    fn the_gaze_never_opens_under_the_sea() {
         // `build_slice_world` đặt mọi thứ ở `(0, 0)` vì test không quan tâm địa
         // hình. Với seed 42, ô đó nằm dưới mực biển — người chơi mở game ra và
         // thấy mình ở đáy biển. Bài này giữ cho chuyện đó không quay lại, ở
         // nhiều seed chứ không chỉ seed may mắn.
         for seed in [1u64, 7, 42, 1234, 99_999] {
             let g = Game::new(seed);
-            let (ax, ay) = vi_tri_avatar(&g);
+            let (ax, ay) = eye_pos(&g);
             let t = g.tile(ax, ay);
             assert_ne!(
                 t.material, "water",
@@ -1367,7 +1589,7 @@ mod tests {
     #[test]
     fn doi_lat_z_doi_vat_lieu() {
         let g = Game::new(42);
-        let (ax, ay) = vi_tri_avatar(&g);
+        let (ax, ay) = eye_pos(&g);
         let mut g2 = Game::new(42);
 
         g2.set_z(g.z() + 5);
@@ -1597,6 +1819,27 @@ mod tests {
     }
 
     #[test]
+    fn the_village_stands_on_ground_gentle_enough_to_build_on() {
+        // Bản đầu chỉ hỏi "có phải nước không" trước khi đặt nhà, và ngôi làng
+        // đầu tiên nằm vắt qua một vách 64 mét: đường sỏi chạy thẳng xuống vực,
+        // và nửa làng chìm trong bóng đổ của chính cái vách đó. Không có bài
+        // test nào bắt được — nó chỉ lộ ra khi nhìn màn hình.
+        let g = Game::new(42);
+        let steep: Vec<(i64, i64)> = g
+            .overrides
+            .keys()
+            .copied()
+            .filter(|(x, y)| g.slope_m(*x, *y) > MAX_BUILD_SLOPE_M)
+            .collect();
+        assert!(
+            steep.is_empty(),
+            "{} ô của làng nằm trên dốc quá đứng, ví dụ {:?}",
+            steep.len(),
+            &steep[..steep.len().min(4)]
+        );
+    }
+
+    #[test]
     fn every_villager_has_a_home_and_a_workplace() {
         // Một cư dân không có nhà sẽ đứng im mãi mãi ở pha "về nhà".
         let g = Game::new(42);
@@ -1689,7 +1932,7 @@ mod tests {
         // nên nó phải được trộn vào hai bên khi so sánh.
         let mut g = Game::new(42);
         g.set_cell(3, 3, "path_gravel");
-        let who = g.avatar();
+        let who = a_villager(&g);
         let d = g
             .preview(&walk_cmd(who, 1, 0))
             .expect("vẫn phải xem trước được");
@@ -1705,7 +1948,7 @@ mod tests {
         for _ in 0..25 {
             g.tick_once();
         }
-        let who = g.avatar();
+        let who = a_villager(&g);
         g.apply(&walk_cmd(who, 1, 0)).unwrap();
 
         let d = g.preview(&walk_cmd(who, 0, 1)).expect("preview chạy được");
@@ -1715,7 +1958,7 @@ mod tests {
     #[test]
     fn preview_does_not_touch_the_world() {
         let g = Game::new(42);
-        let who = g.avatar();
+        let who = a_villager(&g);
         let before = g.state_hash();
         let n = g.journal_len();
         let d = g.preview(&walk_cmd(who, 1, 0)).unwrap();
@@ -1727,14 +1970,14 @@ mod tests {
     #[test]
     fn preview_reports_who_moves_and_where() {
         let g = Game::new(42);
-        let who = g.avatar();
-        let (ax, ay) = vi_tri_avatar(&g);
+        let who = a_villager(&g);
+        let (ax, ay) = pos_of(&g, who);
         let d = g.preview(&walk_cmd(who, 1, 0)).unwrap();
         let mine = d
             .changes
             .iter()
             .find(|c| c.id == who)
-            .expect("avatar phải đổi");
+            .expect("người được ra lệnh phải đổi chỗ");
         assert_eq!(mine.from, Some((ax, ay)));
         assert_eq!(mine.to, Some((ax + 1, ay)));
         assert!(mine.moved());
@@ -1743,7 +1986,7 @@ mod tests {
     #[test]
     fn preview_of_an_illegal_command_says_so_instead_of_lying() {
         let g = Game::new(42);
-        let who = g.avatar();
+        let who = a_villager(&g);
         let d = g.preview(&walk_cmd(who, 5, 0)).unwrap();
         assert!(d.error.is_some(), "đi 5 ô một bước phải hỏng");
         assert!(!d.changes_anything());
@@ -1755,7 +1998,7 @@ mod tests {
         // Ràng buộc quan trọng nhất của cả console True God: thứ được khắc phải
         // đúng bằng thứ người chơi đã xem.
         let mut g = Game::new(42);
-        let who = g.avatar();
+        let who = a_villager(&g);
         let d = g.preview(&walk_cmd(who, 1, 0)).unwrap();
         let stale = d.base_hash.to_hex();
 
@@ -1773,21 +2016,21 @@ mod tests {
     #[test]
     fn commit_goes_through_when_the_world_is_still() {
         let mut g = Game::new(42);
-        let who = g.avatar();
+        let who = a_villager(&g);
         let d = g.preview(&walk_cmd(who, 1, 0)).unwrap();
-        let (ax, ay) = vi_tri_avatar(&g);
+        let (ax, ay) = pos_of(&g, who);
         let done = g
             .commit_checked(&walk_cmd(who, 1, 0), &d.base_hash.to_hex())
             .expect("thế giới chưa đổi thì phải khắc được");
         assert_eq!(g.state_hash(), done.after_hash);
-        assert_eq!(vi_tri_avatar(&g), (ax + 1, ay));
+        assert_eq!(pos_of(&g, who), (ax + 1, ay));
     }
 
     #[test]
     fn a_previewed_hash_matches_what_commit_produces() {
         // Lời hứa cốt lõi: `after_hash` của preview đúng bằng hash sau khi khắc.
         let mut g = Game::new(42);
-        let who = g.avatar();
+        let who = a_villager(&g);
         let d = g.preview(&walk_cmd(who, 0, 1)).unwrap();
         g.commit_checked(&walk_cmd(who, 0, 1), &d.base_hash.to_hex())
             .unwrap();
@@ -1797,8 +2040,8 @@ mod tests {
     #[test]
     fn clicking_a_reachable_tile_walks_there() {
         let mut g = Game::new(42);
-        let who = g.avatar();
-        let (ax, ay) = vi_tri_avatar(&g);
+        let who = a_villager(&g);
+        let (ax, ay) = pos_of(&g, who);
         // Một ô đất khô cách vài bước.
         let goal = (ax + 4, ay + 2);
         assert!(
@@ -1816,15 +2059,15 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(vi_tri_avatar(&g), goal, "không tới được đích đã bấm");
+        assert_eq!(pos_of(&g, who), goal, "không tới được đích đã bấm");
     }
 
     #[test]
     fn clicking_into_the_sea_walks_to_the_shore_not_nowhere() {
         // Đứng im mà không nói gì là câu trả lời tệ nhất cho một cú bấm chuột.
         let mut g = Game::new(42);
-        let who = g.avatar();
-        let (ax, ay) = vi_tri_avatar(&g);
+        let who = a_villager(&g);
+        let (ax, ay) = eye_pos(&g);
 
         // Tìm một ô nước trong tầm nhìn.
         let sea = (-60..60)
@@ -1844,11 +2087,7 @@ mod tests {
                     break;
                 }
             }
-            assert_ne!(
-                vi_tri_avatar(&g),
-                (ax, ay),
-                "đã có kế hoạch mà không nhúc nhích"
-            );
+            assert_ne!(eye_pos(&g), (ax, ay), "đã có kế hoạch mà không nhúc nhích");
         }
     }
 
@@ -1856,8 +2095,8 @@ mod tests {
     fn a_new_destination_replaces_the_old_one() {
         // Bấm chỗ khác giữa đường phải đổi hướng ngay, không đi nốt đường cũ.
         let mut g = Game::new(42);
-        let who = g.avatar();
-        let (ax, ay) = vi_tri_avatar(&g);
+        let who = a_villager(&g);
+        let (ax, ay) = pos_of(&g, who);
         g.set_destination(who, (ax + 6, ay));
         let first = g.remaining_steps(who);
         g.set_destination(who, (ax + 1, ay));
@@ -1870,9 +2109,11 @@ mod tests {
         // replay được. Hai thế giới cùng seed, cùng lệnh, phải cùng hash.
         let mut a = Game::new(42);
         let mut b = Game::new(42);
-        let (ax, ay) = vi_tri_avatar(&a);
-        a.set_destination(a.avatar(), (ax + 5, ay + 3));
-        b.set_destination(b.avatar(), (ax + 5, ay + 3));
+        let (ax, ay) = eye_pos(&a);
+        let wa = a_villager(&a);
+        let wb = a_villager(&b);
+        a.set_destination(wa, (ax + 5, ay + 3));
+        b.set_destination(wb, (ax + 5, ay + 3));
         for _ in 0..30 {
             a.tick_once();
             b.tick_once();
@@ -1901,10 +2142,10 @@ mod tests {
             .store()
             .with_attr("item.nutrition")
             .next()
-            .expect("thế giới lát cắt có một ổ bánh");
+            .expect("làng phải có kho lương");
         assert!(g.placed().contains(&banh), "bánh phải đang nằm trên đất");
 
-        let who = g.avatar();
+        let who = a_villager(&g);
         // Đi tới chỗ bánh rồi nhặt.
         let bx = g.attr_int(banh, "core.pos.x");
         let by = g.attr_int(banh, "core.pos.y");
