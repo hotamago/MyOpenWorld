@@ -1,0 +1,6 @@
+# Sương giá đầu mùa — sự kiện khí hậu, đánh dấu mốc của lịch nông nghiệp.
+schema: event_def/v1
+id: first_frost
+name: { en: "First Frost", vi: "Sương giá đầu mùa" }
+tags: [climate, seasonal]
+script: null

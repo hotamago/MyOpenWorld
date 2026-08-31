@@ -1,0 +1,8 @@
+# Lễ hội mùa màng — sự kiện văn hóa, do khu định cư tổ chức chứ không do thiên
+# nhiên gây ra. Cùng một khuôn dữ liệu với động đất, vì cả hai đều chỉ là "một
+# chuyện có thể xảy ra"; khác nhau nằm ở tag và ở script, không ở kiểu.
+schema: event_def/v1
+id: harvest_festival
+name: { en: "Harvest Festival", vi: "Lễ hội mùa màng" }
+tags: [culture, seasonal, settlement]
+script: null

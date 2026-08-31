@@ -1,0 +1,10 @@
+# Bình nước — vật chứa, nên nó có tag `container`.
+#
+# Nó tham chiếu tới block `water` bằng đúng id trong `blocks/water/`. Đó là lý do
+# id phải khớp tên thư mục: một tham chiếu chéo chỉ đáng tin khi có đúng một
+# cách viết ra id.
+schema: item_def/v1
+id: water_flask
+name: { en: "Water Flask", vi: "Bình nước" }
+tags: [container, liquid_storage]
+script: null

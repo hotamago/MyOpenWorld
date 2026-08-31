@@ -1,0 +1,14 @@
+# Băng: rắn nhưng **không mờ đục**.
+#
+# `opaque: false` là chủ đích. Nhìn thấy hình dạng dưới lớp băng là manh mối duy
+# nhất cho biết chỗ nào đủ dày để đi qua.
+schema: block_def/v1
+id: ice
+name: { en: "Ice", vi: "Băng" }
+color: "#cfe6f0"
+hardness: 30
+liquid: false
+opaque: false
+walkable: false
+tags: [solid, diggable, frozen]
+script: null

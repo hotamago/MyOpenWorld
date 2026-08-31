@@ -3,6 +3,7 @@
 use crate::error::{ConfigError, ConfigResult};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Toàn bộ cấu hình ứng dụng.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -252,6 +253,23 @@ pub struct LlmConfig {
     /// Thư mục chứa bản ghi cho chế độ `RECORD`/`REPLAY`.
     #[serde(default = "mac_dinh_cassette")]
     pub cassette_dir: String,
+    /// Định tuyến model theo **vai** (`§20.7`), khóa là tên vai.
+    ///
+    /// Mọi trường ở trên là mặc định chung; mục này nói vai nào đi chệch khỏi
+    /// mặc định đó. Lý do tách ra là chi phí chứ không phải kiến trúc: các vai
+    /// khác nhau về **số lần gọi** tới vài bậc độ lớn, nên buộc chúng dùng chung
+    /// một model nghĩa là hoặc trả giá model mạnh cho những lời gọi tầm thường,
+    /// hoặc giao việc khó cho một model không kham nổi.
+    ///
+    /// `BTreeMap` chứ không phải `HashMap`: thứ tự duyệt phải xác định, vì nó
+    /// quyết định thứ tự các dòng trong thông báo lỗi cấu hình — và một thông
+    /// báo lỗi đổi thứ tự giữa hai lần chạy là một thông báo không dán vào issue
+    /// được.
+    ///
+    /// Rỗng là hợp lệ và là mặc định: không khai vai nào thì mọi vai chạy bằng
+    /// đúng `llm.*`.
+    #[serde(default)]
+    pub routes: BTreeMap<String, RouteConfig>,
 }
 
 fn mac_dinh_llm_mode() -> LlmMode {
@@ -288,6 +306,121 @@ impl Default for LlmConfig {
             cognitive_latency_ticks: mac_dinh_do_tre(),
             timeout_ms: mac_dinh_timeout(),
             cassette_dir: mac_dinh_cassette(),
+            routes: BTreeMap::new(),
+        }
+    }
+}
+
+/// Phần ghi đè của **một vai** trong [`LlmConfig::routes`] (`§20.7`).
+///
+/// Mọi trường đều tùy chọn, và "không khai" được biểu diễn bằng **giá trị rỗng
+/// hoặc `0`** chứ không bằng `Option`. Đó là một đánh đổi có chủ ý: `Option`
+/// trong YAML biến thành `null`, và một `null` gõ nhầm chỗ đọc y hệt một giá trị
+/// hợp lệ; còn ở đây một trường bỏ trắng, một trường khai chuỗi rỗng và một
+/// trường thiếu hẳn đều có cùng một nghĩa duy nhất — kế thừa `llm.*`.
+///
+/// Cái giá của đánh đổi này là `temperature_milli: 0` không phân biệt được với
+/// "không khai". Chấp nhận được vì `0` cũng chính là mặc định của
+/// [`LlmConfig::temperature_milli`] (`§8.4`: đa dạng đến từ seed, không từ bộ
+/// lấy mẫu), nên hai cách hiểu cho ra cùng một kết quả.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RouteConfig {
+    /// Nhãn nhà cung cấp. Xem [`LlmConfig::provider`].
+    #[serde(default)]
+    pub provider: String,
+    /// Gốc API riêng của vai, ví dụ một máy chủ cục bộ. Xem [`LlmConfig::base_url`].
+    #[serde(default)]
+    pub base_url: String,
+    /// **Tên biến môi trường** chứa API key của vai. Xem [`LlmConfig::api_key_env`].
+    ///
+    /// Chỉ cần khai khi vai gọi tới một endpoint khác endpoint mặc định — một
+    /// máy chủ cục bộ không dùng chung khóa với `OpenRouter`.
+    #[serde(default)]
+    pub api_key_env: String,
+    /// Model của vai.
+    #[serde(default)]
+    pub model: String,
+    /// Trần token đầu ra của vai. Xem [`LlmConfig::max_output_tokens`].
+    #[serde(default)]
+    pub max_output_tokens: u32,
+    /// Nhiệt độ lấy mẫu của vai, phần nghìn. Xem [`LlmConfig::temperature_milli`].
+    #[serde(default)]
+    pub temperature_milli: u32,
+    /// Thời gian chờ của vai, mili giây. Xem [`LlmConfig::timeout_ms`].
+    ///
+    /// Đáng khai riêng cho vai chạy trên máy cục bộ: một mô hình nạp lần đầu
+    /// mất nhiều thời gian hơn hẳn một lời gọi qua mạng, và một timeout chung
+    /// đủ rộng cho nó thì quá rộng cho mọi vai còn lại.
+    #[serde(default)]
+    pub timeout_ms: u64,
+}
+
+/// Cấu hình đã hợp nhất cho một vai — không còn trường nào để ngỏ.
+///
+/// Tồn tại để chỗ gọi model không phải tự biết luật kế thừa. Nếu mỗi chỗ gọi tự
+/// làm phép "route có thì lấy route, không thì lấy mặc định", luật đó sẽ được
+/// chép lại ở mọi chỗ gọi và sẽ lệch nhau ở một chỗ nào đó — và triệu chứng của
+/// nó là một vai lặng lẽ gọi nhầm model, thứ chỉ lộ ra trên hóa đơn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedRoute {
+    /// Vai đã hỏi. Giữ lại vì `§20.10` đòi ghi lại model **thật sự đã dùng**,
+    /// và câu đó chỉ đọc được khi biết nó thuộc vai nào.
+    pub role: String,
+    /// Nhãn nhà cung cấp.
+    pub provider: String,
+    /// Gốc API.
+    pub base_url: String,
+    /// Tên biến môi trường chứa API key.
+    pub api_key_env: String,
+    /// Model.
+    pub model: String,
+    /// Trần token đầu ra.
+    pub max_output_tokens: u32,
+    /// Nhiệt độ lấy mẫu, phần nghìn.
+    pub temperature_milli: u32,
+    /// Thời gian chờ, mili giây.
+    pub timeout_ms: u64,
+}
+
+/// Lấy chuỗi của vai nếu vai có khai, ngược lại kế thừa mặc định.
+fn inherit_text(specific: &str, fallback: &str) -> String {
+    if specific.is_empty() {
+        fallback.to_owned()
+    } else {
+        specific.to_owned()
+    }
+}
+
+/// Như [`inherit_text`] nhưng cho số: `0` là "không khai".
+fn inherit_number<T: Default + PartialEq>(specific: T, fallback: T) -> T {
+    if specific == T::default() {
+        fallback
+    } else {
+        specific
+    }
+}
+
+impl LlmConfig {
+    /// Hợp nhất mặc định `llm.*` với phần ghi đè của `role` (`§20.7`).
+    ///
+    /// **Vai không khai không phải là lỗi** — nó trả về đúng mặc định. Trả
+    /// `Option` ở đây sẽ đẩy cho mọi chỗ gọi một nhánh phải xử lý, và nhánh đó
+    /// sẽ được xử lý bằng `unwrap` — tức là một vai gõ sai làm sập thế giới
+    /// giữa lượt thay vì chạy bằng model mặc định. Định tuyến là chuyện tối ưu
+    /// chi phí, không phải chuyện đúng sai của mô phỏng.
+    pub fn route(&self, role: &str) -> ResolvedRoute {
+        let unset = RouteConfig::default();
+        let overrides = self.routes.get(role).unwrap_or(&unset);
+        ResolvedRoute {
+            role: role.to_owned(),
+            provider: inherit_text(&overrides.provider, &self.provider),
+            base_url: inherit_text(&overrides.base_url, &self.base_url),
+            api_key_env: inherit_text(&overrides.api_key_env, &self.api_key_env),
+            model: inherit_text(&overrides.model, &self.model),
+            max_output_tokens: inherit_number(overrides.max_output_tokens, self.max_output_tokens),
+            temperature_milli: inherit_number(overrides.temperature_milli, self.temperature_milli),
+            timeout_ms: inherit_number(overrides.timeout_ms, self.timeout_ms),
         }
     }
 }
@@ -493,28 +626,80 @@ impl Default for ObservabilityConfig {
 /// Biến môi trường chứa khóa có tồn tại và khác rỗng không.
 ///
 /// Trả `None` khi ổn, `Some(lỗi)` khi thiếu.
-fn thieu_khoa(
-    duong_dan: &'static str,
-    ten_bien: &str,
-    tra_cuu: &impl Fn(&str) -> Option<String>,
+fn missing_key_error(
+    path: &'static str,
+    var_name: &str,
+    lookup: &impl Fn(&str) -> Option<String>,
 ) -> Option<(&'static str, String)> {
-    if ten_bien.is_empty() {
-        return Some((duong_dan, "bắt buộc khi chế độ cần gọi mạng".to_owned()));
+    if var_name.is_empty() {
+        return Some((path, "bắt buộc khi chế độ cần gọi mạng".to_owned()));
     }
-    match tra_cuu(ten_bien) {
+    match lookup(var_name) {
         Some(v) if !v.trim().is_empty() => None,
         _ => Some((
-            duong_dan,
+            path,
             format!(
-                "biến môi trường `{ten_bien}` chưa đặt hoặc rỗng. Chép `.env.example` \
+                "biến môi trường `{var_name}` chưa đặt hoặc rỗng. Chép `.env.example` \
                  thành `.env` rồi điền — bí mật không bao giờ nằm trong `config/*.yaml`"
             ),
         )),
     }
 }
 
+/// Trường này có đúng là **tên biến môi trường** không.
+///
+/// Tách thành hàm vì cùng một bộ luật phải áp cho `llm`, cho `embedding` và cho
+/// từng vai trong `llm.routes`. Chép luật ra ba chỗ là ba chỗ để chúng lệch
+/// nhau, và chỗ lệch sẽ đúng là chỗ ít được đọc lại nhất: các vai thêm về sau.
+///
+/// `role` chỉ có giá trị với route — thông báo lỗi phải nói rõ vai nào sai, vì
+/// đường dẫn field của một route không phải là hằng nên không đặt vào chỗ đường
+/// dẫn được.
+fn check_key_env_name(
+    path: &'static str,
+    role: Option<&str>,
+    var_name: &str,
+    errors: &mut Vec<(&'static str, String)>,
+) {
+    if var_name.is_empty() {
+        return;
+    }
+    let prefix = role.map_or_else(String::new, |r| format!("vai `{r}`: "));
+
+    // Tiền tố `MOW_` là **của lớp cấu hình**, không phải chỗ để bí mật.
+    // `Env::prefixed("MOW_")` đọc mọi biến `MOW_*` thành một field, nên
+    // `MOW_EMBEDDING_API_KEY` không bao giờ tới được chỗ cần tới: nó bị đọc
+    // thành field `embedding_api_key`, và `deny_unknown_fields` từ chối khởi
+    // động với một thông báo nói về "unknown field" — không nói một chữ nào về
+    // khóa API.
+    if var_name.starts_with("MOW_") {
+        errors.push((
+            path,
+            format!(
+                "{prefix}`{var_name}` bắt đầu bằng `MOW_`, mà tiền tố đó thuộc về lớp cấu \
+                 hình: mọi biến `MOW_*` được đọc thành một field của config, nên biến này \
+                 sẽ không bao giờ tới được chỗ cần tới. Đặt tên khác, ví dụ \
+                 `EMBEDDINGS_API_KEY`"
+            ),
+        ));
+    }
+    if !var_name
+        .chars()
+        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+    {
+        errors.push((
+            path,
+            format!(
+                "{prefix}`{var_name}` không phải một tên biến môi trường. Trường này nhận \
+                 TÊN (ví dụ `OPENROUTER_API_KEY`), không nhận giá trị khóa — \
+                 `config/*.yaml` được commit, nên một khóa đặt ở đây là một khóa đã lộ"
+            ),
+        ));
+    }
+}
+
 /// Những mẫu cho thấy một bí mật đã lọt vào file YAML được commit.
-const MAU_BI_MAT: &[&str] = &["sk-", "api_key=", "://", "-----BEGIN"];
+const SECRET_PATTERNS: &[&str] = &["sk-", "api_key=", "://", "-----BEGIN"];
 
 impl AppConfig {
     /// Kiểm tra ràng buộc chéo giữa các mục.
@@ -525,20 +710,20 @@ impl AppConfig {
         self.validate_with_env(|k| std::env::var(k).ok())
     }
 
-    /// Như [`AppConfig::validate`] nhưng tra biến môi trường qua `tra_cuu`.
+    /// Như [`AppConfig::validate`] nhưng tra biến môi trường qua `lookup`.
     ///
     /// Tồn tại vì bước kiểm khóa API **phải** đọc môi trường, còn test thì
     /// không được đụng vào môi trường: `std::env::set_var` là toàn cục cho cả
     /// tiến trình, nên một bài test đặt nó sẽ làm bài test chạy song song bên
     /// cạnh hỏng — và hỏng theo kiểu không lặp lại được, tức là kiểu tệ nhất.
-    pub fn validate_with_env(&self, tra_cuu: impl Fn(&str) -> Option<String>) -> ConfigResult<()> {
-        let mut loi = Vec::new();
+    pub fn validate_with_env(&self, lookup: impl Fn(&str) -> Option<String>) -> ConfigResult<()> {
+        let mut errors = Vec::new();
 
         if self.sim.tick_rate == 0 {
-            loi.push(("sim.tick_rate", "phải lớn hơn 0".to_owned()));
+            errors.push(("sim.tick_rate", "phải lớn hơn 0".to_owned()));
         }
         if !self.sim.chunk_size.is_power_of_two() {
-            loi.push((
+            errors.push((
                 "sim.chunk_size",
                 format!(
                     "phải là lũy thừa của 2, nhận {}. Chỉ số chunk tính bằng `div_euclid`, \
@@ -548,12 +733,12 @@ impl AppConfig {
             ));
         }
         if self.vector.dimension == 0 {
-            loi.push(("vector.dimension", "phải lớn hơn 0".to_owned()));
+            errors.push(("vector.dimension", "phải lớn hơn 0".to_owned()));
         }
 
         // `P0-09`: kho ký ức phải nằm ở file riêng.
         if self.vector.url == self.persistence.url {
-            loi.push((
+            errors.push((
                 "vector.url",
                 "trùng với `persistence.url`. Kho ký ức phải nằm ở file riêng để không \
                  tranh khóa với tiến trình mô phỏng, và để rebuild chỉ mục không đụng \
@@ -564,7 +749,7 @@ impl AppConfig {
 
         // `§20.2.2`: độ trễ nhận thức phải dương ở mọi chế độ gọi thật.
         if self.llm.mode != LlmMode::Stub && self.llm.cognitive_latency_ticks == 0 {
-            loi.push((
+            errors.push((
                 "llm.cognitive_latency_ticks",
                 "phải lớn hơn 0 khi không ở chế độ STUB. Bằng 0 nghĩa là kết quả LLM \
                  được áp ngay khi về, và thế giới sẽ phụ thuộc vào tốc độ đường truyền \
@@ -574,50 +759,29 @@ impl AppConfig {
         }
 
         if self.llm.mode == LlmMode::Live && self.llm.provider.is_empty() {
-            loi.push(("llm.provider", "bắt buộc khi `llm.mode` là LIVE".to_owned()));
+            errors.push(("llm.provider", "bắt buộc khi `llm.mode` là LIVE".to_owned()));
         }
 
         // `api_key_env` nhận **tên biến**, không nhận khóa. Dán thẳng khóa vào
         // đây là lỗi dễ mắc nhất, và hậu quả của nó là một bí mật nằm trong
         // một file được commit — thứ không rút lại được bằng một commit sau.
-        for (duong_dan, ten) in [
-            ("llm.api_key_env", &self.llm.api_key_env),
-            ("embedding.api_key_env", &self.embedding.api_key_env),
-        ] {
-            if ten.is_empty() {
-                continue;
-            }
-            // Tiền tố `MOW_` là **của lớp cấu hình**, không phải chỗ để bí mật.
-            // `Env::prefixed("MOW_")` đọc mọi biến `MOW_*` thành một field, nên
-            // `MOW_EMBEDDING_API_KEY` không bao giờ tới được chỗ cần tới: nó bị
-            // đọc thành field `embedding_api_key`, và `deny_unknown_fields` từ
-            // chối khởi động với một thông báo nói về "unknown field" — không
-            // nói một chữ nào về khóa API.
-            if ten.starts_with("MOW_") {
-                loi.push((
-                    duong_dan,
-                    format!(
-                        "`{ten}` bắt đầu bằng `MOW_`, mà tiền tố đó thuộc về lớp cấu hình: \
-                         mọi biến `MOW_*` được đọc thành một field của config, nên biến này \
-                         sẽ không bao giờ tới được chỗ cần tới. Đặt tên khác, ví dụ \
-                         `EMBEDDINGS_API_KEY`"
-                    ),
-                ));
-            }
-            if !ten
-                .chars()
-                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
-            {
-                loi.push((
-                    duong_dan,
-                    format!(
-                        "`{ten}` không phải một tên biến môi trường. Trường này nhận TÊN \
-                         (ví dụ `OPENROUTER_API_KEY`), không nhận giá trị khóa — \
-                         `config/*.yaml` được commit, nên một khóa đặt ở đây là một khóa \
-                         đã lộ"
-                    ),
-                ));
-            }
+        check_key_env_name("llm.api_key_env", None, &self.llm.api_key_env, &mut errors);
+        check_key_env_name(
+            "embedding.api_key_env",
+            None,
+            &self.embedding.api_key_env,
+            &mut errors,
+        );
+        // Cùng bộ luật cho từng vai. Một vai khai khóa riêng là chỗ dễ lọt nhất
+        // vì nó được thêm về sau, khi luật ở trên đã trở thành thứ hiển nhiên
+        // và không ai đọc lại nữa.
+        for (role, route) in &self.llm.routes {
+            check_key_env_name(
+                "llm.routes.*.api_key_env",
+                Some(role),
+                &route.api_key_env,
+                &mut errors,
+            );
         }
 
         // Chế độ cần mạng: kiểm **đủ mọi mảnh, lúc khởi động**. Thiếu một mảnh
@@ -626,7 +790,7 @@ impl AppConfig {
         // "NPC bỗng dưng ngờ nghệch" chứ không phải một thông báo cấu hình.
         if matches!(self.llm.mode, LlmMode::Live | LlmMode::Record) {
             if self.llm.base_url.is_empty() {
-                loi.push((
+                errors.push((
                     "llm.base_url",
                     "bắt buộc khi `llm.mode` là LIVE hoặc RECORD. OpenRouter: \
                      `https://openrouter.ai/api/v1`"
@@ -634,27 +798,41 @@ impl AppConfig {
                 ));
             }
             if self.llm.model.is_empty() {
-                loi.push((
+                errors.push((
                     "llm.model",
                     "bắt buộc khi `llm.mode` là LIVE hoặc RECORD".to_owned(),
                 ));
             }
             if self.llm.max_output_tokens == 0 {
-                loi.push((
+                errors.push((
                     "llm.max_output_tokens",
                     "bằng 0 nghĩa là mô hình bị cắt trước khi nói được chữ nào, và nó \
                      trả về chuỗi rỗng chứ không trả về lỗi"
                         .to_owned(),
                 ));
             }
-            if let Some(e) = thieu_khoa("llm.api_key_env", &self.llm.api_key_env, &tra_cuu) {
-                loi.push(e);
+            if let Some(e) = missing_key_error("llm.api_key_env", &self.llm.api_key_env, &lookup) {
+                errors.push(e);
+            }
+            // Một vai trỏ sang endpoint khác thì cũng cần khóa của endpoint đó,
+            // và cần nó **lúc khởi động**. Vai để trống thì kế thừa
+            // `llm.api_key_env` — đã kiểm ngay ở trên, kiểm lại chỉ nhân đôi
+            // cùng một dòng lỗi.
+            for (role, route) in &self.llm.routes {
+                if route.api_key_env.is_empty() {
+                    continue;
+                }
+                if let Some((path, msg)) =
+                    missing_key_error("llm.routes.*.api_key_env", &route.api_key_env, &lookup)
+                {
+                    errors.push((path, format!("vai `{role}`: {msg}")));
+                }
             }
         }
 
         if self.embedding.mode == EmbeddingMode::Live {
             if self.embedding.base_url.is_empty() {
-                loi.push((
+                errors.push((
                     "embedding.base_url",
                     "bắt buộc khi `embedding.mode` là LIVE. Máy chủ cục bộ dựng bằng \
                      `./mow ai up`: `http://localhost:18080/v1`"
@@ -662,22 +840,22 @@ impl AppConfig {
                 ));
             }
             if self.embedding.model.is_empty() {
-                loi.push((
+                errors.push((
                     "embedding.model",
                     "bắt buộc khi `embedding.mode` là LIVE".to_owned(),
                 ));
             }
-            if let Some(e) = thieu_khoa(
+            if let Some(e) = missing_key_error(
                 "embedding.api_key_env",
                 &self.embedding.api_key_env,
-                &tra_cuu,
+                &lookup,
             ) {
-                loi.push(e);
+                errors.push(e);
             }
         }
 
         if self.embedding.batch_size == 0 {
-            loi.push((
+            errors.push((
                 "embedding.batch_size",
                 "phải lớn hơn 0; bằng 0 thì không văn bản nào được gửi đi và chỉ mục \
                  lặng lẽ rỗng"
@@ -686,14 +864,14 @@ impl AppConfig {
         }
 
         if self.content.packs.is_empty() {
-            loi.push((
+            errors.push((
                 "content.packs",
                 "phải nạp ít nhất một pack; `core` là pack chính thức".to_owned(),
             ));
         }
 
         // `§P10.6`: bí mật chỉ ở `.env`, không bao giờ trong YAML được commit.
-        for (duong_dan, gia_tri) in [
+        for (path, value) in [
             ("persistence.url", &self.persistence.url),
             ("vector.url", &self.vector.url),
             (
@@ -703,26 +881,26 @@ impl AppConfig {
             ("llm.base_url", &self.llm.base_url),
             ("embedding.base_url", &self.embedding.base_url),
         ] {
-            if let Some(mau) = MAU_BI_MAT.iter().find(|m| gia_tri.contains(**m)) {
+            if let Some(pattern) = SECRET_PATTERNS.iter().find(|m| value.contains(**m)) {
                 // `://` trong một endpoint là bình thường; chỉ báo khi có dấu
                 // hiệu của thông tin đăng nhập nhúng trong URL.
-                if *mau == "://" && !gia_tri.contains('@') {
+                if *pattern == "://" && !value.contains('@') {
                     continue;
                 }
-                loi.push((
-                    duong_dan,
+                errors.push((
+                    path,
                     format!(
-                        "chứa `{mau}` — trông như bí mật. File `config/*.yaml` được commit; \
+                        "chứa `{pattern}` — trông như bí mật. File `config/*.yaml` được commit; \
                          đưa giá trị này vào `.env` và tham chiếu qua biến môi trường MOW_*"
                     ),
                 ));
             }
         }
 
-        if loi.is_empty() {
+        if errors.is_empty() {
             Ok(())
         } else {
-            Err(ConfigError::Invalid(loi))
+            Err(ConfigError::Invalid(errors))
         }
     }
 

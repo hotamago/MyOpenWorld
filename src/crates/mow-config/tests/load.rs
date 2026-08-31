@@ -1,3 +1,4 @@
+use mow_config::schema::RouteConfig;
 use mow_config::{load, AppConfig, EmbeddingMode, LlmMode};
 use std::fs;
 
@@ -328,6 +329,215 @@ embedding:
     assert!(e.to_string().contains("dimension"), "{e}");
 }
 
+// ── Định tuyến model theo vai (`§20.7`) ──────────────────────────────────────
+
+#[test]
+fn vai_de_trong_thi_ke_thua_mac_dinh() {
+    // Cả điểm của `routes`: khai đúng thứ đi chệch, im lặng về phần còn lại.
+    // Một route phải khai lại mọi trường là một route sẽ trôi khỏi `llm.*` mà
+    // không ai để ý, vì không có gì nói rằng hai chỗ đó lẽ ra phải giống nhau.
+    let d = tempfile::tempdir().unwrap();
+    viet(
+        d.path(),
+        "base.yaml",
+        "env: dev
+llm:
+  provider: openrouter
+  base_url: \"https://openrouter.ai/api/v1\"
+  api_key_env: OPENROUTER_API_KEY
+  model: \"model-mac-dinh\"
+  max_output_tokens: 2048
+  temperature_milli: 300
+  timeout_ms: 30000
+  routes:
+    npc:
+      model: \"model-cua-npc\"
+",
+    );
+    let c = load(d.path(), "dev").expect("hợp lệ");
+    let r = c.llm.route("npc");
+    assert_eq!(r.role, "npc");
+    // Khai thì đổi.
+    assert_eq!(r.model, "model-cua-npc");
+    // Không khai thì kế thừa, từng trường một.
+    assert_eq!(r.provider, "openrouter");
+    assert_eq!(r.base_url, "https://openrouter.ai/api/v1");
+    assert_eq!(r.api_key_env, "OPENROUTER_API_KEY");
+    assert_eq!(r.max_output_tokens, 2048);
+    assert_eq!(r.temperature_milli, 300);
+    assert_eq!(r.timeout_ms, 30_000);
+}
+
+#[test]
+fn vai_khai_day_du_thi_ghi_de_het() {
+    let d = tempfile::tempdir().unwrap();
+    viet(
+        d.path(),
+        "base.yaml",
+        "env: dev
+llm:
+  provider: openrouter
+  base_url: \"https://openrouter.ai/api/v1\"
+  api_key_env: OPENROUTER_API_KEY
+  model: \"model-mac-dinh\"
+  max_output_tokens: 2048
+  temperature_milli: 300
+  timeout_ms: 30000
+  routes:
+    action:
+      provider: local
+      base_url: \"http://localhost:18081/v1\"
+      api_key_env: LOCAL_LLM_API_KEY
+      model: \"model-cuc-bo\"
+      max_output_tokens: 256
+      temperature_milli: 700
+      timeout_ms: 120000
+",
+    );
+    let c = load(d.path(), "dev").expect("hợp lệ");
+    let r = c.llm.route("action");
+    assert_eq!(r.provider, "local");
+    assert_eq!(r.base_url, "http://localhost:18081/v1");
+    assert_eq!(r.api_key_env, "LOCAL_LLM_API_KEY");
+    assert_eq!(r.model, "model-cuc-bo");
+    assert_eq!(r.max_output_tokens, 256);
+    assert_eq!(r.temperature_milli, 700);
+    assert_eq!(r.timeout_ms, 120_000);
+    // Và mặc định chung không bị route nào sửa: `route()` hợp nhất chứ không
+    // ghi vào `llm.*`.
+    assert_eq!(c.llm.model, "model-mac-dinh");
+}
+
+#[test]
+fn vai_khong_ton_tai_thi_chay_bang_mac_dinh_chu_khong_no() {
+    // Định tuyến là chuyện tối ưu chi phí, không phải chuyện đúng sai của mô
+    // phỏng. Một vai gõ sai phải cho ra một lời gọi bình thường — không phải
+    // một panic giữa lượt của một thế giới đang chạy.
+    let c = cfg_live();
+    let r = c.llm.route("vai-khong-ai-khai");
+    assert_eq!(r.model, c.llm.model);
+    assert_eq!(r.base_url, c.llm.base_url);
+    assert_eq!(r.api_key_env, c.llm.api_key_env);
+    assert_eq!(r.max_output_tokens, c.llm.max_output_tokens);
+    assert_eq!(r.timeout_ms, c.llm.timeout_ms);
+    // Không khai route nào cả cũng vậy.
+    assert!(c.llm.routes.is_empty());
+}
+
+#[test]
+fn api_key_env_cua_vai_bat_dau_bang_mow_bi_tu_choi() {
+    // Cùng bộ luật với `llm.api_key_env`. Đây là chỗ dễ lọt nhất vì các vai
+    // được thêm về sau, khi luật kia đã thành thứ hiển nhiên không ai đọc lại.
+    let mut c = cfg_live();
+    c.llm.routes.insert(
+        "action".to_owned(),
+        RouteConfig {
+            api_key_env: "MOW_LOCAL_LLM_API_KEY".to_owned(),
+            ..RouteConfig::default()
+        },
+    );
+    let e = c
+        .validate_with_env(co_khoa)
+        .expect_err("`MOW_` là tiền tố của lớp cấu hình");
+    let s = e.to_string();
+    assert!(s.contains("llm.routes"), "{s}");
+    assert!(s.contains("MOW_"), "{s}");
+    // Đường dẫn field của một route không phải hằng, nên thông báo phải tự nói
+    // vai nào sai — nếu không thì với năm vai, người đọc phải đoán.
+    assert!(s.contains("action"), "phải chỉ ra vai nào sai: {s}");
+}
+
+#[test]
+fn api_key_env_cua_vai_khong_phai_ten_bien_thi_bi_tu_choi() {
+    let mut c = cfg_live();
+    c.llm.routes.insert(
+        "action".to_owned(),
+        RouteConfig {
+            api_key_env: "sk-or-v1-882569e1380b97ae".to_owned(),
+            ..RouteConfig::default()
+        },
+    );
+    let e = c.validate_with_env(co_khoa).expect_err("khóa không phải tên");
+    assert!(e.to_string().contains("TÊN"), "{e}");
+}
+
+#[test]
+fn vai_khai_khoa_rieng_ma_thieu_bien_thi_tu_choi_luc_khoi_dong() {
+    // Một vai trỏ sang endpoint khác cần khóa của endpoint đó. Thiếu nó mà vẫn
+    // chạy nghĩa là mọi hành động của mọi thực thể hỏng ở lần gọi đầu tiên.
+    let mut c = cfg_live();
+    c.llm.routes.insert(
+        "action".to_owned(),
+        RouteConfig {
+            base_url: "http://localhost:18081/v1".to_owned(),
+            api_key_env: "LOCAL_LLM_API_KEY".to_owned(),
+            model: "model-cuc-bo".to_owned(),
+            ..RouteConfig::default()
+        },
+    );
+    // `co_khoa` chỉ biết OPENROUTER_API_KEY và EMBEDDINGS_API_KEY.
+    let e = c
+        .validate_with_env(co_khoa)
+        .expect_err("thiếu khóa của vai phải là lỗi");
+    let s = e.to_string();
+    assert!(s.contains("LOCAL_LLM_API_KEY"), "{s}");
+    assert!(s.contains("action"), "{s}");
+
+    // Và có khóa thì qua.
+    c.validate_with_env(|k| {
+        if k == "LOCAL_LLM_API_KEY" {
+            Some("khong-can".to_owned())
+        } else {
+            co_khoa(k)
+        }
+    })
+    .expect("đủ khóa thì phải qua");
+}
+
+#[test]
+fn vai_ke_thua_khoa_thi_khong_bi_hoi_hai_lan() {
+    // Vai để trống `api_key_env` dùng lại `llm.api_key_env` — đã kiểm ở nhánh
+    // chung. Kiểm lại chỉ nhân đôi cùng một dòng lỗi, và một thông báo lặp làm
+    // người đọc tưởng có hai chỗ hỏng.
+    let mut c = cfg_live();
+    c.llm.routes.insert(
+        "npc".to_owned(),
+        RouteConfig {
+            model: "model-cua-npc".to_owned(),
+            ..RouteConfig::default()
+        },
+    );
+    let e = c
+        .validate_with_env(khong_co_bien)
+        .expect_err("thiếu khóa mặc định");
+    let s = e.to_string();
+    assert_eq!(
+        s.matches("OPENROUTER_API_KEY").count(),
+        1,
+        "một khóa thiếu chỉ được báo một lần: {s}"
+    );
+}
+
+#[test]
+fn field_la_trong_route_thi_bao_loi() {
+    // `deny_unknown_fields` phải áp cả trong `routes`: một `max_tokens` gõ
+    // thiếu chữ sẽ im lặng trở thành "không khai" và vai đó lặng lẽ chạy bằng
+    // trần token của `llm.*`.
+    let d = tempfile::tempdir().unwrap();
+    viet(
+        d.path(),
+        "base.yaml",
+        "env: dev
+llm:
+  routes:
+    action:
+      max_tokens: 256
+",
+    );
+    let e = load(d.path(), "dev").expect_err("`max_tokens` không phải field của route");
+    assert!(e.to_string().contains("max_tokens"), "{e}");
+}
+
 // ── File cấu hình thật của dự án ─────────────────────────────────────────────
 
 #[test]
@@ -344,6 +554,42 @@ fn base_yaml_that_khai_dung_model_da_chon() {
     // Và `dev` vẫn phải là chế độ không mạng.
     assert_eq!(c.llm.mode, LlmMode::Stub);
     assert_eq!(c.embedding.mode, EmbeddingMode::Stub);
+}
+
+#[test]
+fn base_yaml_that_khai_du_ba_vai() {
+    // `§20.7`: ba vai khác nhau về số lần gọi tới vài bậc độ lớn. Bài này khóa
+    // chính con số đó lại — một lần "gộp cho gọn" ba vai về một model là một
+    // thay đổi phải cố ý sửa test, không được là một dòng bị xóa nhầm.
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("config");
+    let c = load(&root, "dev").expect("config thật phải hợp lệ");
+    assert_eq!(c.llm.routes.len(), 3, "phải khai đúng ba vai");
+
+    // `action` chạy cục bộ: nó bị gọi nhiều nhất và làm việc đơn giản nhất.
+    let action = c.llm.route("action");
+    assert_eq!(action.model, "Qwen/Qwen3.5-4B");
+    assert_eq!(action.base_url, "http://localhost:18081/v1");
+    assert_eq!(action.api_key_env, "LOCAL_LLM_API_KEY");
+    assert_eq!(action.max_output_tokens, 256);
+
+    // `npc` chỉ đổi model; endpoint và khóa kế thừa `llm.*`.
+    let npc = c.llm.route("npc");
+    assert_eq!(npc.model, "deepseek/deepseek-v4-flash-0731");
+    assert_eq!(npc.base_url, c.llm.base_url);
+    assert_eq!(npc.api_key_env, "OPENROUTER_API_KEY");
+
+    // `yuu` hiếm nhưng mỗi lần gọi là một quyết định ảnh hưởng cả thế giới.
+    let yuu = c.llm.route("yuu");
+    assert_eq!(yuu.model, "deepseek/deepseek-v4-pro-0813");
+    assert_eq!(yuu.max_output_tokens, 4096);
+    assert_eq!(yuu.base_url, c.llm.base_url);
+
+    // Ba vai, ba model — gộp hai vai vào một model là mất chính thứ mục này
+    // tồn tại để mua.
+    assert_ne!(action.model, npc.model);
+    assert_ne!(npc.model, yuu.model);
 }
 
 #[test]

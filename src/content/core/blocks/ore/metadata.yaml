@@ -1,0 +1,14 @@
+# Quặng: hiếm, và đó là toàn bộ giá trị của nó.
+#
+# `hardness` thấp hơn đá macma một chút: quặng nằm trong mạch, và mạch thường
+# giòn hơn khối đá bao quanh nó.
+schema: block_def/v1
+id: ore
+name: { en: "Ore", vi: "Quặng" }
+color: "#b08a3a"
+hardness: 70
+liquid: false
+opaque: true
+walkable: false
+tags: [rock, diggable, ore]
+script: null

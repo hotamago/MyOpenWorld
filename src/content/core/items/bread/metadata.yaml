@@ -1,0 +1,13 @@
+# Bánh mì — vật phẩm mẫu, và là cái mẫu cố ý chọn cho nhàm chán.
+#
+# `ItemDef` ở đây **không** chứa khối lượng, thể tích hay dinh dưỡng. Những thứ
+# đó là component của một entity vật phẩm (`§8.5`) và thuộc về `mow-items`; nhét
+# chúng vào đây sẽ tạo nguồn sự thật thứ hai cho cùng một con số.
+#
+# Cái file này khai đúng phần **định danh**: id, tên hiển thị, và các tag mà hệ
+# khác tra cứu theo.
+schema: item_def/v1
+id: bread
+name: { en: "Bread", vi: "Bánh mì" }
+tags: [food, perishable, craftable]
+script: null

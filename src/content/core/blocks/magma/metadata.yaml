@@ -1,0 +1,16 @@
+# Magma: lỏng, nhưng **không** `walkable`.
+#
+# Hai trường này nói hai chuyện khác nhau, và đây là ô chứng minh điều đó.
+# `liquid` là vật lý — nó chảy, nó lan. `walkable` là câu hỏi *"đường tìm được
+# có được đi qua đây không"*, và câu trả lời là không, vì đi qua nghĩa là chết.
+# Gộp hai trường lại sẽ làm một trong hai câu hỏi không hỏi được nữa.
+schema: block_def/v1
+id: magma
+name: { en: "Magma", vi: "Magma" }
+color: "#d4562a"
+hardness: 0
+liquid: true
+opaque: true
+walkable: false
+tags: [liquid, fluid, hot, hazard]
+script: null

@@ -1,0 +1,16 @@
+# Đất mặt — lớp có chất hữu cơ, thứ mà mọi thứ trồng được đều cần.
+#
+# Vì sao một thư mục cho một vật liệu: `§18.5.1` nói diện mạo của ô **suy ra từ
+# thuộc tính vật liệu**. Thêm một vật liệu vì thế phải là thêm dữ liệu, không
+# phải sửa một enum Rust rồi sửa tiếp một bảng màu TypeScript — hai chỗ đó sẽ
+# lệch nhau, và không có gì báo khi chúng lệch.
+schema: block_def/v1
+id: topsoil
+name: { en: "Topsoil", vi: "Đất mặt" }
+color: "#6b5a3e"
+hardness: 20
+liquid: false
+opaque: true
+walkable: false
+tags: [soil, diggable]
+script: null

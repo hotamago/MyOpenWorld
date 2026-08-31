@@ -1,0 +1,14 @@
+# Không khí là **nền**, không phải một chất.
+#
+# Nó tối để mọi thứ khác nổi lên trên bản đồ (`§18.5`), và nó là ô duy nhất mà
+# `walkable` đúng theo nghĩa đen: đi xuyên qua không tốn gì.
+schema: block_def/v1
+id: air
+name: { en: "Air", vi: "Không khí" }
+color: "#0d1014"
+hardness: 0
+liquid: false
+opaque: false
+walkable: true
+tags: [gas, passable]
+script: null

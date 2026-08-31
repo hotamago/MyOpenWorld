@@ -4,6 +4,21 @@
 #     cp .env.example .env              # roi dien OPENROUTER_API_KEY
 #     cargo run -p mow-cli -- config check --env live
 #
+# LIVE can HAI khoa, khong phai mot — tu khi co dinh tuyen theo vai (§20.7):
+#
+#   OPENROUTER_API_KEY   cho `llm.*` mac dinh, tuc hai vai `npc` va `yuu`.
+#   LOCAL_LLM_API_KEY    cho vai `action`, tro sang may chu cuc bo o cong
+#                        18081. May chu noi bo khong kiem khoa, nhung bien VAN
+#                        phai ton tai va khac rong: `AppConfig::validate` tu
+#                        choi khoi dong khi thieu, va no tu choi dung — tha
+#                        chet luc khoi dong con hon chet o lan suy nghi dau
+#                        tien cua mot NPC. Dat `LOCAL_LLM_API_KEY=khong-can`
+#                        trong `.env` la du.
+#
+# Muon chay ca ba vai qua OpenRouter (chua dung may chu cuc bo): xoa
+# `base_url` va `api_key_env` cua vai `action` trong base.yaml — bo trong la
+# ke thua `llm.*`.
+#
 # Vi sao la mot moi truong rieng chu khong phai sua `dev.yaml`:
 #
 #   `dev` phai chay duoc offline, mien phi va xac dinh. Do la moi truong ma

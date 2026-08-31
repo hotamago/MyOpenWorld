@@ -1,0 +1,9 @@
+# Thỏi sắt — vật phẩm hàng hóa, thứ tồn tại ở dạng stack chứ không phải instance.
+#
+# Tag `bulk` là thứ `§8.5.2` đọc để quyết định 4200 thỏi sắt trong kho không
+# được thành 4200 entity.
+schema: item_def/v1
+id: iron_ingot
+name: { en: "Iron Ingot", vi: "Thỏi sắt" }
+tags: [material, metal, bulk]
+script: null

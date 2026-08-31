@@ -1,0 +1,15 @@
+[package]
+name = "mow-content"
+description = "Bo nap dinh nghia vat lieu, vat pham va su kien tu content pack: mot thu muc la mot thuc the, mot metadata.yaml la mot dinh nghia."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

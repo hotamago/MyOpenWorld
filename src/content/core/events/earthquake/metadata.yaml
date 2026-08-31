@@ -1,0 +1,10 @@
+# Động đất — sự kiện thế giới, không phải bản ghi trong event log.
+#
+# Phân biệt này quan trọng: `§22` nói về event log, thứ ghi lại **chuyện đã xảy
+# ra**. `EventDef` ở đây là **khuôn** của một chuyện có thể xảy ra — nó được
+# đạo diễn (`mow-director`) chọn ra và biên dịch thành command.
+schema: event_def/v1
+id: earthquake
+name: { en: "Earthquake", vi: "Động đất" }
+tags: [geology, hazard, regional]
+script: null

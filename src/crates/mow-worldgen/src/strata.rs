@@ -117,3 +117,146 @@ pub fn sample(seed: u64, p: &GenerationProfile, x: i64, y: i64, elev: &Elevation
         cave,
     }
 }
+
+/// Vật liệu tại một ô 3D `(x, y, z)`, với `z` là độ cao tính bằng mét.
+///
+/// Đây là hàm mà **màn hình** cần: `§18.1` vẽ theo lát `z`, nên câu hỏi
+/// "ô này là gì" phải trả lời được cho mọi `z`, không chỉ cho bề mặt.
+///
+/// Nó ở đây chứ không ở phía renderer vì nó là một luật của thế giới, không
+/// phải một lựa chọn hiển thị. Hai chỗ tự suy ra tầng đất sẽ lệch nhau, và khi
+/// lệch thì người chơi đào xuyên qua một lớp đá mà bản đồ vẽ là đất.
+///
+/// Quy ước: `z == height_m` là **ô bề mặt** — ô cuối cùng còn là chất rắn.
+/// `z > height_m` là không khí, hoặc nước nếu ô nằm dưới mực biển.
+#[must_use]
+pub fn material_at(elev: &Elevation, s: &Strata, sea_level_m: i64, z: i64) -> Material {
+    if z > elev.height_m {
+        // Trên mặt đất nhưng dưới mực biển: cột nước.
+        return if z <= sea_level_m {
+            Material::Water
+        } else {
+            Material::Air
+        };
+    }
+
+    // `depth` 0 nghĩa là chính ô bề mặt.
+    let depth = elev.height_m - z;
+
+    // Hang nằm trong đá, dưới lớp đất. Nó là **khoảng rỗng**, nên nó phải trả
+    // về `Air` chứ không phải một loại đá "rỗng" — người chơi rơi xuống hang,
+    // và một cái hang bằng đá thì không phải hang.
+    if s.cave && depth > i64::from(s.bedrock_depth_m) + 4 && depth < i64::from(s.bedrock_depth_m) + 9
+    {
+        return Material::Air;
+    }
+
+    if depth < i64::from(s.soil_depth_m) {
+        return s.surface;
+    }
+    if depth < i64::from(s.bedrock_depth_m) {
+        // Dưới lớp đất mặt là trầm tích, trừ nơi đất đã bị rửa trôi hết —
+        // ở đó `surface` vốn đã là đá.
+        return Material::Sedimentary;
+    }
+
+    // Quặng nằm thành dải trong đá gốc, không rải đều: chỉ một khoảng độ sâu
+    // hẹp mới có. Không có ràng buộc đó thì "tìm thấy quặng" mất hết ý nghĩa.
+    if s.ore_present && depth >= i64::from(s.bedrock_depth_m) + 12 && depth < i64::from(s.bedrock_depth_m) + 20 {
+        return Material::Ore;
+    }
+    if depth > i64::from(s.bedrock_depth_m) + 900 {
+        return Material::Magma;
+    }
+    Material::Igneous
+}
+
+#[cfg(test)]
+mod tests_material_at {
+    use super::*;
+
+    fn nen() -> (Elevation, Strata) {
+        let e = Elevation {
+            height_m: 100,
+            slope: 4,
+            submerged: false,
+        };
+        let s = Strata {
+            surface: Material::Topsoil,
+            soil_depth_m: 3,
+            bedrock_depth_m: 11,
+            ore_present: false,
+            cave: false,
+        };
+        (e, s)
+    }
+
+    #[test]
+    fn tren_be_mat_la_khong_khi() {
+        let (e, s) = nen();
+        assert_eq!(material_at(&e, &s, 0, 101), Material::Air);
+        assert_eq!(material_at(&e, &s, 0, 500), Material::Air);
+    }
+
+    #[test]
+    fn o_be_mat_la_vat_lieu_be_mat() {
+        // `z == height_m` phải là ô rắn cuối cùng. Lệch một ô ở đây nghĩa là
+        // nhân vật đứng lơ lửng, hoặc lún nửa người xuống đất.
+        let (e, s) = nen();
+        assert_eq!(material_at(&e, &s, 0, 100), Material::Topsoil);
+    }
+
+    #[test]
+    fn duoi_lop_dat_la_tram_tich_roi_toi_da_goc() {
+        let (e, s) = nen();
+        assert_eq!(material_at(&e, &s, 0, 98), Material::Topsoil);
+        assert_eq!(material_at(&e, &s, 0, 96), Material::Sedimentary);
+        assert_eq!(material_at(&e, &s, 0, 80), Material::Igneous);
+    }
+
+    #[test]
+    fn duoi_muc_bien_thi_cot_tren_la_nuoc() {
+        let e = Elevation {
+            height_m: -20,
+            slope: 1,
+            submerged: true,
+        };
+        let s = Strata {
+            surface: Material::Water,
+            soil_depth_m: 2,
+            bedrock_depth_m: 10,
+            ore_present: false,
+            cave: false,
+        };
+        assert_eq!(material_at(&e, &s, 0, -5), Material::Water);
+        assert_eq!(material_at(&e, &s, 0, 0), Material::Water);
+        // Trên mực biển vẫn là không khí.
+        assert_eq!(material_at(&e, &s, 0, 1), Material::Air);
+    }
+
+    #[test]
+    fn hang_la_khoang_rong_chu_khong_phai_mot_loai_da() {
+        let (e, mut s) = nen();
+        s.cave = true;
+        let z = e.height_m - (i64::from(s.bedrock_depth_m) + 6);
+        assert_eq!(material_at(&e, &s, 0, z), Material::Air);
+    }
+
+    #[test]
+    fn quang_chi_o_mot_dai_do_sau() {
+        let (e, mut s) = nen();
+        s.ore_present = true;
+        let trong_dai = e.height_m - (i64::from(s.bedrock_depth_m) + 15);
+        let ngoai_dai = e.height_m - (i64::from(s.bedrock_depth_m) + 40);
+        assert_eq!(material_at(&e, &s, 0, trong_dai), Material::Ore);
+        assert_eq!(material_at(&e, &s, 0, ngoai_dai), Material::Igneous);
+    }
+
+    #[test]
+    fn xac_dinh_tuyet_doi() {
+        let (e, s) = nen();
+        for z in -50..150 {
+            assert_eq!(material_at(&e, &s, 0, z), material_at(&e, &s, 0, z));
+        }
+    }
+}

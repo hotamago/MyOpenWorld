@@ -43,6 +43,46 @@ llm:
   timeout_ms: 30000
   cassette_dir: "llm-cassettes"
 
+  # Dinh tuyen model theo VAI — §20.7. Truong nao de trong hoac bang 0 thi ke
+  # thua gia tri `llm.*` o tren.
+  #
+  # Vi sao tach ba vai chu khong dung mot model cho tat ca: ba vai khac nhau ve
+  # SO LAN GOI toi vai bac do lon, khong khac nhau ve kien truc.
+  #
+  #   action  goi nhieu nhat — moi thuc the, moi lan quyet dinh buoc tiep theo.
+  #           Nhung viec no lam la viec don gian: chon mot hanh dong trong mot
+  #           danh sach ngan. Tra gia mot model manh cho no la tra gia manh nhat
+  #           cho cong viec tam thuong nhat.
+  #   npc     hoi thoai va chien thuat — thua so lan goi, can chat luong vua.
+  #   yuu     hiem nhat: phan tu, ngoai giao phuc tap, de xuat law/species. Moi
+  #           lan goi la mot quyet dinh anh huong ca the gioi, nen day la cho
+  #           dang tra tien cho mot model manh.
+  #
+  # Gop lai mot model nghia la chon MOT trong hai cai gia: hoac tra gia `yuu`
+  # cho moi buoc di cua moi NPC, hoac giao viec cua `yuu` cho mot model khong
+  # kham noi. Ca hai deu khong phat hien duoc bang test — cai thu nhat lo ra
+  # tren hoa don, cai thu hai lo ra o chat luong the gioi.
+  routes:
+    action:
+      # May chu cuc bo rieng cho model hanh dong (khac cong 18080 cua embedding).
+      # Chay cuc bo vi day la vai bi goi nhieu nhat: mot lan goi mien phi nhung
+      # cham van re hon mot lan goi tinh tien.
+      base_url: "http://localhost:18081/v1"
+      # Endpoint khac thi khoa khac — khong dung chung khoa OpenRouter.
+      api_key_env: LOCAL_LLM_API_KEY
+      model: "Qwen/Qwen3.5-4B"
+      # 256 la du cho "chon mot hanh dong". Nho hon nua thi model bi cat giua
+      # chung va tra ve chuoi rong — xem tai lieu cua `llm.max_output_tokens`.
+      max_output_tokens: 256
+    npc:
+      # Ke thua base_url/api_key_env cua OpenRouter o tren; chi doi model.
+      model: "deepseek/deepseek-v4-flash-0731"
+    yuu:
+      model: "deepseek/deepseek-v4-pro-0813"
+      # Rong hon han: phan tu va de xuat law can cho ra van ban dai, va mot lan
+      # bi cat o day dat hon nhieu so voi so token da tra them.
+      max_output_tokens: 4096
+
 embedding:
   # STUB = bam dac trung chay tai cho: xac dinh, khong mang, khong khoa.
   # Cho tuong dong TU VUNG, khong phai ngu nghia — du de ca duong ong ky uc

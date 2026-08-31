@@ -1,0 +1,11 @@
+# Đá trầm tích: lớp đá gốc mềm nhất, thứ lộ ra khi đất mặt bị rửa trôi.
+schema: block_def/v1
+id: sedimentary
+name: { en: "Sedimentary Rock", vi: "Đá trầm tích" }
+color: "#8a8578"
+hardness: 45
+liquid: false
+opaque: true
+walkable: false
+tags: [rock, diggable, bedrock]
+script: null

@@ -1,0 +1,11 @@
+# Đá biến chất: cứng hơn trầm tích vì nó đã từng chịu nhiệt và áp suất.
+schema: block_def/v1
+id: metamorphic
+name: { en: "Metamorphic Rock", vi: "Đá biến chất" }
+color: "#6f6a72"
+hardness: 65
+liquid: false
+opaque: true
+walkable: false
+tags: [rock, diggable, bedrock]
+script: null

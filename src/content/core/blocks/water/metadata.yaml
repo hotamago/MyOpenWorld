@@ -1,0 +1,15 @@
+# Nước không phải một màu, nó là một thang.
+#
+# `color` ở đây là màu mép nước. Biển sâu tối hơn, nhưng đó là việc của tầng vẽ
+# (`§18.5.1`) — nó suy ra từ cao độ, không phải từ mười một biến thể màu chép
+# tay trong dữ liệu.
+schema: block_def/v1
+id: water
+name: { en: "Water", vi: "Nước" }
+color: "#2c5c8a"
+hardness: 0
+liquid: true
+opaque: false
+walkable: true
+tags: [liquid, fluid, passable]
+script: null

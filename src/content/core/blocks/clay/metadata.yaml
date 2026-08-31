@@ -1,0 +1,11 @@
+# Sét: cứng hơn đất mặt, và là thứ giữ nước — nên nó có tag riêng.
+schema: block_def/v1
+id: clay
+name: { en: "Clay", vi: "Sét" }
+color: "#8c6b4f"
+hardness: 25
+liquid: false
+opaque: true
+walkable: false
+tags: [soil, diggable, impermeable]
+script: null

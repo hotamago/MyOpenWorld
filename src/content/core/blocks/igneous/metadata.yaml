@@ -1,0 +1,11 @@
+# Đá macma: cứng nhất trong các loại đá thường gặp, nên đào lâu nhất.
+schema: block_def/v1
+id: igneous
+name: { en: "Igneous Rock", vi: "Đá macma" }
+color: "#55535a"
+hardness: 80
+liquid: false
+opaque: true
+walkable: false
+tags: [rock, diggable, bedrock]
+script: null

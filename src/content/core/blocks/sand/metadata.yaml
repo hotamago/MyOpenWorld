@@ -1,0 +1,11 @@
+# Cát: mềm nhất trong các chất rắn, nên đào nhanh nhất.
+schema: block_def/v1
+id: sand
+name: { en: "Sand", vi: "Cát" }
+color: "#d8c48a"
+hardness: 10
+liquid: false
+opaque: true
+walkable: false
+tags: [soil, diggable, granular]
+script: null
