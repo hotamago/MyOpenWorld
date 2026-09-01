@@ -846,7 +846,10 @@ mod tests {
             // được hiện ra chút nào.
             for l in lines {
                 let cites = l["cites"].as_array().expect("thiếu `cites`");
-                assert!(!cites.is_empty(), "một câu không có trích dẫn đã lọt qua: {l}");
+                assert!(
+                    !cites.is_empty(),
+                    "một câu không có trích dẫn đã lọt qua: {l}"
+                );
             }
         }
     }
@@ -859,15 +862,17 @@ mod tests {
         for _ in 0..600 {
             g.tick_once();
         }
-        let that: std::collections::BTreeSet<u64> =
-            g.sim().log().iter().map(|e| e.seq.0).collect();
+        let that: std::collections::BTreeSet<u64> = g.sim().log().iter().map(|e| e.seq.0).collect();
         let body = json!({ "question": "Dân làng đang gặp chuyện gì?" }).to_string();
         let r = route(&mut g, "POST", "/api/yuu", "", &body);
         let v: J = serde_json::from_str(&r.body).unwrap();
         for l in v["lines"].as_array().unwrap() {
             for c in l["cites"].as_array().unwrap() {
                 let seq = c.as_u64().unwrap();
-                assert!(that.contains(&seq), "trích dẫn tới sự kiện không tồn tại: {seq}");
+                assert!(
+                    that.contains(&seq),
+                    "trích dẫn tới sự kiện không tồn tại: {seq}"
+                );
             }
         }
     }

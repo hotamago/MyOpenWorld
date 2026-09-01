@@ -11,6 +11,16 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "isolatedModules": true,
+    // `tsc` **không bao giờ** được ghi ra file. Vite là thứ dịch mã ở đây; một
+    // file `.js` do `tsc` sinh ra nằm cạnh `.ts` sẽ **che** chính nguồn của nó,
+    // vì `moduleResolution: bundler` ưu tiên `.js`.
+    //
+    // Chuyện này đã xảy ra thật, hai lần, và lần nào cũng mất hàng giờ để tìm:
+    // 92 file `.js` cũ nằm im trong `src/`, và `@/i18n` giải ra bản `.js` thiếu
+    // những khóa vừa thêm — nên `t("yuu.hint")` trả về chuỗi rỗng trong khi
+    // `import()` thẳng file `.ts` trả về đúng chữ. Không lỗi, không cảnh báo,
+    // chỉ một ô trống trên màn hình.
+    "noEmit": true,
     "skipLibCheck": true,
     "jsx": "preserve",
     "types": ["node", "vite/client", "vitest/globals"],

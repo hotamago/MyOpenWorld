@@ -225,6 +225,49 @@ pub(crate) fn compare(before: &Snapshot, after: &Snapshot) -> Vec<EntityChange> 
 
 /// Tóm tắt một sự kiện thành một dòng đọc được.
 pub(crate) fn summarize(kind: &str, payload: &Value) -> String {
+    // Vài loại sự kiện đáng được một câu thật thay vì một bãi `khóa=giá trị`.
+    //
+    // Đây không phải trang trí: những dòng này đi thẳng vào câu trả lời của Yuu
+    // và vào biên niên sử, tức là vào chỗ người chơi **đọc**. Một dòng như
+    // `cause=9125 kind=food → consumed={6} day=35` đúng nhưng không ai đọc nổi,
+    // và một câu không đọc nổi thì cũng như không có.
+    //
+    // Chỉ những loại engine thật sự phát ra mới có mặt ở đây; loại khác rơi về
+    // cách chung bên dưới, và đó là hành vi đúng cho một content pack thêm sự
+    // kiện mới mà server chưa biết.
+    match kind {
+        "econ.shortage" => {
+            let what = payload.get_text("kind").unwrap_or("gì đó");
+            return format!("Làng thiếu {what}.");
+        }
+        "econ.day" => {
+            // Nhận cả `Int` lẫn `Uint`: `Value::get_int` chỉ khớp `Int`, và
+            // chỗ phát sự kiện này dùng `Uint`. Không có nhánh thứ hai thì mọi
+            // ngày đều hiện ra là "ngày thứ 0" — đúng kiểu lỗi im lặng mà một
+            // giá trị mặc định hợp lệ luôn tạo ra.
+            let day = payload
+                .get_int("day")
+                .or_else(|| payload.get_uint("day").and_then(|u| i64::try_from(u).ok()))
+                .unwrap_or(0);
+            return format!("Hết ngày thứ {day}.");
+        }
+        "npc.intended" => {
+            let i = payload.get_text("intent").unwrap_or("gì đó");
+            return format!("Định {i}.");
+        }
+        "core.entity.moved" => {
+            let x = payload.get_int("x").unwrap_or(0);
+            let y = payload.get_int("y").unwrap_or(0);
+            return format!("Bước tới ({x}, {y}).");
+        }
+        "core.entity.spawned" => return "Ra đời.".to_owned(),
+        "truegod.intervened" => {
+            let k = payload.get_text("key").unwrap_or("một thuộc tính");
+            return format!("Bàn tay của thần chạm vào `{k}`.");
+        }
+        _ => {}
+    }
+
     match payload {
         Value::Map(m) if !m.is_empty() => {
             let parts: Vec<String> = m

@@ -866,7 +866,10 @@ impl Game {
         if let Some(v) = self.terrain.borrow().get(&(x, y)) {
             return v.clone();
         }
-        let v = self.gen.base_cell(x, y).unwrap_or_else(|_| edge_cell(&self.gen));
+        let v = self
+            .gen
+            .base_cell(x, y)
+            .unwrap_or_else(|_| edge_cell(&self.gen));
         let mut cache = self.terrain.borrow_mut();
         // Trần để một ván dài không biến bảng nhớ thành chỗ rò bộ nhớ. Xóa sạch
         // chứ không đuổi từng ô: không có thứ tự truy cập nào để dựa vào, và
@@ -2164,8 +2167,8 @@ mod tests {
         // Đường dẫn tính từ `CARGO_MANIFEST_DIR`, không từ thư mục làm việc:
         // `cargo test` chạy với cwd là thư mục crate, còn server chạy từ `src/`.
         // Một bài test phụ thuộc cwd là một bài test đỏ tuỳ chỗ ai gõ lệnh.
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../content/core/blocks");
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../content/core/blocks");
         for stage in CROP_STAGES {
             let p = dir.join(stage).join("metadata.yaml");
             assert!(p.exists(), "pha `{stage}` không có định nghĩa ở {p:?}");
